@@ -428,6 +428,82 @@ class SampleApiTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("sample_ID", response.json())
 
+    def test_bulk_import_duplicate_sample_ids_are_rejected_atomically(self) -> None:
+        payload = [
+            {
+                "study": self.study.id,
+                "sample_ID": "sample-1",
+                "sample_name": "Sample 1",
+                "description": "First upload row",
+                "group": "control",
+                "chemical": "",
+                "chemical_longname": "",
+                "dose": 0,
+                "technical_control": False,
+                "reference_rna": False,
+                "solvent_control": True,
+            },
+            {
+                "study": self.study.id,
+                "sample_ID": "sample-1",
+                "sample_name": "Sample 1 duplicate",
+                "description": "Second upload row",
+                "group": "treated",
+                "chemical": "cmpd",
+                "chemical_longname": "Compound",
+                "dose": 2,
+                "technical_control": False,
+                "reference_rna": False,
+                "solvent_control": False,
+            },
+        ]
+
+        response = self.client.post("/api/samples/", payload, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Sample.objects.count(), 0)
+        self.assertEqual(len(response.json()), 2)
+        self.assertEqual(response.json()[1]["sample_ID"][0], "This sample_ID is duplicated within the upload.")
+
+    def test_bulk_import_preserves_row_level_validation_errors(self) -> None:
+        payload = [
+            {
+                "study": self.study.id,
+                "sample_ID": "sample-1",
+                "sample_name": "Sample 1",
+                "description": "First upload row",
+                "group": "control",
+                "chemical": "",
+                "chemical_longname": "",
+                "dose": 0,
+                "technical_control": False,
+                "reference_rna": False,
+                "solvent_control": True,
+            },
+            {
+                "study": self.study.id,
+                "sample_ID": "bad sample",
+                "sample_name": "Sample 2",
+                "description": "Second upload row",
+                "group": "treated",
+                "chemical": "cmpd",
+                "chemical_longname": "Compound",
+                "dose": -1,
+                "technical_control": False,
+                "reference_rna": False,
+                "solvent_control": False,
+            },
+        ]
+
+        response = self.client.post("/api/samples/", payload, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Sample.objects.count(), 0)
+        self.assertEqual(len(response.json()), 2)
+        self.assertEqual(response.json()[0], {})
+        self.assertIn("sample_ID", response.json()[1])
+        self.assertIn("dose", response.json()[1])
+
     def test_duplicate_sample_id_within_study_returns_bad_request(self) -> None:
         Sample.objects.create(
             study=self.study,

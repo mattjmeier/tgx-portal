@@ -22,7 +22,13 @@ from .serializers import (
     UserCreateSerializer,
     UserRoleUpdateSerializer,
 )
-from .services import ConfigGenerationError, build_project_config_bundle
+from .services import (
+    ConfigGenerationError,
+    SampleImportValidationError,
+    build_project_config_bundle,
+    create_samples_from_validated_rows,
+    validate_sample_import_rows,
+)
 from .tasks import create_plane_ticket
 
 logger = logging.getLogger(__name__)
@@ -128,6 +134,23 @@ class SampleViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         many = isinstance(request.data, list)
+        if many:
+            try:
+                validated_rows = validate_sample_import_rows(request.data)
+            except SampleImportValidationError as exc:
+                return Response(exc.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            role = _get_user_role(request.user)
+            if role == UserProfile.Role.CLIENT:
+                for item in validated_rows:
+                    if item["study"].project.owner_id != request.user.id:
+                        raise PermissionDenied("Clients may only create samples within their own projects.")
+
+            created_samples = create_samples_from_validated_rows(validated_rows)
+            serializer = self.get_serializer(created_samples, many=True)
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
         serializer = self.get_serializer(data=request.data, many=many)
         serializer.is_valid(raise_exception=True)
         role = _get_user_role(request.user)

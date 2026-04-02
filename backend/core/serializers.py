@@ -1,10 +1,11 @@
 from django.contrib.auth import get_user_model
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError as PydanticValidationError
+from pydantic import ValidationError as PydanticValidationError
 from rest_framework import serializers
 
-from .models import Assay, Project, Sample, Study, UserProfile, sample_id_validator
+from .models import Assay, Project, Sample, Study, UserProfile
+from .services import validate_sample_payload
 
 User = get_user_model()
 
@@ -49,23 +50,6 @@ class StudySerializer(serializers.ModelSerializer):
             )
         ]
 
-
-class SampleInputSchema(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
-
-    study: int
-    sample_ID: str = Field(min_length=1)
-    sample_name: str = Field(min_length=1)
-    description: str = ""
-    group: str = Field(min_length=1)
-    chemical: str = ""
-    chemical_longname: str = ""
-    dose: float = Field(ge=0)
-    technical_control: bool = False
-    reference_rna: bool = False
-    solvent_control: bool = False
-
-
 class SampleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sample
@@ -100,11 +84,10 @@ class SampleSerializer(serializers.ModelSerializer):
         }
 
         try:
-            SampleInputSchema.model_validate(payload)
+            validate_sample_payload(payload)
         except PydanticValidationError as exc:
             raise serializers.ValidationError(exc.errors()) from exc
 
-        sample_id_validator(attrs["sample_ID"])
         return attrs
 
 

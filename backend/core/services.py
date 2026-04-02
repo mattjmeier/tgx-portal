@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from io import BytesIO
+from typing import Any
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import yaml
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from django.utils.text import slugify
+from pydantic import BaseModel, ConfigDict, Field, ValidationError as PydanticValidationError
 
-from .models import Assay, Project, Sample
+from .models import Assay, Project, Sample, Study, sample_id_validator
 
 
 class ConfigGenerationError(Exception):
@@ -18,6 +22,129 @@ class ConfigGenerationError(Exception):
 class ConfigBundle:
     filename: str
     content: bytes
+
+
+class SampleImportValidationError(Exception):
+    def __init__(self, errors: list[dict[str, list[str]]]):
+        super().__init__("One or more sample rows failed validation.")
+        self.errors = errors
+
+
+class SampleInputSchema(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    study: int
+    sample_ID: str = Field(min_length=1)
+    sample_name: str = Field(min_length=1)
+    description: str = ""
+    group: str = Field(min_length=1)
+    chemical: str = ""
+    chemical_longname: str = ""
+    dose: float = Field(ge=0)
+    technical_control: bool = False
+    reference_rna: bool = False
+    solvent_control: bool = False
+
+
+def validate_sample_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = SampleInputSchema.model_validate(payload).model_dump()
+    sample_id_validator(normalized["sample_ID"])
+    return normalized
+
+
+def _append_error(row_errors: dict[str, list[str]], field: str, message: str) -> None:
+    row_errors.setdefault(field, [])
+    if message not in row_errors[field]:
+        row_errors[field].append(message)
+
+
+def _build_sample_row_errors(exc: PydanticValidationError) -> dict[str, list[str]]:
+    row_errors: dict[str, list[str]] = {}
+    for error in exc.errors():
+        location = error.get("loc", [])
+        field = str(location[-1]) if location else "non_field_errors"
+        _append_error(row_errors, field, error.get("msg", "Invalid value."))
+    return row_errors
+
+
+def validate_sample_import_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized_rows: list[dict[str, Any] | None] = [None] * len(rows)
+    row_errors: list[dict[str, list[str]]] = [{} for _ in rows]
+
+    for index, row in enumerate(rows):
+        try:
+            normalized_rows[index] = validate_sample_payload(row)
+        except PydanticValidationError as exc:
+            row_errors[index] = _build_sample_row_errors(exc)
+            sample_id = row.get("sample_ID", "")
+            if isinstance(sample_id, str) and sample_id.strip():
+                try:
+                    sample_id_validator(sample_id.strip())
+                except DjangoValidationError as validator_exc:
+                    messages = getattr(validator_exc, "messages", [str(validator_exc)])
+                    for message in messages:
+                        _append_error(row_errors[index], "sample_ID", message)
+        except DjangoValidationError as exc:
+            messages = getattr(exc, "messages", [str(exc)])
+            for message in messages:
+                _append_error(row_errors[index], "sample_ID", message)
+
+    study_ids = sorted(
+        {
+            row["study"]
+            for row in normalized_rows
+            if row is not None
+        }
+    )
+    studies_by_id = Study.objects.in_bulk(study_ids)
+
+    seen_keys: set[tuple[int, str]] = set()
+    existing_keys = {
+        (sample.study_id, sample.sample_ID)
+        for sample in Sample.objects.filter(study_id__in=study_ids)
+    }
+
+    for index, normalized_row in enumerate(normalized_rows):
+        if normalized_row is None:
+            continue
+
+        study = studies_by_id.get(normalized_row["study"])
+        if study is None:
+            _append_error(row_errors[index], "study", "Selected study was not found.")
+            continue
+
+        row_key = (study.id, normalized_row["sample_ID"])
+        if row_key in seen_keys:
+            _append_error(row_errors[index], "sample_ID", "This sample_ID is duplicated within the upload.")
+        else:
+            seen_keys.add(row_key)
+
+        if row_key in existing_keys:
+            _append_error(row_errors[index], "sample_ID", "This sample_ID already exists within the selected study.")
+
+        normalized_row["study"] = study
+
+    if any(row_error for row_error in row_errors):
+        raise SampleImportValidationError(row_errors)
+
+    return [row for row in normalized_rows if row is not None]
+
+
+def create_samples_from_validated_rows(normalized_rows: list[dict[str, Any]]) -> list[Sample]:
+    samples = [
+        Sample(**normalized_row)
+        for normalized_row in normalized_rows
+    ]
+
+    with transaction.atomic():
+        created_samples = Sample.objects.bulk_create(samples)
+
+    return created_samples
+
+
+def create_samples_from_rows(rows: list[dict[str, Any]]) -> list[Sample]:
+    normalized_rows = validate_sample_import_rows(rows)
+    return create_samples_from_validated_rows(normalized_rows)
 
 
 def _build_config_payload(project: Project, assays: list[Assay], samples: list[Sample]) -> dict:
@@ -134,5 +261,5 @@ def build_project_config_bundle(project: Project) -> ConfigBundle:
         archive.writestr("metadata.tsv", metadata_tsv)
         archive.writestr("contrasts.tsv", contrasts_tsv)
 
-    filename = f"config_bundle_{slugify(project.title)}.zip"
+    filename = f"config_bundle_{slugify(project.title).replace('-', '_')}.zip"
     return ConfigBundle(filename=filename, content=file_buffer.getvalue())
