@@ -1,0 +1,1099 @@
+version: 1
+
+# BLUEPRINT ONLY (STORY-002)
+# This file documents the intended Directus collections/fields/relations + RBAC
+# building blocks for Bioinformatician Sample Intake.
+#
+# It was not exported from a running Directus instance, so it should not be
+# treated as an authoritative migration artifact.
+#
+# Recommended bootstrap path:
+# - `python3 directus/bootstrap/bootstrap_story_001.py`
+# - `python3 directus/bootstrap/bootstrap_story_002.py`
+# - export a real snapshot from the running Directus instance for replay.
+
+collections:
+  - collection: projects
+    meta:
+      icon: assignment
+      note: Collaborator-facing project intake and lifecycle.
+      display_template: "{{title}}"
+      accountability: all
+      sort: 10
+      group: null
+      hidden: false
+      singleton: false
+      archive_field: status
+      archive_value: archived
+      unarchive_value: draft
+      sort_field: updated_at
+  - collection: studies
+    meta:
+      icon: science
+      note: Study definitions scoped to a project.
+      display_template: "{{species}} {{celltype}}"
+      accountability: all
+      sort: 20
+      hidden: false
+      singleton: false
+  - collection: samples
+    meta:
+      icon: biotech
+      note: Samples scoped to a study.
+      display_template: "{{sample_ID}}"
+      accountability: all
+      sort: 30
+      hidden: false
+      singleton: false
+  - collection: assays
+    meta:
+      icon: analytics
+      note: Assays scoped to a sample (platform, genome, quantification).
+      display_template: "{{platform}}"
+      accountability: all
+      sort: 40
+      hidden: false
+      singleton: false
+  - collection: sample_plating
+    meta:
+      icon: grid_on
+      note: Optional plating metadata per sample.
+      display_template: "Plate {{plate_number}} {{plate_well}}"
+      accountability: all
+      sort: 50
+      hidden: false
+      singleton: false
+
+  - collection: sample_intake_uploads
+    meta:
+      icon: upload_file
+      note: Bioinformatician workflow for CSV/TSV preview, validation, and commit into samples/assays.
+      display_template: "Intake {{status}}"
+      accountability: all
+      sort: 60
+      hidden: false
+      singleton: false
+
+  # Lookup collections (admin-managed)
+  - collection: platform_options
+    meta:
+      icon: list
+      note: Supported assay platforms (e.g., TempO-Seq, RNA-Seq).
+      display_template: "{{name}}"
+      accountability: all
+      sort: 110
+      hidden: false
+      singleton: false
+  - collection: genome_versions
+    meta:
+      icon: list
+      note: Genome / annotation bundle choices.
+      display_template: "{{name}}"
+      accountability: all
+      sort: 120
+      hidden: false
+      singleton: false
+  - collection: quantification_methods
+    meta:
+      icon: list
+      note: Quantification methods (lookup).
+      display_template: "{{name}}"
+      accountability: all
+      sort: 130
+      hidden: false
+      singleton: false
+  - collection: species_options
+    meta:
+      icon: list
+      note: Species lookup.
+      display_template: "{{name}}"
+      accountability: all
+      sort: 140
+      hidden: false
+      singleton: false
+  - collection: biospyder_databases
+    meta:
+      icon: list
+      note: TempO-Seq Biospyder database selections.
+      display_template: "{{name}}"
+      accountability: all
+      sort: 150
+      hidden: false
+      singleton: false
+  - collection: biospyder_manifests
+    meta:
+      icon: list
+      note: TempO-Seq Biospyder manifest selections.
+      display_template: "{{name}}"
+      accountability: all
+      sort: 160
+      hidden: false
+      singleton: false
+
+  # Junction (m2m) collections
+  - collection: projects_biospyder_databases
+    meta:
+      icon: link
+      note: Junction table for projects ↔ biospyder_databases.
+      accountability: all
+      hidden: true
+
+fields:
+  # projects
+  - collection: projects
+    field: id
+    type: uuid
+    schema: { is_primary_key: true, is_nullable: false }
+    meta: { hidden: true }
+  - collection: projects
+    field: title
+    type: string
+    schema: { is_nullable: false, max_length: 255 }
+    meta:
+      interface: input
+      required: true
+      note: Public project title used for reporting and integrations.
+  - collection: projects
+    field: pi_name
+    type: string
+    schema: { is_nullable: false, max_length: 255 }
+    meta:
+      interface: input
+      required: true
+      note: Principal investigator name (used for Plane workspace mapping).
+  - collection: projects
+    field: researcher_name
+    type: string
+    schema: { is_nullable: false, max_length: 255 }
+    meta:
+      interface: input
+      required: true
+      note: Primary researcher / point of contact.
+  - collection: projects
+    field: description
+    type: text
+    schema: { is_nullable: true }
+    meta:
+      interface: input-multiline
+      required: false
+  - collection: projects
+    field: status
+    type: string
+    schema: { is_nullable: false, max_length: 50, default_value: draft }
+    meta:
+      interface: select-dropdown
+      required: true
+      options:
+        choices:
+          - { text: Draft, value: draft }
+          - { text: Submitted, value: submitted }
+          - { text: Intake Ready, value: intake_ready }
+          - { text: Active, value: active }
+          - { text: Archived, value: archived }
+  - collection: projects
+    field: intake_platform
+    type: string
+    schema: { is_nullable: false, max_length: 50 }
+    meta:
+      interface: select-dropdown
+      required: true
+      note: Drives intake-specific conditional fields.
+      options:
+        choices:
+          - { text: TempO-Seq, value: TempO-Seq }
+          - { text: RNA-Seq, value: RNA-Seq }
+          - { text: Other, value: Other }
+  - collection: projects
+    field: client_user
+    type: uuid
+    schema: { is_nullable: false }
+    meta:
+      interface: select-dropdown-m2o
+      required: true
+      note: Client scoping anchor (clients can only see their projects).
+      special: [m2o]
+  - collection: projects
+    field: bioinformatician_assigned
+    type: uuid
+    schema: { is_nullable: true }
+    meta:
+      interface: select-dropdown-m2o
+      required: false
+      special: [m2o]
+      note: Assigned lab bioinformatician (used for downstream notifications/Plane).
+  - collection: projects
+    field: biospyder_manifest
+    type: uuid
+    schema: { is_nullable: true }
+    meta:
+      interface: select-dropdown-m2o
+      required: false
+      special: [m2o]
+      note: Required for TempO-Seq projects.
+      conditions:
+        - name: Hide unless TempO-Seq
+          rule:
+            _and:
+              - intake_platform: { _neq: TempO-Seq }
+          hidden: true
+  - collection: projects
+    field: biospyder_databases
+    type: alias
+    meta:
+      interface: list-m2m
+      special: [m2m]
+      required: false
+      note: Required for TempO-Seq projects.
+      options:
+        junctionCollection: projects_biospyder_databases
+        junctionField: projects_id
+        relatedCollection: biospyder_databases
+        relatedField: biospyder_databases_id
+      conditions:
+        - name: Hide unless TempO-Seq
+          rule:
+            _and:
+              - intake_platform: { _neq: TempO-Seq }
+          hidden: true
+  - collection: projects
+    field: plane_sync_status
+    type: string
+    schema: { is_nullable: true, max_length: 50 }
+    meta:
+      interface: select-dropdown
+      required: false
+      options:
+        choices:
+          - { text: Pending, value: pending }
+          - { text: Success, value: success }
+          - { text: Failed, value: failed }
+      readonly: true
+  - collection: projects
+    field: plane_last_error
+    type: text
+    schema: { is_nullable: true }
+    meta: { interface: input-multiline, readonly: true }
+  - collection: projects
+    field: plane_external_ref
+    type: string
+    schema: { is_nullable: true, max_length: 255 }
+    meta: { interface: input, readonly: true }
+  - collection: projects
+    field: created_at
+    type: timestamp
+    schema: { is_nullable: false }
+    meta: { special: [date-created], readonly: true, interface: datetime }
+  - collection: projects
+    field: updated_at
+    type: timestamp
+    schema: { is_nullable: false }
+    meta: { special: [date-updated], readonly: true, interface: datetime }
+
+  # studies
+  - collection: studies
+    field: id
+    type: uuid
+    schema: { is_primary_key: true, is_nullable: false }
+    meta: { hidden: true }
+  - collection: studies
+    field: project
+    type: uuid
+    schema: { is_nullable: false }
+    meta: { interface: select-dropdown-m2o, required: true, special: [m2o] }
+  - collection: studies
+    field: species
+    type: uuid
+    schema: { is_nullable: true }
+    meta: { interface: select-dropdown-m2o, special: [m2o] }
+  - collection: studies
+    field: celltype
+    type: string
+    schema: { is_nullable: true, max_length: 255 }
+    meta: { interface: input }
+  - collection: studies
+    field: treatment_var
+    type: string
+    schema: { is_nullable: true, max_length: 255 }
+    meta: { interface: input }
+  - collection: studies
+    field: batch_var
+    type: string
+    schema: { is_nullable: true, max_length: 255 }
+    meta: { interface: input }
+  - collection: studies
+    field: units
+    type: string
+    schema: { is_nullable: true, max_length: 64 }
+    meta: { interface: input }
+
+  # samples
+  - collection: samples
+    field: id
+    type: uuid
+    schema: { is_primary_key: true, is_nullable: false }
+    meta: { hidden: true }
+  - collection: samples
+    field: study
+    type: uuid
+    schema: { is_nullable: false }
+    meta: { interface: select-dropdown-m2o, required: true, special: [m2o] }
+  - collection: samples
+    field: sample_ID
+    type: string
+    schema: { is_nullable: false, max_length: 128 }
+    meta:
+      interface: input
+      required: true
+      note: Must match ^[a-zA-Z0-9-_]*$ (enforced by validation layer).
+  - collection: samples
+    field: sample_name
+    type: string
+    schema: { is_nullable: true, max_length: 255 }
+    meta: { interface: input }
+  - collection: samples
+    field: description
+    type: text
+    schema: { is_nullable: true }
+    meta: { interface: input-multiline }
+  - collection: samples
+    field: group
+    type: string
+    schema: { is_nullable: true, max_length: 255 }
+    meta: { interface: input }
+  - collection: samples
+    field: chemical
+    type: string
+    schema: { is_nullable: true, max_length: 255 }
+    meta: { interface: input }
+  - collection: samples
+    field: chemical_longname
+    type: string
+    schema: { is_nullable: true, max_length: 255 }
+    meta: { interface: input }
+  - collection: samples
+    field: dose
+    type: string
+    schema: { is_nullable: true, max_length: 255 }
+    meta: { interface: input }
+  - collection: samples
+    field: technical_control
+    type: boolean
+    schema: { is_nullable: true }
+    meta: { interface: boolean }
+  - collection: samples
+    field: reference_rna
+    type: boolean
+    schema: { is_nullable: true }
+    meta: { interface: boolean }
+  - collection: samples
+    field: solvent_control
+    type: boolean
+    schema: { is_nullable: true }
+    meta: { interface: boolean }
+
+  # assays
+  - collection: assays
+    field: id
+    type: uuid
+    schema: { is_primary_key: true, is_nullable: false }
+    meta: { hidden: true }
+  - collection: assays
+    field: sample
+    type: uuid
+    schema: { is_nullable: false }
+    meta: { interface: select-dropdown-m2o, required: true, special: [m2o] }
+  - collection: assays
+    field: platform
+    type: uuid
+    schema: { is_nullable: true }
+    meta: { interface: select-dropdown-m2o, special: [m2o] }
+  - collection: assays
+    field: genome_version
+    type: uuid
+    schema: { is_nullable: true }
+    meta: { interface: select-dropdown-m2o, special: [m2o] }
+  - collection: assays
+    field: quantification_method
+    type: uuid
+    schema: { is_nullable: true }
+    meta: { interface: select-dropdown-m2o, special: [m2o] }
+  - collection: assays
+    field: read_mode
+    type: string
+    schema: { is_nullable: true, max_length: 10 }
+    meta:
+      interface: select-dropdown
+      options:
+        choices:
+          - { text: Single-end, value: se }
+          - { text: Paired-end, value: pe }
+
+  # sample_plating
+  - collection: sample_plating
+    field: id
+    type: uuid
+    schema: { is_primary_key: true, is_nullable: false }
+    meta: { hidden: true }
+  - collection: sample_plating
+    field: sample
+    type: uuid
+    schema: { is_nullable: false }
+    meta: { interface: select-dropdown-m2o, required: true, special: [m2o] }
+  - collection: sample_plating
+    field: plate_number
+    type: integer
+    schema: { is_nullable: true }
+    meta: { interface: input }
+  - collection: sample_plating
+    field: batch
+    type: string
+    schema: { is_nullable: true, max_length: 64 }
+    meta: { interface: input }
+  - collection: sample_plating
+    field: plate_well
+    type: string
+    schema: { is_nullable: true, max_length: 8 }
+    meta: { interface: input }
+  - collection: sample_plating
+    field: row
+    type: string
+    schema: { is_nullable: true, max_length: 2 }
+    meta: { interface: input }
+  - collection: sample_plating
+    field: column
+    type: integer
+    schema: { is_nullable: true }
+    meta: { interface: input }
+  - collection: sample_plating
+    field: index_I7
+    type: string
+    schema: { is_nullable: true, max_length: 64 }
+    meta: { interface: input }
+  - collection: sample_plating
+    field: I7_Index_ID
+    type: string
+    schema: { is_nullable: true, max_length: 64 }
+    meta: { interface: input }
+  - collection: sample_plating
+    field: index2
+    type: string
+    schema: { is_nullable: true, max_length: 64 }
+    meta: { interface: input }
+  - collection: sample_plating
+    field: I5_Index_ID
+    type: string
+    schema: { is_nullable: true, max_length: 64 }
+    meta: { interface: input }
+
+  # sample_intake_uploads
+  - collection: sample_intake_uploads
+    field: id
+    type: uuid
+    schema: { is_primary_key: true, is_nullable: false }
+    meta: { hidden: true }
+  - collection: sample_intake_uploads
+    field: study
+    type: uuid
+    schema: { is_nullable: false }
+    meta: { interface: select-dropdown-m2o, required: true, special: [m2o] }
+  - collection: sample_intake_uploads
+    field: file_type
+    type: string
+    schema: { is_nullable: false, max_length: 10, default_value: tsv }
+    meta:
+      interface: select-dropdown
+      required: true
+      options:
+        choices:
+          - { text: TSV, value: tsv }
+          - { text: CSV, value: csv }
+  - collection: sample_intake_uploads
+    field: source_type
+    type: string
+    schema: { is_nullable: false, max_length: 10, default_value: text }
+    meta:
+      interface: select-dropdown
+      required: true
+      options:
+        choices:
+          - { text: Paste, value: text }
+          - { text: File, value: file }
+  - collection: sample_intake_uploads
+    field: source_text
+    type: text
+    schema: { is_nullable: true }
+    meta:
+      interface: input-multiline
+      note: Paste CSV/TSV content here when source_type is Paste.
+      options: { softLength: 2000 }
+  - collection: sample_intake_uploads
+    field: source_file
+    type: uuid
+    schema: { is_nullable: true }
+    meta:
+      interface: select-dropdown-m2o
+      note: Upload a file in Directus Files first, then select it here when source_type is File.
+      special: [m2o]
+  - collection: sample_intake_uploads
+    field: status
+    type: string
+    schema: { is_nullable: false, max_length: 20, default_value: draft }
+    meta:
+      interface: select-dropdown
+      required: true
+      options:
+        choices:
+          - { text: Draft, value: draft }
+          - { text: Validated, value: validated }
+          - { text: Invalid, value: invalid }
+          - { text: Committed, value: committed }
+          - { text: Commit Failed, value: commit_failed }
+  - collection: sample_intake_uploads
+    field: validate_requested
+    type: boolean
+    schema: { is_nullable: false, default_value: false }
+    meta:
+      interface: boolean
+      note: Toggle on and save to force revalidation (will be reset automatically).
+  - collection: sample_intake_uploads
+    field: commit_requested
+    type: boolean
+    schema: { is_nullable: false, default_value: false }
+    meta:
+      interface: boolean
+      note: Toggle on and save to commit validated rows into samples/assays (will be reset automatically).
+  - collection: sample_intake_uploads
+    field: row_count
+    type: integer
+    schema: { is_nullable: true }
+    meta: { interface: input, readonly: true }
+  - collection: sample_intake_uploads
+    field: valid_row_count
+    type: integer
+    schema: { is_nullable: true }
+    meta: { interface: input, readonly: true }
+  - collection: sample_intake_uploads
+    field: invalid_row_count
+    type: integer
+    schema: { is_nullable: true }
+    meta: { interface: input, readonly: true }
+  - collection: sample_intake_uploads
+    field: preview_rows
+    type: json
+    schema: { is_nullable: true }
+    meta:
+      interface: input-code
+      options: { language: json }
+      note: First rows parsed from the uploaded content (for preview).
+  - collection: sample_intake_uploads
+    field: validation_errors
+    type: json
+    schema: { is_nullable: true }
+    meta:
+      interface: input-code
+      options: { language: json }
+      note: Row-level and field-level validation errors.
+  - collection: sample_intake_uploads
+    field: validation_summary
+    type: json
+    schema: { is_nullable: true }
+    meta:
+      interface: input-code
+      options: { language: json }
+      note: Validation summary including create/update counts.
+  - collection: sample_intake_uploads
+    field: validated_hash
+    type: string
+    schema: { is_nullable: true, max_length: 128 }
+    meta: { hidden: true }
+  - collection: sample_intake_uploads
+    field: validated_at
+    type: timestamp
+    schema: { is_nullable: true }
+    meta: { interface: datetime, readonly: true }
+  - collection: sample_intake_uploads
+    field: commit_result
+    type: json
+    schema: { is_nullable: true }
+    meta:
+      interface: input-code
+      options: { language: json }
+      note: Commit summary and per-row outcome.
+  - collection: sample_intake_uploads
+    field: committed_at
+    type: timestamp
+    schema: { is_nullable: true }
+    meta: { interface: datetime, readonly: true }
+
+  # lookups (simple: id + name + code)
+  - collection: platform_options
+    field: id
+    type: uuid
+    schema: { is_primary_key: true, is_nullable: false }
+    meta: { hidden: true }
+  - collection: platform_options
+    field: name
+    type: string
+    schema: { is_nullable: false, max_length: 255 }
+    meta: { interface: input, required: true }
+  - collection: platform_options
+    field: code
+    type: string
+    schema: { is_nullable: false, max_length: 64 }
+    meta: { interface: input, required: true }
+
+  - collection: genome_versions
+    field: id
+    type: uuid
+    schema: { is_primary_key: true, is_nullable: false }
+    meta: { hidden: true }
+  - collection: genome_versions
+    field: name
+    type: string
+    schema: { is_nullable: false, max_length: 255 }
+    meta: { interface: input, required: true }
+  - collection: genome_versions
+    field: code
+    type: string
+    schema: { is_nullable: false, max_length: 64 }
+    meta: { interface: input, required: true }
+
+  - collection: quantification_methods
+    field: id
+    type: uuid
+    schema: { is_primary_key: true, is_nullable: false }
+    meta: { hidden: true }
+  - collection: quantification_methods
+    field: name
+    type: string
+    schema: { is_nullable: false, max_length: 255 }
+    meta: { interface: input, required: true }
+  - collection: quantification_methods
+    field: code
+    type: string
+    schema: { is_nullable: false, max_length: 64 }
+    meta: { interface: input, required: true }
+
+  - collection: species_options
+    field: id
+    type: uuid
+    schema: { is_primary_key: true, is_nullable: false }
+    meta: { hidden: true }
+  - collection: species_options
+    field: name
+    type: string
+    schema: { is_nullable: false, max_length: 255 }
+    meta: { interface: input, required: true }
+  - collection: species_options
+    field: code
+    type: string
+    schema: { is_nullable: false, max_length: 64 }
+    meta: { interface: input, required: true }
+
+  - collection: biospyder_databases
+    field: id
+    type: uuid
+    schema: { is_primary_key: true, is_nullable: false }
+    meta: { hidden: true }
+  - collection: biospyder_databases
+    field: name
+    type: string
+    schema: { is_nullable: false, max_length: 255 }
+    meta: { interface: input, required: true }
+  - collection: biospyder_databases
+    field: code
+    type: string
+    schema: { is_nullable: false, max_length: 64 }
+    meta: { interface: input, required: true }
+
+  - collection: biospyder_manifests
+    field: id
+    type: uuid
+    schema: { is_primary_key: true, is_nullable: false }
+    meta: { hidden: true }
+  - collection: biospyder_manifests
+    field: name
+    type: string
+    schema: { is_nullable: false, max_length: 255 }
+    meta: { interface: input, required: true }
+  - collection: biospyder_manifests
+    field: code
+    type: string
+    schema: { is_nullable: false, max_length: 64 }
+    meta: { interface: input, required: true }
+
+  # projects_biospyder_databases (junction)
+  - collection: projects_biospyder_databases
+    field: id
+    type: uuid
+    schema: { is_primary_key: true, is_nullable: false }
+    meta: { hidden: true }
+  - collection: projects_biospyder_databases
+    field: projects_id
+    type: uuid
+    schema: { is_nullable: false }
+    meta: { interface: select-dropdown-m2o, required: true, special: [m2o] }
+  - collection: projects_biospyder_databases
+    field: biospyder_databases_id
+    type: uuid
+    schema: { is_nullable: false }
+    meta: { interface: select-dropdown-m2o, required: true, special: [m2o] }
+
+relations:
+  # core hierarchy
+  - collection: studies
+    field: project
+    related_collection: projects
+    meta: { many_collection: studies, many_field: project, one_collection: projects, one_field: studies }
+    schema: { on_delete: CASCADE }
+  - collection: samples
+    field: study
+    related_collection: studies
+    meta: { many_collection: samples, many_field: study, one_collection: studies, one_field: samples }
+    schema: { on_delete: CASCADE }
+  - collection: assays
+    field: sample
+    related_collection: samples
+    meta: { many_collection: assays, many_field: sample, one_collection: samples, one_field: assays }
+    schema: { on_delete: CASCADE }
+  - collection: sample_plating
+    field: sample
+    related_collection: samples
+    meta: { many_collection: sample_plating, many_field: sample, one_collection: samples, one_field: plating }
+    schema: { on_delete: CASCADE }
+  - collection: sample_intake_uploads
+    field: study
+    related_collection: studies
+    meta: { many_collection: sample_intake_uploads, many_field: study, one_collection: studies, one_field: sample_intake_uploads }
+    schema: { on_delete: CASCADE }
+  - collection: sample_intake_uploads
+    field: source_file
+    related_collection: directus_files
+    meta: { many_collection: sample_intake_uploads, many_field: source_file, one_collection: directus_files, one_field: sample_intake_uploads }
+    schema: { on_delete: SET NULL }
+
+  # project scoping + assignments
+  - collection: projects
+    field: client_user
+    related_collection: directus_users
+    meta: { many_collection: projects, many_field: client_user, one_collection: directus_users, one_field: client_projects }
+    schema: { on_delete: RESTRICT }
+  - collection: projects
+    field: bioinformatician_assigned
+    related_collection: directus_users
+    meta: { many_collection: projects, many_field: bioinformatician_assigned, one_collection: directus_users, one_field: assigned_projects }
+    schema: { on_delete: SET NULL }
+
+  # lookups
+  - collection: studies
+    field: species
+    related_collection: species_options
+    meta: { many_collection: studies, many_field: species, one_collection: species_options, one_field: studies }
+    schema: { on_delete: SET NULL }
+  - collection: assays
+    field: platform
+    related_collection: platform_options
+    meta: { many_collection: assays, many_field: platform, one_collection: platform_options, one_field: assays }
+    schema: { on_delete: SET NULL }
+  - collection: assays
+    field: genome_version
+    related_collection: genome_versions
+    meta: { many_collection: assays, many_field: genome_version, one_collection: genome_versions, one_field: assays }
+    schema: { on_delete: SET NULL }
+  - collection: assays
+    field: quantification_method
+    related_collection: quantification_methods
+    meta: { many_collection: assays, many_field: quantification_method, one_collection: quantification_methods, one_field: assays }
+    schema: { on_delete: SET NULL }
+  - collection: projects
+    field: biospyder_manifest
+    related_collection: biospyder_manifests
+    meta: { many_collection: projects, many_field: biospyder_manifest, one_collection: biospyder_manifests, one_field: projects }
+    schema: { on_delete: SET NULL }
+
+  # projects ↔ biospyder_databases (m2m via junction)
+  - collection: projects_biospyder_databases
+    field: projects_id
+    related_collection: projects
+    meta: { many_collection: projects_biospyder_databases, many_field: projects_id, one_collection: projects, one_field: biospyder_databases }
+    schema: { on_delete: CASCADE }
+  - collection: projects_biospyder_databases
+    field: biospyder_databases_id
+    related_collection: biospyder_databases
+    meta: { many_collection: projects_biospyder_databases, many_field: biospyder_databases_id, one_collection: biospyder_databases, one_field: projects }
+    schema: { on_delete: CASCADE }
+
+roles:
+  - id: 7be43bbe-2c82-4357-8623-f2e1889e3b6a
+    name: Admin
+    icon: admin_panel_settings
+    description: Full access for administrators and bioinformatics staff.
+    admin_access: true
+    app_access: true
+  - id: 8054625f-e147-426c-a007-f510c11f7b25
+    name: Client
+    icon: account_circle
+    description: Collaborator/client role scoped to assigned projects only.
+    admin_access: false
+    app_access: true
+  - id: d3146aad-b417-4e23-b4c9-fb042d451785
+    name: System
+    icon: smart_toy
+    description: Least-privilege automation/integration role for flows/endpoints.
+    admin_access: false
+    app_access: false
+
+permissions:
+  # Admin: allow all on domain collections + lookups (kept explicit to avoid granting system tables)
+  - role: 7be43bbe-2c82-4357-8623-f2e1889e3b6a
+    collection: projects
+    action: "*"
+    fields: ["*"]
+    permissions: {}
+  - role: 7be43bbe-2c82-4357-8623-f2e1889e3b6a
+    collection: studies
+    action: "*"
+    fields: ["*"]
+    permissions: {}
+  - role: 7be43bbe-2c82-4357-8623-f2e1889e3b6a
+    collection: samples
+    action: "*"
+    fields: ["*"]
+    permissions: {}
+  - role: 7be43bbe-2c82-4357-8623-f2e1889e3b6a
+    collection: assays
+    action: "*"
+    fields: ["*"]
+    permissions: {}
+  - role: 7be43bbe-2c82-4357-8623-f2e1889e3b6a
+    collection: sample_plating
+    action: "*"
+    fields: ["*"]
+    permissions: {}
+  - role: 7be43bbe-2c82-4357-8623-f2e1889e3b6a
+    collection: sample_intake_uploads
+    action: "*"
+    fields: ["*"]
+    permissions: {}
+  - role: 7be43bbe-2c82-4357-8623-f2e1889e3b6a
+    collection: platform_options
+    action: "*"
+    fields: ["*"]
+    permissions: {}
+  - role: 7be43bbe-2c82-4357-8623-f2e1889e3b6a
+    collection: genome_versions
+    action: "*"
+    fields: ["*"]
+    permissions: {}
+  - role: 7be43bbe-2c82-4357-8623-f2e1889e3b6a
+    collection: quantification_methods
+    action: "*"
+    fields: ["*"]
+    permissions: {}
+  - role: 7be43bbe-2c82-4357-8623-f2e1889e3b6a
+    collection: species_options
+    action: "*"
+    fields: ["*"]
+    permissions: {}
+  - role: 7be43bbe-2c82-4357-8623-f2e1889e3b6a
+    collection: biospyder_databases
+    action: "*"
+    fields: ["*"]
+    permissions: {}
+  - role: 7be43bbe-2c82-4357-8623-f2e1889e3b6a
+    collection: biospyder_manifests
+    action: "*"
+    fields: ["*"]
+    permissions: {}
+
+  # Client: scoped to their assigned projects and descendant records
+  - role: 8054625f-e147-426c-a007-f510c11f7b25
+    collection: projects
+    action: read
+    fields: ["*"]
+    permissions:
+      client_user: { _eq: "$CURRENT_USER" }
+  - role: 8054625f-e147-426c-a007-f510c11f7b25
+    collection: projects
+    action: create
+    fields:
+      - title
+      - pi_name
+      - researcher_name
+      - description
+      - status
+      - intake_platform
+      - biospyder_manifest
+      - biospyder_databases
+      - bioinformatician_assigned
+      - client_user
+    permissions: {}
+    validation: {}
+  - role: 8054625f-e147-426c-a007-f510c11f7b25
+    collection: projects
+    action: update
+    fields:
+      - title
+      - pi_name
+      - researcher_name
+      - description
+      - status
+      - intake_platform
+      - biospyder_manifest
+      - biospyder_databases
+      - bioinformatician_assigned
+    permissions:
+      client_user: { _eq: "$CURRENT_USER" }
+    validation: {}
+  - role: 8054625f-e147-426c-a007-f510c11f7b25
+    collection: studies
+    action: "*"
+    fields: ["*"]
+    permissions:
+      project:
+        client_user: { _eq: "$CURRENT_USER" }
+  - role: 8054625f-e147-426c-a007-f510c11f7b25
+    collection: samples
+    action: "*"
+    fields: ["*"]
+    permissions:
+      study:
+        project:
+          client_user: { _eq: "$CURRENT_USER" }
+  - role: 8054625f-e147-426c-a007-f510c11f7b25
+    collection: assays
+    action: "*"
+    fields: ["*"]
+    permissions:
+      sample:
+        study:
+          project:
+            client_user: { _eq: "$CURRENT_USER" }
+  - role: 8054625f-e147-426c-a007-f510c11f7b25
+    collection: sample_plating
+    action: "*"
+    fields: ["*"]
+    permissions:
+      sample:
+        study:
+          project:
+            client_user: { _eq: "$CURRENT_USER" }
+
+  # System: project read + update Plane sync metadata only
+  - role: d3146aad-b417-4e23-b4c9-fb042d451785
+    collection: projects
+    action: read
+    fields: ["*"]
+    permissions: {}
+  - role: d3146aad-b417-4e23-b4c9-fb042d451785
+    collection: projects
+    action: update
+    fields:
+      - plane_sync_status
+      - plane_last_error
+      - plane_external_ref
+    permissions: {}
+
+presets:
+  # Client role defaults: keep the experience "guided" and always scoped.
+  - id: 635837b7-0320-4206-b32f-9295b4d999d2
+    role: 8054625f-e147-426c-a007-f510c11f7b25
+    collection: projects
+    bookmark: "My Projects"
+    layout: tabular
+    layout_query:
+      sort: ["-updated_at"]
+    filter:
+      client_user: { _eq: "$CURRENT_USER" }
+  - id: 4da439e9-88c6-4123-ba3e-e9b77bd014da
+    role: 8054625f-e147-426c-a007-f510c11f7b25
+    collection: studies
+    bookmark: "My Studies"
+    layout: tabular
+    layout_query: { sort: ["-id"] }
+    filter:
+      project:
+        client_user: { _eq: "$CURRENT_USER" }
+  - id: d1d25856-5d61-40a0-8fe6-fe68f2ed3be6
+    role: 8054625f-e147-426c-a007-f510c11f7b25
+    collection: samples
+    bookmark: "My Samples"
+    layout: tabular
+    layout_query: { sort: ["sample_ID"] }
+    filter:
+      study:
+        project:
+          client_user: { _eq: "$CURRENT_USER" }
+  - id: ef7f4ea5-8fc3-4b70-8ba5-b108f7b747ba
+    role: 8054625f-e147-426c-a007-f510c11f7b25
+    collection: assays
+    bookmark: "My Assays"
+    layout: tabular
+    layout_query: { sort: ["-id"] }
+    filter:
+      sample:
+        study:
+          project:
+            client_user: { _eq: "$CURRENT_USER" }
+
+  # Admin shortcuts
+  - id: 1cb7aa8f-52b8-4bf5-9e87-d400c8bca2d2
+    role: 7be43bbe-2c82-4357-8623-f2e1889e3b6a
+    collection: sample_intake_uploads
+    bookmark: "Sample Intake Uploads"
+    layout: tabular
+    layout_query: { sort: ["-validated_at"] }
+
+flows:
+  # Flow stubs: can be imported/applied via snapshot, or recreated manually in Directus UI.
+  - id: d3d1ed60-8606-45c1-982a-d0abbde070fe
+    name: "Project Created → Plane Sync"
+    icon: sync
+    color: "#2ECDA7"
+    status: active
+    trigger: event
+    accountability: null
+    options:
+      type: items.create
+      collection: projects
+  - id: 6c52eec9-5944-4dda-8016-8c0d918f7465
+    name: "Project Intake Ready → Plane Sync"
+    icon: sync
+    color: "#2ECDA7"
+    status: active
+    trigger: event
+    accountability: null
+    options:
+      type: items.update
+      collection: projects
+
+operations:
+  # These operations assume a Directus endpoint extension at /plane-sync/sync.
+  - id: 64ca626c-fbb5-4c13-a624-4b4bd65bdb25
+    name: "Call Plane Sync (created)"
+    key: webhook
+    type: webhook
+    position_x: 19
+    position_y: 19
+    flow: d3d1ed60-8606-45c1-982a-d0abbde070fe
+    options:
+      method: POST
+      url: "{{env.PUBLIC_URL}}/plane-sync/sync"
+      headers:
+        - { header: Content-Type, value: application/json }
+        - { header: Authorization, value: "Bearer {{env.DIRECTUS_AUTOMATION_TOKEN}}" }
+      body: "{\"project_id\":\"{{$trigger.key}}\",\"event\":\"created\"}"
+  - id: 3754ed8b-3e7c-41fd-906d-d91b03fe6704
+    name: "Call Plane Sync (intake_ready)"
+    key: webhook
+    type: webhook
+    position_x: 19
+    position_y: 19
+    flow: 6c52eec9-5944-4dda-8016-8c0d918f7465
+    options:
+      method: POST
+      url: "{{env.PUBLIC_URL}}/plane-sync/sync"
+      headers:
+        - { header: Content-Type, value: application/json }
+        - { header: Authorization, value: "Bearer {{env.DIRECTUS_AUTOMATION_TOKEN}}" }
+      body: "{\"project_id\":\"{{$trigger.key}}\",\"event\":\"intake_ready\"}"

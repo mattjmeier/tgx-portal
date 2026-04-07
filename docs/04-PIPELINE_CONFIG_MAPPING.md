@@ -35,6 +35,57 @@ The system must generate:
 2. `metadata.tsv`
 3. `contrasts.tsv`
 
+## Export Contract (STORY-004)
+
+### Supported Action
+Prefer a Directus custom endpoint that generates and (optionally) stores artifacts.
+
+### `metadata.tsv` format (v1)
+One row per assay (joined to its sample + study):
+
+Columns (in order):
+- `study_id`
+- `sample_ID`
+- `sample_name`
+- `group`
+- `chemical`
+- `chemical_longname`
+- `dose`
+- `technical_control`
+- `reference_rna`
+- `solvent_control`
+- `platform`
+- `genome_version`
+- `quantification_method`
+- `read_mode`
+- `assay_id`
+- `sample_id`
+
+### `contrasts.tsv` format (v1)
+One row per contrast:
+
+Columns (in order):
+- `study_id`
+- `variable` (derived from `studies.treatment_var`, defaulting to `group`)
+- `contrast` (sanitized `{treatment}_vs_{control}`)
+- `treatment`
+- `control`
+
+If a study has ≤1 level for the selected `variable`, `contrasts.tsv` is generated with a header only and the export returns a warning instead of failing.
+
+### Error Contract (v1)
+Non-2xx responses are JSON objects with:
+`{ ok: false, code: string, message: string, details?: object|null }`
+
+Key domain error codes:
+- `mixed_platforms_not_supported`
+- `tempo_seq_missing_biospyder_manifest`
+- `tempo_seq_missing_biospyder_databases`
+- `missing_assay_platform`
+- `mixed_genome_versions_not_supported`
+- `mixed_quant_methods_not_supported`
+- `mixed_read_modes_not_supported`
+
 ## Implementation Options
 Preferred order:
 1. Directus custom endpoint that reads relational data and emits artifacts

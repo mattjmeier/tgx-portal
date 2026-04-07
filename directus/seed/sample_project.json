@@ -1,0 +1,125 @@
+{
+  "fixture_name": "golden-sample-project",
+  "project": {
+    "title": "Golden Sample Project",
+    "pi_name": "Dr. Ada Lovelace",
+    "researcher_name": "Sam Example",
+    "description": "Repeatable non-production fixture covering project, study, sample, assay, plating, lookup, and sample intake flows.",
+    "status": "active",
+    "intake_platform": "TempO-Seq",
+    "plane_sync_status": "pending",
+    "plane_external_ref": "fixture-golden-sample-project"
+  },
+  "lookups": {
+    "platform_options": [
+      { "name": "TempO-Seq", "code": "tempo-seq" },
+      { "name": "RNA-Seq", "code": "rna-seq" }
+    ],
+    "genome_versions": [
+      { "name": "GRCh38", "code": "grch38" },
+      { "name": "GRCm39", "code": "grcm39" }
+    ],
+    "quantification_methods": [
+      { "name": "Counts", "code": "counts" },
+      { "name": "TPM", "code": "tpm" }
+    ],
+    "species_options": [
+      { "name": "Homo sapiens", "code": "human" },
+      { "name": "Mus musculus", "code": "mouse" }
+    ],
+    "biospyder_databases": [
+      { "name": "TempO-Seq Human Whole Transcriptome", "code": "human-wt" },
+      { "name": "TempO-Seq Mouse Whole Transcriptome", "code": "mouse-wt" }
+    ],
+    "biospyder_manifests": [
+      { "name": "Human WT Manifest v1", "code": "human-wt-v1" }
+    ]
+  },
+  "project_biospyder_manifest_code": "human-wt-v1",
+  "project_biospyder_database_codes": ["human-wt"],
+  "studies": [
+    {
+      "key": "study-a",
+      "species": "Homo sapiens",
+      "celltype": "PBMC",
+      "treatment_var": "compound",
+      "batch_var": "prep_batch",
+      "units": "nM",
+      "samples": [
+        {
+          "sample_ID": "GS001_CTRL",
+          "sample_name": "Control 0nM",
+          "description": "Untreated control sample",
+          "group": "control",
+          "chemical": "vehicle",
+          "chemical_longname": "Vehicle control",
+          "dose": "0",
+          "assay": {
+            "platform_code": "tempo-seq",
+            "genome_version_code": "grch38",
+            "quantification_method_code": "counts",
+            "read_mode": "single-end"
+          },
+          "plating": {
+            "plate_number": "P001",
+            "batch": "BATCH-A",
+            "plate_well": "A01",
+            "row": 1,
+            "column": 1
+          }
+        },
+        {
+          "sample_ID": "GS001_LOW",
+          "sample_name": "Compound Low",
+          "description": "Low-dose treated sample",
+          "group": "treated",
+          "chemical": "cmpd-x",
+          "chemical_longname": "Compound X",
+          "dose": "10",
+          "assay": {
+            "platform_code": "tempo-seq",
+            "genome_version_code": "grch38",
+            "quantification_method_code": "counts",
+            "read_mode": "single-end"
+          },
+          "plating": {
+            "plate_number": "P001",
+            "batch": "BATCH-A",
+            "plate_well": "A02",
+            "row": 1,
+            "column": 2
+          }
+        },
+        {
+          "sample_ID": "GS001_HIGH",
+          "sample_name": "Compound High",
+          "description": "High-dose treated sample",
+          "group": "treated",
+          "chemical": "cmpd-x",
+          "chemical_longname": "Compound X",
+          "dose": "100",
+          "assay": {
+            "platform_code": "tempo-seq",
+            "genome_version_code": "grch38",
+            "quantification_method_code": "counts",
+            "read_mode": "single-end"
+          },
+          "plating": {
+            "plate_number": "P001",
+            "batch": "BATCH-A",
+            "plate_well": "A03",
+            "row": 1,
+            "column": 3
+          }
+        }
+      ],
+      "sample_intake_upload": {
+        "file_type": "tsv",
+        "write_mode": "upsert",
+        "source_type": "text",
+        "status": "draft",
+        "source_text": "sample_ID\tsample_name\tdescription\tgroup\tchemical\tchemical_longname\tdose\tplatform\tgenome_version\tquantification_method\tread_mode\nGS001_CTRL\tControl 0nM\tUntreated control sample\tcontrol\tvehicle\tVehicle control\t0\ttempo-seq\tgrch38\tcounts\tsingle-end\nGS001_LOW\tCompound Low\tLow-dose treated sample\ttreated\tcmpd-x\tCompound X\t10\ttempo-seq\tgrch38\tcounts\tsingle-end\nGS001_HIGH\tCompound High\tHigh-dose treated sample\ttreated\tcmpd-x\tCompound X\t100\ttempo-seq\tgrch38\tcounts\tsingle-end\n"
+      }
+    }
+  ]
+}

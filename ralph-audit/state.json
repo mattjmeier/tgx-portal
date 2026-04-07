@@ -1,0 +1,95 @@
+{
+  "generated_at": "2026-04-07T20:26:13Z",
+  "prd_path": "/home/mmeier/shared2/projects/tgx-portal/.taskmaster/docs/prd.md",
+  "stories": {
+    "STORY-001": {
+      "acceptance_criteria": [
+        "The intake workflow captures project title, PI name, researcher name, assigned bioinformatician, description, and status.",
+        "The form adapts based on selected assay or platform choices, including TempO-Seq-specific options only when relevant.",
+        "Client users can only view and edit projects assigned to them.",
+        "Validation errors are shown before invalid project data is saved.",
+        "Project creation or promotion can trigger downstream automation such as Plane integration."
+      ],
+      "body_markdown": "**As a** collaborator or client,\n**I want to** create and update project intake information through a guided Directus-based workflow,\n**So that I can** submit accurate project details without relying on static PDF forms.\n\n**Acceptance Criteria:**\n- [ ] The intake workflow captures project title, PI name, researcher name, assigned bioinformatician, description, and status.\n- [ ] The form adapts based on selected assay or platform choices, including TempO-Seq-specific options only when relevant.\n- [ ] Client users can only view and edit projects assigned to them.\n- [ ] Validation errors are shown before invalid project data is saved.\n- [ ] Project creation or promotion can trigger downstream automation such as Plane integration.\n\n**Task Breakdown Hint:**\n- Task 1.1: Model `projects` collection and required relations (~4 hours)\n- Task 1.2: Configure Directus roles, policies, and field presentation (~6 hours)\n- Task 1.3: Add intake-specific interface logic and automation triggers (~6 hours)\n- Task 1.4: Write role and validation tests (~4 hours)\n\n**Dependencies:** REQ-001, REQ-002, REQ-004\n\n---",
+      "dependencies": "REQ-001, REQ-002, REQ-004",
+      "description": "- Task 1.1: Model `projects` collection and required relations (~4 hours) - Task 1.2: Configure Directus roles, policies, and field presentation (~6 hours) - Task 1.3: Add intake-specific interface logic and automation triggers (~6 hours)",
+      "directus_sensitive": true,
+      "id": "STORY-001",
+      "last_run_at": "2026-04-07T19:22:00Z",
+      "note": "Accepted as complete after live Directus bootstrap, exported baseline-story-001.yaml, and successful replay of that baseline on a fresh database.",
+      "number": 1,
+      "output_relpath": "ralph-audit/results/01-collaborator-project-intake.md",
+      "passes": true,
+      "skipped": false,
+      "slug": "collaborator-project-intake",
+      "title": "Collaborator Project Intake"
+    },
+    "STORY-002": {
+      "acceptance_criteria": [
+        "The upload workflow accepts CSV or TSV input and shows a preview before commit.",
+        "Invalid rows return row-level and field-level messages, including duplicate `sample_ID` and pattern failures.",
+        "Valid rows create or update records in the correct related collections.",
+        "The workflow supports study-scoped validation rules and lookup-backed value checks.",
+        "The workflow remains inside Directus unless a documented limitation requires a fallback frontend route."
+      ],
+      "body_markdown": "**As a** bioinformatician,\n**I want to** upload and validate tabular sample metadata inside Directus,\n**So that I can** correct issues quickly and create valid sample and assay records without manual re-entry.\n\n**Acceptance Criteria:**\n- [ ] The upload workflow accepts CSV or TSV input and shows a preview before commit.\n- [ ] Invalid rows return row-level and field-level messages, including duplicate `sample_ID` and pattern failures.\n- [ ] Valid rows create or update records in the correct related collections.\n- [ ] The workflow supports study-scoped validation rules and lookup-backed value checks.\n- [ ] The workflow remains inside Directus unless a documented limitation requires a fallback frontend route.\n\n**Task Breakdown Hint:**\n- Task 2.1: Define import payload and validation contract (~4 hours)\n- Task 2.2: Build Directus module, endpoint, or operation for preview and validation (~8 hours)\n- Task 2.3: Persist validated rows into collections (~6 hours)\n- Task 2.4: Add upload and validation integration tests (~4 hours)\n\n**Dependencies:** REQ-001, REQ-003, REQ-005\n\n---",
+      "dependencies": "REQ-001, REQ-003, REQ-005",
+      "description": "- Task 2.1: Define import payload and validation contract (~4 hours) - Task 2.2: Build Directus module, endpoint, or operation for preview and validation (~8 hours) - Task 2.3: Persist validated rows into collections (~6 hours)",
+      "directus_sensitive": true,
+      "id": "STORY-002",
+      "last_run_at": "2026-04-07T19:52:27Z",
+      "note": "Skipped: exceeded 5 attempts without passing",
+      "number": 2,
+      "output_relpath": "ralph-audit/results/02-bioinformatician-sample-intake.md",
+      "passes": false,
+      "skipped": true,
+      "slug": "bioinformatician-sample-intake",
+      "title": "Bioinformatician Sample Intake"
+    },
+    "STORY-003": {
+      "acceptance_criteria": [
+        "Admin users can maintain lookup collections such as genome versions, quantification methods, species options, and Biospyder metadata.",
+        "Permission filters enforce project-scoped access for client users across launch-critical collections.",
+        "System automation can execute required flows and endpoint calls using a dedicated least-privilege role.",
+        "Audit-relevant updates are visible in Directus activity history or equivalent logging.",
+        "Lookup changes take effect in downstream forms and config generation without application redeploys."
+      ],
+      "body_markdown": "**As an** administrator,\n**I want to** manage lookup tables, roles, and policies in Directus,\n**So that I can** maintain reference data and access control without code deployments for routine changes.\n\n**Acceptance Criteria:**\n- [ ] Admin users can maintain lookup collections such as genome versions, quantification methods, species options, and Biospyder metadata.\n- [ ] Permission filters enforce project-scoped access for client users across launch-critical collections.\n- [ ] System automation can execute required flows and endpoint calls using a dedicated least-privilege role.\n- [ ] Audit-relevant updates are visible in Directus activity history or equivalent logging.\n- [ ] Lookup changes take effect in downstream forms and config generation without application redeploys.\n\n**Task Breakdown Hint:**\n- Task 3.1: Create lookup collections and admin views (~4 hours)\n- Task 3.2: Implement role and policy rules (~6 hours)\n- Task 3.3: Verify automation role capabilities (~3 hours)\n- Task 3.4: Add admin-focused test coverage (~3 hours)\n\n**Dependencies:** REQ-001, REQ-002\n\n---",
+      "dependencies": "REQ-001, REQ-002",
+      "description": "- Task 3.1: Create lookup collections and admin views (~4 hours) - Task 3.2: Implement role and policy rules (~6 hours) - Task 3.3: Verify automation role capabilities (~3 hours)",
+      "directus_sensitive": true,
+      "id": "STORY-003",
+      "last_run_at": "2026-04-07T20:26:13Z",
+      "note": "Skipped: exceeded 5 attempts without passing",
+      "number": 3,
+      "output_relpath": "ralph-audit/results/03-admin-lookup-and-permissions-management.md",
+      "passes": false,
+      "skipped": true,
+      "slug": "admin-lookup-and-permissions-management",
+      "title": "Admin Lookup and Permissions Management"
+    },
+    "STORY-004": {
+      "acceptance_criteria": [
+        "A supported action can generate `config.yaml`, `metadata.tsv`, and `contrasts.tsv` for an eligible project.",
+        "Artifact generation reads from Directus collections and lookup tables only.",
+        "Mixed incompatible assay platforms fail with a descriptive error instead of producing invalid output.",
+        "TempO-Seq exports fail with a descriptive error when required Biospyder metadata is missing.",
+        "The assigned bioinformatician is notified or shown artifact readiness after successful generation."
+      ],
+      "body_markdown": "**As a** bioinformatician,\n**I want to** generate Snakemake-ready configuration artifacts from a project in Directus,\n**So that I can** start downstream analysis using reproducible metadata-driven files.\n\n**Acceptance Criteria:**\n- [ ] A supported action can generate `config.yaml`, `metadata.tsv`, and `contrasts.tsv` for an eligible project.\n- [ ] Artifact generation reads from Directus collections and lookup tables only.\n- [ ] Mixed incompatible assay platforms fail with a descriptive error instead of producing invalid output.\n- [ ] TempO-Seq exports fail with a descriptive error when required Biospyder metadata is missing.\n- [ ] The assigned bioinformatician is notified or shown artifact readiness after successful generation.\n\n**Task Breakdown Hint:**\n- Task 4.1: Define export mapping and error contract (~4 hours)\n- Task 4.2: Build Directus endpoint or flow-backed operation (~8 hours)\n- Task 4.3: Add artifact storage or return behavior (~4 hours)\n- Task 4.4: Create golden-file tests for output artifacts (~6 hours)\n\n**Dependencies:** REQ-001, REQ-006\n\n---",
+      "dependencies": "REQ-001, REQ-006",
+      "description": "- Task 4.1: Define export mapping and error contract (~4 hours) - Task 4.2: Build Directus endpoint or flow-backed operation (~8 hours) - Task 4.3: Add artifact storage or return behavior (~4 hours)",
+      "directus_sensitive": true,
+      "id": "STORY-004",
+      "last_run_at": null,
+      "note": "Reset to pending after loop hardening; previous result predated Directus live-validation gating.",
+      "number": 4,
+      "output_relpath": "ralph-audit/results/04-workflow-configuration-export.md",
+      "passes": false,
+      "skipped": false,
+      "slug": "workflow-configuration-export",
+      "title": "Workflow Configuration Export"
+    }
+  },
+  "story_count": 4
+}

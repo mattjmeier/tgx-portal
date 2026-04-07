@@ -4,7 +4,7 @@
 The relational model still follows the lab hierarchy:
 `Project -> Study -> Sample -> Assay`
 
-In this branch, that hierarchy should be implemented as **Directus collections and relations** instead of Django models.
+That hierarchy should be implemented as **Directus collections and relations**.
 
 ## Core Collections
 
