@@ -1,34 +1,62 @@
-# Database Schema & Data Models
+# Collections & Data Model
 
 ## Core Philosophy
-We use a relational structure inspired by the `SummarizedExperiment` object. Metadata is separated into hierarchical levels: Project -> Study -> Sample -> Assay. 
+The relational model still follows the lab hierarchy:
+`Project -> Study -> Sample -> Assay`
 
-## Models & Pydantic Validation
+In this branch, that hierarchy should be implemented as **Directus collections and relations** instead of Django models.
+
+## Core Collections
 
 ### 1. Project Management
-* **`Project`**: Represents the collaboration.
-  * Fields: `id`, `pi_name`, `researcher_name`, `bioinformatician_assigned`, `title`, `description`, `created_at`.
-  * *Constraint*: PI Name and title are used to route to Plane PM.
-* **`Study`**: A distinct experiment within a project.
-  * Fields: `id`, `project_id`, `species` (Enum: human, mouse, rat, hamster), `celltype`, `treatment_var`, `batch_var`.
+* **`projects`**
+  * Fields: `id`, `pi_name`, `researcher_name`, `bioinformatician_assigned`, `title`, `description`, `owner`, `status`, `created_at`, `updated_at`
+  * `owner` should reference the Directus user or a linked collaborator record used for client visibility rules.
+  * `pi_name` and `title` remain important for Plane and reporting integrations.
 
-### 2. The Sample Tensor
-* **`Sample`**: The biological entity. 
-  * Validation: Must use strict regex for `sample_ID`: `^[a-zA-Z0-9-_]*$` (No spaces/special chars).
-  * Fields: `id`, `study_id`, `sample_ID`, `sample_name`, `description`, `group` (experimental group mapping).
-  * *Toxicology Specifics*: `chemical`, `chemical_longname`, `dose` (Float, min: 0), `technical_control` (Bool), `reference_rna` (Bool), `solvent_control` (Bool).
-* **`Assay`**: Defines the analytical run. 
-  * Concept: A given sample might be run on "TempO-Seq" or "RNA-Seq". 
-  * Fields: `id`, `sample_id`, `platform` (TempO-Seq vs RNA-Seq), `genome_version`, `quantification_method` (e.g., raw_counts, normalized_transcripts).
+* **`studies`**
+  * Fields: `id`, `project`, `species`, `celltype`, `treatment_var`, `batch_var`, `units`
+  * Relationship: many studies belong to one project.
+  * Constraint goal: prevent duplicate study definitions within the same project.
 
-### 3. Lab Utilities (Metadata)
-* **`SamplePlating`**: To facilitate lab work and label printing.
-  * Fields: `sample_id`, `plate_number`, `batch`, `plate_well` (e.g., E-A01), `row`, `column`, `index_I7`, `I7_Index_ID`, `index2`, `I5_Index_ID`.
+### 2. Sample Metadata
+* **`samples`**
+  * Fields: `id`, `study`, `sample_ID`, `sample_name`, `description`, `group`, `chemical`, `chemical_longname`, `dose`, `technical_control`, `reference_rna`, `solvent_control`
+  * Relationship: many samples belong to one study.
+  * Validation goal: `sample_ID` must match `^[a-zA-Z0-9-_]*$`.
+  * Constraint goal: `sample_ID` must be unique within a study.
+
+* **`assays`**
+  * Fields: `id`, `sample`, `platform`, `genome_version`, `quantification_method`, `read_mode`
+  * Relationship: many assays belong to one sample.
+
+### 3. Lab Utility Collections
+* **`sample_plating`**
+  * Fields: `id`, `sample`, `plate_number`, `batch`, `plate_well`, `row`, `column`, `index_I7`, `I7_Index_ID`, `index2`, `I5_Index_ID`
+  * Relationship: one plating record per sample where applicable.
+
+### 4. Future-Proofing Collections
+* **`sequencing_runs`**
+  * Fields: `id`, `run_id`, `flowcell_id`, `instrument_name`, `date_run`, `raw_data_path`
+
+* **`assay_sequencing_runs`**
+  * Join collection implementing many-to-many between assays and sequencing runs.
+
+## Lookup Collections
+Directus is especially useful for non-code-managed reference data. Add lookup collections for:
+* `genome_versions`
+* `biospyder_databases`
+* `biospyder_manifests`
+* `species_options`
+* `platform_options`
+* `quantification_methods`
+
+These should be admin-editable without a code deploy.
 
 ## Validation Strategy
-Before a `Sample` sheet is ingested into Django models, it must pass through a `Pydantic` schema modeled exactly after the `metadata.schema.yaml`. If a collaborator uploads a CSV with a `sample_ID` containing a space, the backend must return a descriptive 400 Bad Request error.
+Use the following layered approach:
+* Directus field rules for required values, enums, and basic relational constraints.
+* Directus flows or hooks for cross-field and cross-record rules.
+* A custom validation extension or companion service for spreadsheet imports when row-level error reporting must be precise.
 
-### 4. Instrument & Run Tracking (Future-Proofing)
-* **`SequencingRun`**: Represents a physical run on an instrument.
-  * Fields: `id`, `run_id` (e.g., the standard Illumina string format), `flowcell_id`, `instrument_name`, `date_run`, `raw_data_path` (absolute path on the server).
-* **Relationship**: `Assay` has a `ManyToManyField` to `SequencingRun`. (An assay/sample can be sequenced across multiple flow cells to achieve target depth).
+If a collaborator uploads a CSV where `sample_ID` contains spaces or duplicates an existing sample in the study, the system must return row-specific validation feedback.

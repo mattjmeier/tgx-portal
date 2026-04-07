@@ -1,33 +1,33 @@
-# Project R-ODAF Portal: AI Agent Core Context
+# Project R-ODAF Portal: Directus Exploration Context
 
 ## System Purpose
-This project is to build `tgx-portal`, a web application for Health Canada's genomics laboratory. This portal manages metadata, project intake, and configuration generation for **R-ODAF** (a regulatory toxicology transcriptomics Snakemake pipeline).
+This branch explores rebuilding `tgx-portal` around **Directus** as the system of record for Health Canada's genomics laboratory metadata. The portal still supports R-ODAF project intake, sample metadata management, and workflow configuration generation, but the implementation assumption changes from a custom Django application to a Directus-first platform with a custom front end layered on top.
 
-The goal is to replace manual PDF intake forms and scattered metadata with a centralized, modular database that tracks Projects, Studies, Samples, and Assays, while automatically generating workflow configurations and triggering project management tasks.
+The goal remains the same:
+replace PDF intake forms and scattered spreadsheets with a centralized authority for Projects, Studies, Samples, Assays, lookup tables, and downstream workflow artifacts.
 
-It is meant to be a single point of authority on project metadata
+## Target Architecture
+* **Data Platform**: Directus backed by PostgreSQL.
+* **Frontend**: Custom React application consuming the Directus API/SDK.
+* **Automation**: Directus Flows, webhooks, and custom extensions where necessary.
+* **Config Generation**: A separate service or Directus extension that builds Snakemake config artifacts from Directus data.
+* **Containerization**: Docker Compose for local development and production-like environments.
+* **Testing**: API contract tests, frontend tests, and E2E tests against a running Directus stack.
 
-## Tech Stack
-* **Backend**: Django, Django REST Framework (DRF), PostgreSQL, Pydantic (for strict data validation).
-* **Frontend**: React (TypeScript), Vite, TailwindCSS.
-* **Data Grids**: TanStack Table v8 (fully server-side paginated/sorted/filtered).
-* **Task Queue / Integrations**: Celery + Redis (for emails and webhook triggers).
-* **Containerization**: Docker, Docker Compose (Dev & Prod parity).
-* **Testing**: Pytest (Backend), Vitest (Frontend), Playwright (E2E), GitHub Actions (CI/CD).
-
-## Core Directives for the AI
-1. **Strict Typing**: Use TypeScript for all React code. Use Python Type Hints and Pydantic for validation before data hits the Django ORM.
-2. **Modular Architecture**: Keep React components small. Separate API fetching logic from UI components (use React Query / TanStack Query).
-3. **RBAC**: Always assume three roles: `Admin` (Bioinformatics Staff), `Client` (Collaborators), `System` (Automated tasks). Clients can only view/edit their own assigned projects.
-4. **Context Routing**: Do not guess implementation details. Refer to the specific markdown files in the `docs/` folder for exact structural requirements:
+## Core Directives For The AI
+1. **Directus First**: Default to Directus collections, relationships, permissions, and flows before proposing custom backend code.
+2. **Custom Frontend Still Required**: Do not assume the Directus admin UI replaces the client-facing portal. External collaborators should use a tailored front end.
+3. **RBAC**: Keep three primary roles: `Admin`, `Client`, and `System`. Clients must only see projects assigned to them.
+4. **Minimize Custom Code**: Add custom services only when Directus collections, permissions, flows, hooks, or extensions are not sufficient.
+5. **Context Routing**: Use the docs in `docs/` as the current source of truth for the Directus-based design:
 
 ### Knowledge Base Routing
 When working on specific features, read the corresponding document:
-* **Database & Models**: Read `docs/01-DATABASE_SCHEMA.md`
-* **Backend APIs & Plane Integrations**: Read `docs/02-API_AND_INTEGRATIONS.md`
-* **React Frontend & TanStack Tables**: Read `docs/03-UI_UX_REQUIREMENTS.md`
-* **Snakemake YAML Config Generation**: Read `docs/04-PIPELINE_CONFIG_MAPPING.md`
+* **Collections & Data Model**: Read `docs/01-DATABASE_SCHEMA.md`
+* **API, Directus Flows & Integrations**: Read `docs/02-API_AND_INTEGRATIONS.md`
+* **Custom Frontend Requirements**: Read `docs/03-UI_UX_REQUIREMENTS.md`
+* **Snakemake Mapping Strategy**: Read `docs/04-PIPELINE_CONFIG_MAPPING.md`
+* **DevOps & Testing**: Read `docs/05-DEVOPS_AND_TESTING.md`
 
-5. **Test-Driven Development (TDD)**: You must write tests *before* writing the implementation logic. Follow the Red-Green-Refactor loop. 
-6. **Container-First**: All development, testing, and production execution must occur within Docker containers. Do not assume local system dependencies exist other than Docker.
-7. **DevOps & Testing**: Read `docs/05-DEVOPS_AND_TESTING.md` for exact Docker service definitions and CI/CD pipeline steps.
+6. **Container First**: Assume Directus, PostgreSQL, and the custom frontend run in containers.
+7. **Prefer Requirements Over Premature Code**: This branch is for architectural exploration. Favor clear requirements and implementation notes before rebuilding.

@@ -1,24 +1,56 @@
 # Frontend UI & UX Requirements
 
 ## Framework
-* React 18, TypeScript, Vite.
-* **Styling**: TailwindCSS + Headless UI (e.g., Radix UI or shadcn/ui).
-* **State/Fetching**: TanStack Query (React Query) for server-state caching.
+* React 18 with TypeScript
+* Vite for local development
+* TailwindCSS or another utility-first styling system
+* TanStack Query for server-state
+* TanStack Table for large explorer views
 
-## Component: Project Intake Form (Client UI)
-* Replaces the static PDF. 
-* Must be dynamic: If `Platform == TempO-Seq`, show `Biospyder Manifest` dropdowns. If `Platform == RNA-Seq`, hide them.
-* **Spreadsheet Upload**: Provide a drag-and-drop zone. Use `Papaparse` to parse the CSV/TSV locally. Display a preview grid. If Pydantic/DRF returns validation errors, highlight the exact cell/row in the UI. Allow copy-pasting from Excel directly into the UI (consider `react-datasheet-grid` or TanStack implementation).
+## Product Direction
+This project still requires a **custom front end**.
 
-## Component: Data Explorer Tables (Bioinformatician UI)
-* Use **TanStack Table v8**.
-* **CRITICAL**: The database will eventually hold hundreds of thousands of sample/gene rows. *All data grid implementations must be Server-Side.*
-* TanStack Table configuration must map `onSortingChange`, `onPaginationChange`, and `onGlobalFilterChange` to state variables, which are then passed as query parameters to TanStack Query (e.g., `?page=2&ordering=-sample_ID&search=M1`).
-* **Features Required on Tables**:
-  * Global Search.
-  * Column toggling (hide/show specific metadata).
-  * Row selection (to trigger bulk actions like "Export selected to TSV" or "Print Labels").
+Directus should not be treated as the client-facing experience. Instead:
+* collaborators use a tailored intake portal
+* bioinformaticians use a custom workspace optimized for sample review and exports
+* Directus admin is primarily for internal operations and reference-data management
 
-## Admin Capabilities
-* Provide an "Admin Dashboard" that bypasses standard client limits.
-* Admins need a view to assign users to roles, manage lookup tables (e.g., adding a new `genome_version` or `biospyder_db` option to the dropdowns without requiring a code deploy).
+## Component: Project Intake Form
+* Replaces the static PDF
+* Must be dynamic based on upstream assay and platform choices
+* If `platform == TempO-Seq`, show Biospyder-related options
+* If `platform == RNA-Seq`, hide TempO-Seq-specific controls
+
+## Component: Spreadsheet Upload
+* Provide drag-and-drop upload for CSV/TSV
+* Parse locally for preview
+* Show row-level and cell-level validation feedback returned by the validation layer
+* Allow copy-paste from Excel-like sources where practical
+* Do not expose raw Directus admin forms to collaborators for bulk sample intake
+
+## Component: Explorer Tables
+* All large tables must be server-side
+* The frontend must map sorting, filtering, pagination, and search state to Directus-compatible query parameters or custom API parameters
+* Required table capabilities:
+  * global search
+  * server-side sort
+  * pagination
+  * row selection
+  * export actions
+  * optional column visibility preferences
+
+## Admin Experience
+Use Directus admin for:
+* internal data review
+* role and permission administration
+* lookup-table maintenance
+* lightweight manual corrections
+
+Use the custom frontend for:
+* collaborator intake
+* domain-specific workflows
+* guided config generation
+* domain-specific dashboards
+
+## UX Principle
+The external user experience should feel like a regulated lab portal, not like a generic database tool.
