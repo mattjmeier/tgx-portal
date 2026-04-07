@@ -24,10 +24,16 @@ export type SampleQueryParams = {
   ordering?: string;
 };
 
-export class BulkSampleImportError extends Error {
-  rowErrors: Array<{ rowNumber: number; message: string }>;
+export type BulkSampleRowError = {
+  rowNumber: number;
+  message: string;
+  fieldErrors: Record<string, string[]>;
+};
 
-  constructor(message: string, rowErrors: Array<{ rowNumber: number; message: string }> = []) {
+export class BulkSampleImportError extends Error {
+  rowErrors: BulkSampleRowError[];
+
+  constructor(message: string, rowErrors: BulkSampleRowError[] = []) {
     super(message);
     this.name = "BulkSampleImportError";
     this.rowErrors = rowErrors;
@@ -107,22 +113,34 @@ export async function createSamplesBulk(payload: CreateSamplePayload[]): Promise
           return [];
         }
 
-        const messages = Object.entries(rowError as Record<string, unknown>).flatMap(([field, value]) => {
+        const fieldErrors = Object.entries(rowError as Record<string, unknown>).reduce<Record<string, string[]>>((accumulator, [field, value]) => {
           if (!Array.isArray(value)) {
-            return [];
+            return accumulator;
           }
 
-          return value.map((item) => {
+          const messages = value.flatMap((item) => {
             if (typeof item === "string") {
-              return `${field}: ${item}`;
+              return [item];
             }
-            return `${field}: ${JSON.stringify(item)}`;
+            return [JSON.stringify(item)];
           });
-        });
 
-        return messages.length > 0
-          ? [{ rowNumber: index + 2, message: messages.join(" | ") }]
-          : [{ rowNumber: index + 2, message: "Invalid row." }];
+          if (messages.length > 0) {
+            accumulator[field] = messages;
+          }
+
+          return accumulator;
+        }, {});
+
+        const messages = Object.entries(fieldErrors).flatMap(([field, value]) =>
+          value.map((message) => `${field}: ${message}`),
+        );
+
+        if (messages.length === 0) {
+          return [];
+        }
+
+        return [{ rowNumber: index + 2, message: messages.join(" | "), fieldErrors }];
       });
 
       throw new BulkSampleImportError("One or more rows failed validation.", rowErrors);

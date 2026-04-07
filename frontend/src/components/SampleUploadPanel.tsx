@@ -3,7 +3,7 @@ import Papa from "papaparse";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { PaginatedResponse } from "../api/projects";
-import { BulkSampleImportError, createSamplesBulk, type CreateSamplePayload } from "../api/samples";
+import { BulkSampleImportError, createSamplesBulk, type BulkSampleRowError, type CreateSamplePayload } from "../api/samples";
 import type { Sample } from "../api/samples";
 
 type SampleUploadPanelProps = {
@@ -64,7 +64,7 @@ export function SampleUploadPanel({ studyId }: SampleUploadPanelProps) {
   const [rows, setRows] = useState<ParsedUploadRow[]>([]);
   const [fileName, setFileName] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [rowErrors, setRowErrors] = useState<Array<{ rowNumber: number; message: string }>>([]);
+  const [rowErrors, setRowErrors] = useState<BulkSampleRowError[]>([]);
 
   const templateUrl = useMemo(() => buildTemplateDownload(), []);
 
@@ -161,6 +161,14 @@ export function SampleUploadPanel({ studyId }: SampleUploadPanelProps) {
     mutation.mutate(payload);
   }
 
+  function getRowError(rowNumber: number) {
+    return rowErrors.find((entry) => entry.rowNumber === rowNumber);
+  }
+
+  function getCellError(rowNumber: number, field: keyof ParsedUploadRow) {
+    return getRowError(rowNumber)?.fieldErrors[field]?.join(" | ") ?? null;
+  }
+
   return (
     <section className="upload-panel">
       <div className="section-header compact-header">
@@ -188,27 +196,33 @@ export function SampleUploadPanel({ studyId }: SampleUploadPanelProps) {
             <table className="preview-table">
               <thead>
                 <tr>
-                  <th>sample_ID</th>
-                  <th>sample_name</th>
-                  <th>group</th>
-                  <th>dose</th>
-                  <th>technical_control</th>
-                  <th>reference_rna</th>
-                  <th>solvent_control</th>
+                  {templateHeaders.map((header) => (
+                    <th key={header}>{header}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, index) => {
-                  const rowError = rowErrors.find((entry) => entry.rowNumber === index + 2);
+                  const rowNumber = index + 2;
+                  const rowError = getRowError(rowNumber);
                   return (
                     <tr className={rowError ? "preview-row-error" : ""} key={`${row.sample_ID}-${index}`}>
-                      <td>{row.sample_ID}</td>
-                      <td>{row.sample_name}</td>
-                      <td>{row.group}</td>
-                      <td>{row.dose}</td>
-                      <td>{row.technical_control}</td>
-                      <td>{row.reference_rna}</td>
-                      <td>{row.solvent_control}</td>
+                      {templateHeaders.map((header) => {
+                        const field = header as keyof ParsedUploadRow;
+                        const cellError = getCellError(rowNumber, field);
+                        return (
+                          <td
+                            className={cellError ? "preview-cell-error" : ""}
+                            key={header}
+                            title={cellError ?? undefined}
+                          >
+                            <div className="preview-cell-content">
+                              <span>{row[field]}</span>
+                              {cellError ? <span className="preview-cell-error-note">{cellError}</span> : null}
+                            </div>
+                          </td>
+                        );
+                      })}
                     </tr>
                   );
                 })}
