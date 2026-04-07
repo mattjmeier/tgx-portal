@@ -1,0 +1,143 @@
+:root {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  color: #102226;
+  background:
+    radial-gradient(circle at top left, rgba(117, 201, 169, 0.32), transparent 28%),
+    radial-gradient(circle at top right, rgba(255, 214, 102, 0.26), transparent 22%),
+    linear-gradient(180deg, #f6f5ee 0%, #eef2ea 100%);
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+body,
+#root {
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+code {
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+}
+
+.shell {
+  width: min(1100px, calc(100vw - 2rem));
+  margin: 0 auto;
+  padding: 3rem 0 4rem;
+}
+
+.hero,
+.card,
+.next-steps {
+  border: 1px solid rgba(16, 34, 38, 0.12);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 18px 50px rgba(47, 70, 62, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.hero {
+  padding: 2rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.8rem;
+  color: #37685b;
+}
+
+.hero h1,
+.next-steps h2,
+.card h2 {
+  margin: 0;
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  line-height: 1.05;
+}
+
+.hero h1 {
+  max-width: 11ch;
+  font-size: clamp(2.8rem, 6vw, 5.5rem);
+}
+
+.lede {
+  max-width: 58rem;
+  margin: 1rem 0 0;
+  font-size: 1.08rem;
+  color: #2d4640;
+}
+
+.hero-meta {
+  display: inline-flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 1.5rem;
+  padding: 0.8rem 1rem;
+  border-radius: 999px;
+  background: #102226;
+  color: #f6f5ee;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.card,
+.next-steps {
+  padding: 1.5rem;
+}
+
+.card p,
+.next-steps li {
+  color: #345049;
+}
+
+.next-steps {
+  margin-top: 1rem;
+}
+
+.next-steps ol {
+  margin: 1rem 0 0;
+  padding-left: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .shell {
+    width: min(100vw - 1rem, 1100px);
+    padding-top: 1rem;
+  }
+
+  .hero,
+  .card,
+  .next-steps {
+    border-radius: 20px;
+  }
+
+  .hero-meta {
+    display: block;
+    border-radius: 16px;
+  }
+}

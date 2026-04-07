@@ -1,0 +1,59 @@
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  directus:
+    image: directus/directus:11
+    restart: unless-stopped
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      KEY: ${DIRECTUS_KEY}
+      SECRET: ${DIRECTUS_SECRET}
+      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+      DB_CLIENT: pg
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      WEBSOCKETS_ENABLED: "true"
+      CORS_ENABLED: ${DIRECTUS_CORS_ENABLED}
+      PUBLIC_URL: ${DIRECTUS_PUBLIC_URL}
+    ports:
+      - "8055:8055"
+    volumes:
+      - ./directus/extensions:/directus/extensions
+      - ./directus/uploads:/directus/uploads
+      - ./directus/snapshots:/directus/snapshots
+
+  frontend:
+    image: node:20-bookworm
+    restart: unless-stopped
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      VITE_DIRECTUS_URL: ${VITE_DIRECTUS_URL}
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+    depends_on:
+      - directus
+
+volumes:
+  postgres_data:
