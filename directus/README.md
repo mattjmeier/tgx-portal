@@ -68,9 +68,10 @@ This script uses the current STORY-001 snapshot as a blueprint, but creates the 
 
 ## Repeatable Baseline
 
-The first real exported baseline for this branch is:
+The current real exported baselines for this branch are:
 
 - `directus/snapshots/baseline-story-001.yaml`
+- `directus/snapshots/baseline-story-004.yaml`
 
 Recommended repeatable workflow:
 
@@ -82,8 +83,8 @@ Recommended repeatable workflow:
 Example replay flow:
 
 ```bash
-docker compose cp ./directus/snapshots/baseline-story-001.yaml directus:/tmp/baseline-story-001.yaml
-docker compose exec directus npx directus schema apply /tmp/baseline-story-001.yaml --yes
+docker compose cp ./directus/snapshots/baseline-story-004.yaml directus:/tmp/baseline-story-004.yaml
+docker compose exec directus npx directus schema apply /tmp/baseline-story-004.yaml --yes
 ```
 
 ## Repeatable Sample Data
@@ -106,6 +107,17 @@ Notes:
 - This fixture is intentionally non-production and safe to rerun.
 - It is separate from schema bootstrapping on purpose.
 - If `DIRECTUS_SAMPLE_CLIENT_EMAIL` is set to an existing Directus user, the sample project will be assigned to that user; otherwise it is assigned to the admin user running the script.
+
+Reusable local verification-user helper:
+
+- `python3 directus/bootstrap/provision_verification_users.py`
+
+This provisions:
+
+- `client.verify@example.com`
+- `system.verify@example.com`
+
+and assigns the seeded sample project to the client verifier for RBAC smoke tests.
 
 ## Story Snapshots
 
@@ -138,6 +150,7 @@ Current status:
 
 - `directus/snapshots/02-bioinformatician-sample-intake.yaml` should be treated as a design/reference artifact until it is recreated from a real Directus instance or replaced by an API-backed/bootstrap path.
 - API-backed bootstrap path (recommended for fresh local stacks): `python3 directus/bootstrap/bootstrap_story_002.py` (run after `bootstrap_story_001.py`).
+- Live status: applied and verified against the running stack via `/sample-intake/preview` and `/sample-intake/commit` using the seeded project/study on April 7, 2026.
 
 Usage (inside Directus Data Studio):
 
@@ -157,18 +170,26 @@ Usage (inside Directus Data Studio):
 Current status:
 
 - `directus/snapshots/03-admin-lookup-and-permissions-management.yaml` is not yet an approved repeatable baseline.
+- Roles/policies and client-scoped collection access are applied live.
+- Client login and project/study/sample/assay visibility were verified with `client.verify@example.com` on April 7, 2026.
+- System token read scope was verified with `system.verify@example.com` on April 7, 2026.
+- Remaining gap: the stricter Plane-sync helper still needs follow-up because static-token `/users/me` accountability does not currently report a role and `/plane-sync/sync` returned `500`.
 
 ### STORY-004 (Workflow Configuration Export)
 
 - Schema + export tracking + defaults: `directus/snapshots/04-workflow-configuration-export.yaml`
+- Supported bootstrap path (export collections/fields/permissions/defaults): `python3 directus/bootstrap/bootstrap_story_004.py`
+- Live verification helper (seeded project + endpoint smoke test): `python3 directus/bootstrap/verify_story_004_export.py`
 - Workflow export endpoint: `directus/extensions/endpoints/workflow-export/index.js`
 - Shared artifact generation logic + golden-file tests: `directus/extensions/shared/workflowExport.mjs`
 
 Current status:
 
-- `directus/snapshots/04-workflow-configuration-export.yaml` is not yet an approved repeatable baseline.
+- `directus/snapshots/04-workflow-configuration-export.yaml` remains a design/reference artifact.
+- `directus/snapshots/baseline-story-004.yaml` is now the current live-exported repeatable baseline after STORY-004 verification.
 
 Usage (authenticated; e.g., Admin or System automation token):
 
 - Generate and store an export: `POST /workflow-export/projects/{projectId}/generate-config?include_content=false&store=true`
 - Generate without storing: `POST /workflow-export/projects/{projectId}/generate-config?include_content=true&store=false`
+- Seed a repeatable verification target first when needed: `python3 directus/seed/load_sample_project.py`

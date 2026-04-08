@@ -1,5 +1,3 @@
-import { defineHook } from '@directus/extensions-sdk';
-
 import {
   enforceClientOwnership,
   validateProjectIntake,
@@ -9,9 +7,15 @@ function formatErrors(errors) {
   return errors.map((e) => `${e.field}: ${e.message}`).join(' ');
 }
 
-export default defineHook(({ filter }, { services, exceptions, database, getSchema, logger }) => {
+function invalidPayload(message) {
+  const err = new Error(message);
+  err.status = 400;
+  err.code = 'invalid_payload';
+  return err;
+}
+
+export default ({ filter }, { services, database, getSchema, logger }) => {
   const { ItemsService } = services;
-  const { InvalidPayloadException } = exceptions;
 
   async function getProjectsService(accountability) {
     return new ItemsService('projects', {
@@ -32,7 +36,7 @@ export default defineHook(({ filter }, { services, exceptions, database, getSche
 
     const errors = validateProjectIntake(enforced);
     if (errors.length > 0) {
-      throw new InvalidPayloadException(formatErrors(errors));
+      throw invalidPayload(formatErrors(errors));
     }
 
     return enforced;
@@ -62,10 +66,9 @@ export default defineHook(({ filter }, { services, exceptions, database, getSche
     const merged = { ...existing, ...enforced };
     const errors = validateProjectIntake(merged);
     if (errors.length > 0) {
-      throw new InvalidPayloadException(formatErrors(errors));
+      throw invalidPayload(formatErrors(errors));
     }
 
     return enforced;
   });
-});
-
+};

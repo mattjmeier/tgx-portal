@@ -1,6 +1,11 @@
-import { defineEndpoint } from '@directus/extensions-sdk';
-
 import { WorkflowExportError, generateWorkflowExportArtifacts } from '../../shared/workflowExport.mjs';
+
+function invalidPayload(message) {
+  const err = new Error(message);
+  err.status = 400;
+  err.code = 'invalid_payload';
+  return err;
+}
 
 function parseBoolean(value, fallback = false) {
   if (value === undefined || value === null) return fallback;
@@ -22,9 +27,30 @@ async function readSingleton({ service, fields }) {
   return rows[0] ?? null;
 }
 
-export default defineEndpoint((router, { services, exceptions, database, getSchema, logger }) => {
+async function updateProjectExportState(database, projectId, payload) {
+  await database('projects').where({ id: projectId }).update(payload);
+}
+
+function lookupMap(rows, keys = ['id', 'code', 'name']) {
+  const map = new Map();
+  for (const row of rows ?? []) {
+    for (const key of keys) {
+      const value = row?.[key];
+      if (value === null || value === undefined || String(value) === '') continue;
+      map.set(String(value), row);
+    }
+  }
+  return map;
+}
+
+function resolveLookupValue(raw, map) {
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (typeof raw === 'object') return raw;
+  return map.get(String(raw)) ?? { id: raw, code: raw, name: String(raw) };
+}
+
+export default (router, { services, database, getSchema, logger }) => {
   const { ItemsService } = services;
-  const { InvalidPayloadException } = exceptions;
 
   async function handleGenerate(req, res, next, projectIdFromArg) {
     try {
@@ -34,7 +60,7 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
       }
 
       const projectId = projectIdFromArg ?? req.body?.project_id ?? null;
-      if (!projectId) throw new InvalidPayloadException('project_id is required');
+      if (!projectId) throw invalidPayload('project_id is required');
 
       const includeContent =
         parseBoolean(req.query?.include_content, parseBoolean(req.body?.include_content, true));
@@ -47,6 +73,10 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
       const studiesSvc = new ItemsService('studies', opts);
       const samplesSvc = new ItemsService('samples', opts);
       const assaysSvc = new ItemsService('assays', opts);
+      const projectBiospyderDatabasesSvc = new ItemsService('projects_biospyder_databases', opts);
+      const platformOptionsSvc = new ItemsService('platform_options', opts);
+      const genomeVersionsSvc = new ItemsService('genome_versions', opts);
+      const quantMethodsSvc = new ItemsService('quantification_methods', opts);
 
       const project = await projects.readOne(projectId, {
         fields: [
@@ -61,10 +91,20 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
           'biospyder_manifest.id',
           'biospyder_manifest.name',
           'biospyder_manifest.code',
-          'biospyder_databases.biospyder_databases_id.id',
-          'biospyder_databases.biospyder_databases_id.name',
-          'biospyder_databases.biospyder_databases_id.code',
         ],
+      });
+
+      const projectBiospyderDatabases = await readAll({
+        service: projectBiospyderDatabasesSvc,
+        query: {
+          filter: { projects_id: { _eq: projectId } },
+          fields: [
+            'biospyder_databases_id.id',
+            'biospyder_databases_id.name',
+            'biospyder_databases_id.code',
+          ],
+          sort: ['biospyder_databases_id'],
+        },
       });
 
       const studies = await readAll({
@@ -91,9 +131,6 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
             'chemical',
             'chemical_longname',
             'dose',
-            'technical_control',
-            'reference_rna',
-            'solvent_control',
           ],
           sort: ['sample_ID'],
         },
@@ -107,24 +144,43 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
           fields: [
             'id',
             'sample',
-            'platform.id',
-            'platform.name',
-            'platform.code',
-            'genome_version.id',
-            'genome_version.name',
-            'genome_version.code',
-            'genome_version.genomedir',
-            'genome_version.genome_filename',
-            'genome_version.annotation_filename',
-            'genome_version.genome_name',
-            'quantification_method.id',
-            'quantification_method.name',
-            'quantification_method.code',
+            'platform',
+            'genome_version',
+            'quantification_method',
             'read_mode',
           ],
           sort: ['id'],
         },
       });
+
+      const [platformOptions, genomeVersions, quantificationMethods] = await Promise.all([
+        readAll({
+          service: platformOptionsSvc,
+          query: { fields: ['id', 'name', 'code'], sort: ['id'] },
+        }),
+        readAll({
+          service: genomeVersionsSvc,
+          query: {
+            fields: ['id', 'name', 'code', 'genomedir', 'genome_filename', 'annotation_filename', 'genome_name'],
+            sort: ['id'],
+          },
+        }),
+        readAll({
+          service: quantMethodsSvc,
+          query: { fields: ['id', 'name', 'code'], sort: ['id'] },
+        }),
+      ]);
+
+      const platformMap = lookupMap(platformOptions);
+      const genomeVersionMap = lookupMap(genomeVersions);
+      const quantMethodMap = lookupMap(quantificationMethods);
+
+      const enrichedAssays = assays.map((assay) => ({
+        ...assay,
+        platform: resolveLookupValue(assay?.platform, platformMap),
+        genome_version: resolveLookupValue(assay?.genome_version, genomeVersionMap),
+        quantification_method: resolveLookupValue(assay?.quantification_method, quantMethodMap),
+      }));
 
       const pipelineDefaultsSvc = new ItemsService('pipeline_defaults', opts);
       const defaults = await readSingleton({
@@ -133,10 +189,13 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
       });
 
       const generation = generateWorkflowExportArtifacts({
-        project,
+        project: {
+          ...project,
+          biospyder_databases: projectBiospyderDatabases,
+        },
         studies,
         samples,
-        assays,
+        assays: enrichedAssays,
         defaults,
       });
 
@@ -157,7 +216,7 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
           warnings: generation.warnings,
         });
 
-        await projects.updateOne(projectId, {
+        await updateProjectExportState(database, projectId, {
           workflow_export_status: 'ready',
           workflow_export_last_generated_at: new Date().toISOString(),
           latest_workflow_export: exportRow,
@@ -188,13 +247,7 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
         try {
           const projectId = projectIdFromArg ?? req.body?.project_id ?? null;
           if (projectId) {
-            const schema = await getSchema();
-            const projects = new ItemsService('projects', {
-              knex: database,
-              schema,
-              accountability: req.accountability,
-            });
-            await projects.updateOne(projectId, {
+            await updateProjectExportState(database, projectId, {
               workflow_export_status: 'failed',
               workflow_export_last_error_code: err.code,
               workflow_export_last_error_message: err.message,
@@ -212,6 +265,15 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
         });
         return;
       }
+      if (err?.code === 'invalid_payload') {
+        res.status(err.status || 400).json({
+          ok: false,
+          code: err.code,
+          message: err.message,
+          details: null,
+        });
+        return;
+      }
       logger?.error?.(err);
       next(err);
     }
@@ -221,5 +283,4 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
   router.post('/projects/:projectId/generate-config', async (req, res, next) =>
     handleGenerate(req, res, next, req.params?.projectId ?? null)
   );
-});
-
+};

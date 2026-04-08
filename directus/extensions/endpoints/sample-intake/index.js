@@ -1,22 +1,26 @@
-import { defineEndpoint } from '@directus/extensions-sdk';
-
 import {
   commitSampleIntakeFromContent,
   previewSampleIntakeFromContent,
 } from '../../shared/sampleIntakeDirectus.mjs';
 
-export default defineEndpoint((router, { services, exceptions, database, getSchema, logger }) => {
-  const { InvalidPayloadException } = exceptions;
+function invalidPayload(message) {
+  const err = new Error(message);
+  err.status = 400;
+  err.code = 'invalid_payload';
+  return err;
+}
+
+export default (router, { services, database, getSchema, logger }) => {
   const allowedWriteModes = new Set(['upsert', 'create_only']);
 
   router.post('/preview', async (req, res, next) => {
     try {
       const { study_id: studyId, file_type: fileType, content, write_mode: writeMode } = req.body ?? {};
-      if (!studyId) throw new InvalidPayloadException('study_id is required');
-      if (!fileType) throw new InvalidPayloadException('file_type is required');
-      if (typeof content !== 'string') throw new InvalidPayloadException('content must be a string');
+      if (!studyId) throw invalidPayload('study_id is required');
+      if (!fileType) throw invalidPayload('file_type is required');
+      if (typeof content !== 'string') throw invalidPayload('content must be a string');
       if (writeMode && !allowedWriteModes.has(String(writeMode))) {
-        throw new InvalidPayloadException("write_mode must be 'upsert' or 'create_only'");
+        throw invalidPayload("write_mode must be 'upsert' or 'create_only'");
       }
 
       const schema = await getSchema();
@@ -33,6 +37,10 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
 
       res.json(preview);
     } catch (err) {
+      if (err?.code === 'invalid_payload') {
+        res.status(err.status || 400).json({ ok: false, code: err.code, message: err.message });
+        return;
+      }
       logger?.error?.(err);
       next(err);
     }
@@ -41,11 +49,11 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
   router.post('/commit', async (req, res, next) => {
     try {
       const { study_id: studyId, file_type: fileType, content, write_mode: writeMode } = req.body ?? {};
-      if (!studyId) throw new InvalidPayloadException('study_id is required');
-      if (!fileType) throw new InvalidPayloadException('file_type is required');
-      if (typeof content !== 'string') throw new InvalidPayloadException('content must be a string');
+      if (!studyId) throw invalidPayload('study_id is required');
+      if (!fileType) throw invalidPayload('file_type is required');
+      if (typeof content !== 'string') throw invalidPayload('content must be a string');
       if (writeMode && !allowedWriteModes.has(String(writeMode))) {
-        throw new InvalidPayloadException("write_mode must be 'upsert' or 'create_only'");
+        throw invalidPayload("write_mode must be 'upsert' or 'create_only'");
       }
 
       const schema = await getSchema();
@@ -67,8 +75,12 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
 
       res.json({ ok: true, summary: result.summary, commit: result.commit, warnings: result.warnings });
     } catch (err) {
+      if (err?.code === 'invalid_payload') {
+        res.status(err.status || 400).json({ ok: false, code: err.code, message: err.message });
+        return;
+      }
       logger?.error?.(err);
       next(err);
     }
   });
-});
+};

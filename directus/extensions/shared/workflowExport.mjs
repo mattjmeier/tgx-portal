@@ -143,6 +143,34 @@ function pickBioinformaticianName(bio) {
   return email || null;
 }
 
+function normalizeReadMode(value) {
+  const v = normalizeKey(value);
+  if (!v) return null;
+  if (v === 'se' || v === 'single' || v === 'single end' || v === 'single-end') return 'se';
+  if (v === 'pe' || v === 'paired' || v === 'paired end' || v === 'paired-end') return 'pe';
+  return String(value ?? '').trim() || null;
+}
+
+function resolveTreatmentVariable(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return 'group';
+
+  const normalized = normalizeKey(raw).replace(/[_-]+/g, ' ');
+  const aliases = new Map([
+    ['group', 'group'],
+    ['treatment group', 'group'],
+    ['chemical', 'chemical'],
+    ['compound', 'chemical'],
+    ['compound code', 'chemical'],
+    ['chemical longname', 'chemical_longname'],
+    ['chemical long name', 'chemical_longname'],
+    ['compound name', 'chemical_longname'],
+    ['dose', 'dose'],
+  ]);
+
+  return aliases.get(normalized) ?? raw;
+}
+
 function getM2MValues(raw, fields = ['code']) {
   if (!Array.isArray(raw)) return [];
   const out = [];
@@ -264,7 +292,7 @@ export function generateWorkflowExportArtifacts({
   });
 
   const readMode = pickSingleOrError({
-    values: assayRows.map((a) => a?.read_mode ?? null),
+    values: assayRows.map((a) => normalizeReadMode(a?.read_mode ?? null)),
     code: 'mixed_read_modes_not_supported',
     message: 'Project contains multiple read modes; mixed exports are not supported.',
     detailsKey: 'read_modes',
@@ -328,7 +356,7 @@ export function generateWorkflowExportArtifacts({
   }
 
   const singleStudy = studyRows[0];
-  const treatmentVar = String(singleStudy?.treatment_var ?? 'group').trim() || 'group';
+  const treatmentVar = resolveTreatmentVariable(singleStudy?.treatment_var ?? 'group');
   const allowedTreatmentVars = new Set(['group', 'chemical', 'chemical_longname', 'dose']);
   if (!allowedTreatmentVars.has(treatmentVar)) {
     throw new WorkflowExportError({
@@ -362,7 +390,7 @@ export function generateWorkflowExportArtifacts({
         platform: a?.platform?.code ?? a?.platform?.name ?? null,
         genome_version: a?.genome_version?.code ?? a?.genome_version?.name ?? null,
         quantification_method: a?.quantification_method?.code ?? a?.quantification_method?.name ?? null,
-        read_mode: a?.read_mode ?? null,
+        read_mode: normalizeReadMode(a?.read_mode ?? null),
       };
     })
     .sort(stableSortBy(['study_id', 'sample_ID', 'assay_id']));
@@ -474,4 +502,3 @@ export function generateWorkflowExportArtifacts({
     warnings,
   };
 }
-

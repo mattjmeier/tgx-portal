@@ -18,6 +18,9 @@ The recommended flow is:
 - `bootstrap_story_001.py`
 - `bootstrap_story_002.py`
 - `bootstrap_story_003.py`
+- `bootstrap_story_004.py`
+- `provision_verification_users.py`
+- `bootstrap_story_004.py`
 
 This script uses the Directus REST API to create a first-pass schema for:
 
@@ -48,9 +51,19 @@ It is intentionally conservative:
 - enforces project-scoped permissions for `Client` across core collections
 - applies least-privilege permissions for `System` to support flows/endpoints
 
+`bootstrap_story_004.py` applies the workflow export building blocks:
+
+- creates `workflow_exports` and `pipeline_defaults`
+- adds export-tracking fields on `projects`
+- adds genome bundle mapping fields on `genome_versions`
+- grants `System` the minimum extra permissions required for export generation
+- seeds a singleton `pipeline_defaults` row with baseline QC/DESeq2 defaults
+
 Optional verification helper:
 
 - `verify_story_003_system_token.py` (non-destructive checks using `DIRECTUS_AUTOMATION_TOKEN`)
+- `provision_verification_users.py` (creates reusable local Client/System verification users and assigns the seeded project to the client verifier)
+- `verify_story_004_export.py` (seeded project export smoke test)
 
 ## Environment
 
@@ -70,6 +83,7 @@ From the repo root:
 python3 directus/bootstrap/bootstrap_story_001.py
 python3 directus/bootstrap/bootstrap_story_002.py
 python3 directus/bootstrap/bootstrap_story_003.py
+python3 directus/bootstrap/bootstrap_story_004.py
 ```
 
 Or explicitly:

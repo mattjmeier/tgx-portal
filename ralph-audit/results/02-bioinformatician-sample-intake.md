@@ -13,21 +13,28 @@ PRD CHECK:
   - Workflow remains inside Directus Data Studio (no custom portal UI required).
 
 DIRECTUS CHECK:
-- Outcome: blueprint-only
+- Outcome: applied-live
 - Evidence:
   - Hook-based workflow: `directus/extensions/hooks/sample-intake/index.js`
   - Optional endpoints: `directus/extensions/endpoints/sample-intake/index.js`
   - Validation + commit logic: `directus/extensions/shared/sampleIntakeValidation.mjs`, `directus/extensions/shared/sampleIntakeDirectus.mjs`
   - Supported bootstrap path (Directus REST APIs): `directus/bootstrap/bootstrap_story_002.py`
+  - Live verification on April 7, 2026:
+    - `POST /sample-intake/preview` returned `200`
+    - `POST /sample-intake/commit` returned `200`
+    - seeded study `1` updated 3 existing sample/assay rows successfully
   - Contract docs: `docs/02-API_AND_INTEGRATIONS.md`, `directus/README.md`
   - Snapshot blueprint header updated to match guardrails: `directus/snapshots/02-bioinformatician-sample-intake.yaml`
 - Notes:
-  - Marked `blueprint-only` because this loop did not apply schema/permissions to a running Directus instance or export a real post-apply snapshot.
+  - The original loop run was `blueprint-only`, but the story was later bootstrapped and verified live against the running Directus stack.
   - `source_file` validation currently supports only Directus `local` storage (by design); otherwise use `source_text` or switch storage strategy.
 
 VERIFICATION:
 - Ran `node --test directus/extensions/shared/sampleIntakeValidation.test.mjs directus/extensions/shared/sampleIntakeDirectus.test.mjs`
-- Did not run Directus schema apply/export in this loop
+- Ran live endpoint verification against the running Directus stack:
+  - `POST /sample-intake/preview`
+  - `POST /sample-intake/commit`
+- Did not export a dedicated post-STORY-002 baseline snapshot
 
 FILES:
 - directus/extensions/shared/sampleIntakeValidation.mjs

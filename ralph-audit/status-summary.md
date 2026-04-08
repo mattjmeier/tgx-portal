@@ -1,5 +1,5 @@
 # Ralph Build Status Summary
-Generated: 2026-04-07T20:26:13Z
+Generated: 2026-04-07T21:41:24Z
 PRD: /home/mmeier/shared2/projects/tgx-portal/.taskmaster/docs/prd.md
 
 ## Story Mapping
@@ -17,7 +17,7 @@ PRD: /home/mmeier/shared2/projects/tgx-portal/.taskmaster/docs/prd.md
 - Note: Accepted as complete after live Directus bootstrap, exported baseline-story-001.yaml, and successful replay of that baseline on a fresh database.
 
 ### STORY-002: Bioinformatician Sample Intake
-- Status: skipped
+- Status: done
 - Directus Sensitive: yes
 - Dependencies: REQ-001, REQ-003, REQ-005
 - Result File: ralph-audit/results/02-bioinformatician-sample-intake.md
@@ -27,10 +27,10 @@ PRD: /home/mmeier/shared2/projects/tgx-portal/.taskmaster/docs/prd.md
   - Valid rows create or update records in the correct related collections.
   - The workflow supports study-scoped validation rules and lookup-backed value checks.
   - The workflow remains inside Directus unless a documented limitation requires a fallback frontend route.
-- Note: Skipped: exceeded 5 attempts without passing
+- Note: Accepted after live bootstrap plus direct `/sample-intake/preview` and `/sample-intake/commit` verification against the seeded study.
 
 ### STORY-003: Admin Lookup and Permissions Management
-- Status: skipped
+- Status: in_progress
 - Directus Sensitive: yes
 - Dependencies: REQ-001, REQ-002
 - Result File: ralph-audit/results/03-admin-lookup-and-permissions-management.md
@@ -40,10 +40,10 @@ PRD: /home/mmeier/shared2/projects/tgx-portal/.taskmaster/docs/prd.md
   - System automation can execute required flows and endpoint calls using a dedicated least-privilege role.
   - Audit-relevant updates are visible in Directus activity history or equivalent logging.
   - Lookup changes take effect in downstream forms and config generation without application redeploys.
-- Note: Skipped: exceeded 5 attempts without passing
+- Note: Roles/policies, client-scoped visibility, and system read scope are verified live; Plane-sync/audit verification still needs follow-up.
 
 ### STORY-004: Workflow Configuration Export
-- Status: pending
+- Status: done
 - Directus Sensitive: yes
 - Dependencies: REQ-001, REQ-006
 - Result File: ralph-audit/results/04-workflow-configuration-export.md
@@ -53,4 +53,4 @@ PRD: /home/mmeier/shared2/projects/tgx-portal/.taskmaster/docs/prd.md
   - Mixed incompatible assay platforms fail with a descriptive error instead of producing invalid output.
   - TempO-Seq exports fail with a descriptive error when required Biospyder metadata is missing.
   - The assigned bioinformatician is notified or shown artifact readiness after successful generation.
-- Note: Reset to pending after loop hardening; previous result predated Directus live-validation gating.
+- Note: Accepted after live export verification and export of `directus/snapshots/baseline-story-004.yaml`.

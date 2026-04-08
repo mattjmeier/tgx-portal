@@ -189,7 +189,7 @@ fi
 python3 "$PARSER" sync --prd "$PRD_FILE" --state "$STATE_FILE" >/dev/null
 refresh_progress
 
-REQUESTED_MODEL="${REQUESTED_MODEL:-gpt-5.2}"
+REQUESTED_MODEL="${REQUESTED_MODEL:-gpt-5.4}"
 REASONING_EFFORT="${REASONING_EFFORT:-high}"
 
 if [[ -n "${CODEX_MODEL:-}" && "${CODEX_MODEL}" != "$REQUESTED_MODEL" ]]; then

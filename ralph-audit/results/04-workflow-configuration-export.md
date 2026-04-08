@@ -1,0 +1,55 @@
+SUMMARY:
+- Implemented a working Directus-backed workflow export path for STORY-004 and verified it live against the running stack.
+- Fixed local Directus extension bootstrapping for this repo by adding top-level extension manifests and removing unsupported server-side SDK/context assumptions.
+- Aligned the export endpoint with the live schema: assay lookups are resolved from `platform_options` / `genome_versions` / `quantification_methods`, TempO-Seq Biospyder databases are read from the junction table, and project export status is updated without the broken alias field path.
+- Updated the seed fixture and loader alignment so future seeded verification can supply required genome metadata.
+
+PRD CHECK:
+- Story: STORY-004 - Workflow Configuration Export
+- Acceptance: met
+- Evidence:
+  - Supported action generates `config.yaml`, `metadata.tsv`, and `contrasts.tsv` through [index.js](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/endpoints/workflow-export/index.js).
+  - Export reads only Directus collections / lookups / junctions (`projects`, `studies`, `samples`, `assays`, `platform_options`, `genome_versions`, `quantification_methods`, `pipeline_defaults`, `projects_biospyder_databases`).
+  - Mixed-platform and TempO-Seq metadata failure paths are implemented in [workflowExport.mjs](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/shared/workflowExport.mjs) and covered by [workflowExport.test.mjs](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/shared/workflowExport.test.mjs).
+  - Successful generation updates project readiness fields and stores rows in `workflow_exports`.
+
+DIRECTUS CHECK:
+- Outcome: baseline-exported
+- Evidence:
+  - Applied STORY-004 schema/defaults/permissions live with [bootstrap_story_004.mjs](/home/mmeier/shared2/projects/tgx-portal/directus/bootstrap/bootstrap_story_004.mjs).
+  - Verified live export on the running Directus stack: `POST /workflow-export/projects/1/generate-config?include_content=true&store=true` returned `200` on April 7, 2026.
+  - Confirmed persisted state: project `workflow_export_status=ready`, `latest_workflow_export=2`, and stored `workflow_exports` rows.
+  - Exported real repeatable baseline snapshot: [baseline-story-004.yaml](/home/mmeier/shared2/projects/tgx-portal/directus/snapshots/baseline-story-004.yaml)
+
+VERIFICATION:
+- Ran `node --test directus/extensions/shared/workflowExport.test.mjs`
+- Ran `python3 -m unittest directus.snapshots.tests.test_story_004_snapshot`
+- Ran live Directus verification inside the container:
+  - authenticated to Directus
+  - patched seeded `genome_versions` metadata through the Directus API
+  - executed workflow export for seeded project `1`
+  - confirmed stored artifacts and project status updates
+- Did not rerun [load_sample_project.py](/home/mmeier/shared2/projects/tgx-portal/directus/seed/load_sample_project.py) live because host-side HTTP is sandbox-restricted and `directus/seed` is not mounted into the Directus container. I updated [sample_project.json](/home/mmeier/shared2/projects/tgx-portal/directus/seed/sample_project.json) for future reruns and used authenticated API updates for live verification.
+
+FILES:
+- [directus/extensions/endpoints/workflow-export/index.js](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/endpoints/workflow-export/index.js)
+- [directus/extensions/endpoints/sample-intake/index.js](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/endpoints/sample-intake/index.js)
+- [directus/extensions/endpoints/plane-sync/index.js](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/endpoints/plane-sync/index.js)
+- [directus/extensions/hooks/project-intake/index.js](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/hooks/project-intake/index.js)
+- [directus/extensions/hooks/sample-intake/index.js](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/hooks/sample-intake/index.js)
+- [directus/extensions/workflow-export/package.json](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/workflow-export/package.json)
+- [directus/extensions/workflow-export/index.js](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/workflow-export/index.js)
+- [directus/extensions/sample-intake-api/package.json](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/sample-intake-api/package.json)
+- [directus/extensions/sample-intake-api/index.js](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/sample-intake-api/index.js)
+- [directus/extensions/plane-sync/package.json](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/plane-sync/package.json)
+- [directus/extensions/plane-sync/index.js](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/plane-sync/index.js)
+- [directus/extensions/project-intake-hook/package.json](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/project-intake-hook/package.json)
+- [directus/extensions/project-intake-hook/index.js](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/project-intake-hook/index.js)
+- [directus/extensions/sample-intake-hook/package.json](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/sample-intake-hook/package.json)
+- [directus/extensions/sample-intake-hook/index.js](/home/mmeier/shared2/projects/tgx-portal/directus/extensions/sample-intake-hook/index.js)
+- [directus/bootstrap/bootstrap_story_004.mjs](/home/mmeier/shared2/projects/tgx-portal/directus/bootstrap/bootstrap_story_004.mjs)
+- [directus/bootstrap/verify_story_004_export.mjs](/home/mmeier/shared2/projects/tgx-portal/directus/bootstrap/verify_story_004_export.mjs)
+- [directus/seed/load_sample_project.py](/home/mmeier/shared2/projects/tgx-portal/directus/seed/load_sample_project.py)
+- [directus/seed/sample_project.json](/home/mmeier/shared2/projects/tgx-portal/directus/seed/sample_project.json)
+
+STATUS: DONE

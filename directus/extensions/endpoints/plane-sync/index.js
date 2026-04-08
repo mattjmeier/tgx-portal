@@ -1,5 +1,3 @@
-import { defineEndpoint } from '@directus/extensions-sdk';
-
 function normalizeKey(value) {
   return String(value ?? '')
     .trim()
@@ -25,9 +23,15 @@ function pickWorkspace({ piName, env }) {
   return defaultWorkspace || normalizeKey(piName).replace(/\s+/g, '-');
 }
 
-export default defineEndpoint((router, { services, exceptions, database, getSchema, env, logger }) => {
+function invalidPayload(message) {
+  const err = new Error(message);
+  err.status = 400;
+  err.code = 'invalid_payload';
+  return err;
+}
+
+export default (router, { services, database, getSchema, env, logger }) => {
   const { ItemsService } = services;
-  const { InvalidPayloadException } = exceptions;
 
   router.post('/sync', async (req, res, next) => {
     try {
@@ -37,8 +41,8 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
       }
 
       const { project_id: projectId, event } = req.body ?? {};
-      if (!projectId) throw new InvalidPayloadException('project_id is required');
-      if (!event) throw new InvalidPayloadException('event is required');
+      if (!projectId) throw invalidPayload('project_id is required');
+      if (!event) throw invalidPayload('event is required');
 
       const schema = await getSchema();
       const projects = new ItemsService('projects', {
@@ -126,8 +130,12 @@ export default defineEndpoint((router, { services, exceptions, database, getSche
 
       res.json({ ok: true, external_ref: externalRef });
     } catch (err) {
+      if (err?.code === 'invalid_payload') {
+        res.status(err.status || 400).json({ ok: false, code: err.code, message: err.message });
+        return;
+      }
       logger?.error?.(err);
       next(err);
     }
   });
-});
+};

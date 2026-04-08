@@ -14,6 +14,11 @@ async function readFixture(name) {
   return fs.readFile(path.join(FIXTURES, name), 'utf8');
 }
 
+async function readSeedFixture() {
+  const raw = await fs.readFile(path.join(__dirname, '..', '..', 'seed', 'sample_project.json'), 'utf8');
+  return JSON.parse(raw);
+}
+
 function baseRnaSeqFixture() {
   const project = {
     id: '11111111-1111-1111-1111-111111111111',
@@ -136,3 +141,73 @@ test('generateWorkflowExportArtifacts fails TempO-Seq when Biospyder metadata mi
   );
 });
 
+test('generateWorkflowExportArtifacts normalizes seeded legacy treatment_var and read_mode values', async () => {
+  const seed = await readSeedFixture();
+  const studyFixture = seed.studies[0];
+  const project = {
+    id: '77777777-7777-7777-7777-777777777777',
+    title: seed.project.title,
+    researcher_name: seed.project.researcher_name,
+    intake_platform: seed.project.intake_platform,
+    bioinformatician_assigned: { first_name: 'Seed', last_name: 'Bio', email: 'seed@example.com' },
+    biospyder_manifest: { code: seed.project_biospyder_manifest_code },
+    biospyder_databases: seed.project_biospyder_database_codes.map((code) => ({
+      biospyder_databases_id: { code },
+    })),
+  };
+  const study = {
+    id: '88888888-8888-8888-8888-888888888888',
+    species: studyFixture.species,
+    celltype: studyFixture.celltype,
+    treatment_var: studyFixture.treatment_var,
+    batch_var: studyFixture.batch_var,
+    units: studyFixture.units,
+  };
+
+  const samples = studyFixture.samples.map((sample, index) => ({
+    id: `99999999-9999-9999-9999-${String(index + 1).padStart(12, '0')}`,
+    study: study.id,
+    sample_ID: sample.sample_ID,
+    sample_name: sample.sample_name,
+    description: sample.description,
+    group: sample.group,
+    chemical: sample.chemical,
+    chemical_longname: sample.chemical_longname,
+    dose: sample.dose,
+    technical_control: false,
+    reference_rna: false,
+    solvent_control: index === 0,
+  }));
+
+  const assays = studyFixture.samples.map((sample, index) => ({
+    id: `aaaaaaaa-aaaa-aaaa-aaaa-${String(index + 1).padStart(12, '0')}`,
+    sample: samples[index].id,
+    platform: { code: sample.assay.platform_code, name: sample.assay.platform_code },
+    genome_version: {
+      code: sample.assay.genome_version_code,
+      name: sample.assay.genome_version_code,
+      genomedir: '/genomes/grch38',
+      genome_filename: 'genome.fa',
+      annotation_filename: 'genes.gtf',
+      genome_name: 'GRCh38',
+    },
+    quantification_method: {
+      code: sample.assay.quantification_method_code,
+      name: sample.assay.quantification_method_code,
+    },
+    read_mode: sample.assay.read_mode,
+  }));
+
+  const out = generateWorkflowExportArtifacts({
+    project,
+    studies: [study],
+    samples,
+    assays,
+    defaults: { qc_defaults: {}, deseq2_defaults: {} },
+  });
+
+  assert.equal(out.ok, true);
+  assert.match(out.artifacts['config.yaml'], /mode: se/);
+  assert.match(out.artifacts['contrasts.tsv'], /^study_id\tvariable\tcontrast\ttreatment\tcontrol\n/m);
+  assert.match(out.artifacts['contrasts.tsv'], /\tchemical\tcmpd-x_vs_vehicle\tcmpd-x\tvehicle\n/);
+});

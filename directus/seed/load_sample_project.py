@@ -151,25 +151,10 @@ def ensure_project(token: str, project_payload: dict) -> dict:
     )
     if existing:
         item_id = existing[0]["id"]
-        try:
-            update_item(token, "projects", item_id, project_payload)
-        except RuntimeError as exc:
-            if "biospyder_databases does not exist" not in str(exc):
-                raise
-            fallback = read_items(token, "projects", filter_obj=project_filter, limit=1, fields=["id", "title"])
-            if not fallback:
-                raise
+        update_item(token, "projects", item_id, project_payload)
         print(f"UPDATE project {project_payload['title']}")
         return {**existing[0], **project_payload, "id": item_id}
-    try:
-        created = create_item(token, "projects", project_payload)
-    except RuntimeError as exc:
-        if "biospyder_databases does not exist" not in str(exc):
-            raise
-        fallback = read_items(token, "projects", filter_obj=project_filter, limit=1, fields=["id", "title"])
-        if not fallback:
-            raise
-        created = fallback[0]
+    created = create_item(token, "projects", project_payload)
     print(f"CREATE project {project_payload['title']}")
     return created
 

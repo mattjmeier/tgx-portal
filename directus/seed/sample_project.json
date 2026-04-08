@@ -16,8 +16,22 @@
       { "name": "RNA-Seq", "code": "rna-seq" }
     ],
     "genome_versions": [
-      { "name": "GRCh38", "code": "grch38" },
-      { "name": "GRCm39", "code": "grcm39" }
+      {
+        "name": "GRCh38",
+        "code": "grch38",
+        "genomedir": "/refs/grch38",
+        "genome_filename": "GRCh38.primary_assembly.genome.fa",
+        "annotation_filename": "gencode.v44.annotation.gtf",
+        "genome_name": "GRCh38"
+      },
+      {
+        "name": "GRCm39",
+        "code": "grcm39",
+        "genomedir": "/refs/grcm39",
+        "genome_filename": "GRCm39.primary_assembly.genome.fa",
+        "annotation_filename": "gencode.vM33.annotation.gtf",
+        "genome_name": "GRCm39"
+      }
     ],
     "quantification_methods": [
       { "name": "Counts", "code": "counts" },

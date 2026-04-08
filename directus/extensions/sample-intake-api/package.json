@@ -1,0 +1,11 @@
+{
+  "name": "sample-intake-api",
+  "version": "0.0.1",
+  "type": "module",
+  "directus:extension": {
+    "type": "endpoint",
+    "host": "^11.0.0",
+    "path": "index.js",
+    "source": "index.js"
+  }
+}

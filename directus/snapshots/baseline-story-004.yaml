@@ -1,0 +1,5047 @@
+version: 1
+directus: 11.17.2
+vendor: postgres
+collections:
+  - collection: assays
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: assays
+      color: null
+      display_template: '{{platform}}'
+      group: null
+      hidden: false
+      icon: analytics
+      item_duplication_fields: null
+      note: Assays scoped to a sample.
+      preview_url: null
+      singleton: false
+      sort: 40
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: assays
+  - collection: biospyder_databases
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: biospyder_databases
+      color: null
+      display_template: '{{name}}'
+      group: null
+      hidden: false
+      icon: list
+      item_duplication_fields: null
+      note: TempO-Seq Biospyder database selections.
+      preview_url: null
+      singleton: false
+      sort: 150
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: biospyder_databases
+  - collection: biospyder_manifests
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: biospyder_manifests
+      color: null
+      display_template: '{{name}}'
+      group: null
+      hidden: false
+      icon: list
+      item_duplication_fields: null
+      note: TempO-Seq Biospyder manifest selections.
+      preview_url: null
+      singleton: false
+      sort: 160
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: biospyder_manifests
+  - collection: genome_versions
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: genome_versions
+      color: null
+      display_template: '{{name}}'
+      group: null
+      hidden: false
+      icon: list
+      item_duplication_fields: null
+      note: Genome / annotation bundle choices.
+      preview_url: null
+      singleton: false
+      sort: 120
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: genome_versions
+  - collection: pipeline_defaults
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: pipeline_defaults
+      color: null
+      display_template: Pipeline Defaults
+      group: null
+      hidden: false
+      icon: tune
+      item_duplication_fields: null
+      note: Global QC/DESeq2 defaults used during workflow export generation.
+      preview_url: null
+      singleton: true
+      sort: 80
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: pipeline_defaults
+  - collection: platform_options
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: platform_options
+      color: null
+      display_template: '{{name}}'
+      group: null
+      hidden: false
+      icon: list
+      item_duplication_fields: null
+      note: Supported assay platforms.
+      preview_url: null
+      singleton: false
+      sort: 110
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: platform_options
+  - collection: projects
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: projects
+      color: null
+      display_template: '{{title}}'
+      group: null
+      hidden: false
+      icon: assignment
+      item_duplication_fields: null
+      note: Collaborator-facing project intake and lifecycle.
+      preview_url: null
+      singleton: false
+      sort: 10
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: projects
+  - collection: projects_biospyder_databases
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: projects_biospyder_databases
+      color: null
+      display_template: null
+      group: null
+      hidden: true
+      icon: link
+      item_duplication_fields: null
+      note: Junction for projects and biospyder databases.
+      preview_url: null
+      singleton: false
+      sort: 170
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: projects_biospyder_databases
+  - collection: quantification_methods
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: quantification_methods
+      color: null
+      display_template: '{{name}}'
+      group: null
+      hidden: false
+      icon: list
+      item_duplication_fields: null
+      note: Quantification methods.
+      preview_url: null
+      singleton: false
+      sort: 130
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: quantification_methods
+  - collection: sample_intake_uploads
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: sample_intake_uploads
+      color: null
+      display_template: Intake {{status}}
+      group: null
+      hidden: false
+      icon: upload_file
+      item_duplication_fields: null
+      note: Bioinformatician workflow for CSV/TSV preview, validation, and commit.
+      preview_url: null
+      singleton: false
+      sort: 60
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: sample_intake_uploads
+  - collection: sample_plating
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: sample_plating
+      color: null
+      display_template: Plate {{plate_number}} {{plate_well}}
+      group: null
+      hidden: false
+      icon: grid_on
+      item_duplication_fields: null
+      note: Optional plating metadata per sample.
+      preview_url: null
+      singleton: false
+      sort: 50
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: sample_plating
+  - collection: samples
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: samples
+      color: null
+      display_template: '{{sample_ID}}'
+      group: null
+      hidden: false
+      icon: biotech
+      item_duplication_fields: null
+      note: Samples scoped to a study.
+      preview_url: null
+      singleton: false
+      sort: 30
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: samples
+  - collection: species_options
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: species_options
+      color: null
+      display_template: '{{name}}'
+      group: null
+      hidden: false
+      icon: list
+      item_duplication_fields: null
+      note: Species lookup.
+      preview_url: null
+      singleton: false
+      sort: 140
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: species_options
+  - collection: studies
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: studies
+      color: null
+      display_template: '{{species}} {{celltype}}'
+      group: null
+      hidden: false
+      icon: science
+      item_duplication_fields: null
+      note: Study definitions scoped to a project.
+      preview_url: null
+      singleton: false
+      sort: 20
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: studies
+  - collection: workflow_exports
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      collapse: open
+      collection: workflow_exports
+      color: null
+      display_template: '{{status}} {{platform}}'
+      group: null
+      hidden: false
+      icon: output
+      item_duplication_fields: null
+      note: Generated Snakemake config artifacts for a project.
+      preview_url: null
+      singleton: false
+      sort: 70
+      sort_field: null
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: workflow_exports
+fields:
+  - collection: assays
+    field: id
+    type: integer
+    meta:
+      collection: assays
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: assays
+      data_type: integer
+      default_value: nextval('assays_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: assays
+    field: sample
+    type: integer
+    meta:
+      collection: assays
+      conditions: null
+      display: null
+      display_options: null
+      field: sample
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: sample
+      table: assays
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: samples
+      foreign_key_column: id
+  - collection: assays
+    field: platform
+    type: string
+    meta:
+      collection: assays
+      conditions: null
+      display: null
+      display_options: null
+      field: platform
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: platform
+      table: assays
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: assays
+    field: genome_version
+    type: string
+    meta:
+      collection: assays
+      conditions: null
+      display: null
+      display_options: null
+      field: genome_version
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: genome_version
+      table: assays
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: assays
+    field: quantification_method
+    type: string
+    meta:
+      collection: assays
+      conditions: null
+      display: null
+      display_options: null
+      field: quantification_method
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: quantification_method
+      table: assays
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: assays
+    field: read_mode
+    type: string
+    meta:
+      collection: assays
+      conditions: null
+      display: null
+      display_options: null
+      field: read_mode
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: read_mode
+      table: assays
+      data_type: character varying
+      default_value: null
+      max_length: 50
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: biospyder_databases
+    field: id
+    type: integer
+    meta:
+      collection: biospyder_databases
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: biospyder_databases
+      data_type: integer
+      default_value: nextval('biospyder_databases_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: biospyder_databases
+    field: name
+    type: string
+    meta:
+      collection: biospyder_databases
+      conditions: null
+      display: null
+      display_options: null
+      field: name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: name
+      table: biospyder_databases
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: biospyder_databases
+    field: code
+    type: string
+    meta:
+      collection: biospyder_databases
+      conditions: null
+      display: null
+      display_options: null
+      field: code
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: code
+      table: biospyder_databases
+      data_type: character varying
+      default_value: null
+      max_length: 64
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: biospyder_manifests
+    field: id
+    type: integer
+    meta:
+      collection: biospyder_manifests
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: biospyder_manifests
+      data_type: integer
+      default_value: nextval('biospyder_manifests_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: biospyder_manifests
+    field: name
+    type: string
+    meta:
+      collection: biospyder_manifests
+      conditions: null
+      display: null
+      display_options: null
+      field: name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: name
+      table: biospyder_manifests
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: biospyder_manifests
+    field: code
+    type: string
+    meta:
+      collection: biospyder_manifests
+      conditions: null
+      display: null
+      display_options: null
+      field: code
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: code
+      table: biospyder_manifests
+      data_type: character varying
+      default_value: null
+      max_length: 64
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: genome_versions
+    field: id
+    type: integer
+    meta:
+      collection: genome_versions
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: genome_versions
+      data_type: integer
+      default_value: nextval('genome_versions_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: genome_versions
+    field: name
+    type: string
+    meta:
+      collection: genome_versions
+      conditions: null
+      display: null
+      display_options: null
+      field: name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: name
+      table: genome_versions
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: genome_versions
+    field: code
+    type: string
+    meta:
+      collection: genome_versions
+      conditions: null
+      display: null
+      display_options: null
+      field: code
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: code
+      table: genome_versions
+      data_type: character varying
+      default_value: null
+      max_length: 64
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: genome_versions
+    field: genomedir
+    type: string
+    meta:
+      collection: genome_versions
+      conditions: null
+      display: null
+      display_options: null
+      field: genomedir
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: genomedir
+      table: genome_versions
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: genome_versions
+    field: genome_filename
+    type: string
+    meta:
+      collection: genome_versions
+      conditions: null
+      display: null
+      display_options: null
+      field: genome_filename
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: genome_filename
+      table: genome_versions
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: genome_versions
+    field: annotation_filename
+    type: string
+    meta:
+      collection: genome_versions
+      conditions: null
+      display: null
+      display_options: null
+      field: annotation_filename
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: annotation_filename
+      table: genome_versions
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: genome_versions
+    field: genome_name
+    type: string
+    meta:
+      collection: genome_versions
+      conditions: null
+      display: null
+      display_options: null
+      field: genome_name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: genome_name
+      table: genome_versions
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: pipeline_defaults
+    field: id
+    type: integer
+    meta:
+      collection: pipeline_defaults
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: pipeline_defaults
+      data_type: integer
+      default_value: nextval('pipeline_defaults_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: pipeline_defaults
+    field: qc_defaults
+    type: json
+    meta:
+      collection: pipeline_defaults
+      conditions: null
+      display: null
+      display_options: null
+      field: qc_defaults
+      group: null
+      hidden: false
+      interface: input-code
+      note: null
+      options:
+        language: json
+      readonly: false
+      required: false
+      searchable: true
+      sort: 2
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: qc_defaults
+      table: pipeline_defaults
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: pipeline_defaults
+    field: deseq2_defaults
+    type: json
+    meta:
+      collection: pipeline_defaults
+      conditions: null
+      display: null
+      display_options: null
+      field: deseq2_defaults
+      group: null
+      hidden: false
+      interface: input-code
+      note: null
+      options:
+        language: json
+      readonly: false
+      required: false
+      searchable: true
+      sort: 3
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: deseq2_defaults
+      table: pipeline_defaults
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: platform_options
+    field: id
+    type: integer
+    meta:
+      collection: platform_options
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: platform_options
+      data_type: integer
+      default_value: nextval('platform_options_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: platform_options
+    field: name
+    type: string
+    meta:
+      collection: platform_options
+      conditions: null
+      display: null
+      display_options: null
+      field: name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: name
+      table: platform_options
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: platform_options
+    field: code
+    type: string
+    meta:
+      collection: platform_options
+      conditions: null
+      display: null
+      display_options: null
+      field: code
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: code
+      table: platform_options
+      data_type: character varying
+      default_value: null
+      max_length: 64
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: id
+    type: integer
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: projects
+      data_type: integer
+      default_value: nextval('projects_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: title
+    type: string
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: title
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: title
+      table: projects
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: pi_name
+    type: string
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: pi_name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: pi_name
+      table: projects
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: researcher_name
+    type: string
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: researcher_name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: researcher_name
+      table: projects
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: description
+    type: text
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: description
+      group: null
+      hidden: false
+      interface: input-multiline
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: description
+      table: projects
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: status
+    type: string
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: status
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: null
+      options:
+        choices:
+          - text: Draft
+            value: draft
+          - text: Submitted
+            value: submitted
+          - text: Intake Ready
+            value: intake_ready
+          - text: Active
+            value: active
+          - text: Archived
+            value: archived
+      readonly: false
+      required: true
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: status
+      table: projects
+      data_type: character varying
+      default_value: draft
+      max_length: 50
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: intake_platform
+    type: string
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: intake_platform
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: null
+      options:
+        choices:
+          - text: TempO-Seq
+            value: TempO-Seq
+          - text: RNA-Seq
+            value: RNA-Seq
+          - text: Other
+            value: Other
+      readonly: false
+      required: true
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: intake_platform
+      table: projects
+      data_type: character varying
+      default_value: null
+      max_length: 50
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: client_user
+    type: uuid
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: client_user
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 8
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: client_user
+      table: projects
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
+  - collection: projects
+    field: bioinformatician_assigned
+    type: uuid
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: bioinformatician_assigned
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 9
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: bioinformatician_assigned
+      table: projects
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
+  - collection: projects
+    field: biospyder_manifest
+    type: integer
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: biospyder_manifest
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 10
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: biospyder_manifest
+      table: projects
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: biospyder_manifests
+      foreign_key_column: id
+  - collection: projects
+    field: plane_sync_status
+    type: string
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: plane_sync_status
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 11
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: plane_sync_status
+      table: projects
+      data_type: character varying
+      default_value: null
+      max_length: 50
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: plane_last_error
+    type: text
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: plane_last_error
+      group: null
+      hidden: false
+      interface: input-multiline
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 12
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: plane_last_error
+      table: projects
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: plane_external_ref
+    type: string
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: plane_external_ref
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 13
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: plane_external_ref
+      table: projects
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: biospyder_databases
+    type: alias
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: biospyder_databases
+      group: null
+      hidden: false
+      interface: list-m2m
+      note: null
+      options:
+        junctionCollection: projects_biospyder_databases
+        junctionField: projects_id
+        relatedCollection: biospyder_databases
+        relatedField: biospyder_databases_id
+      readonly: false
+      required: false
+      searchable: true
+      sort: 14
+      special:
+        - m2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: projects
+    field: workflow_export_status
+    type: string
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: workflow_export_status
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 15
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: workflow_export_status
+      table: projects
+      data_type: character varying
+      default_value: null
+      max_length: 50
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: workflow_export_last_generated_at
+    type: timestamp
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: workflow_export_last_generated_at
+      group: null
+      hidden: false
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 16
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: workflow_export_last_generated_at
+      table: projects
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: workflow_export_last_error_code
+    type: string
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: workflow_export_last_error_code
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 17
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: workflow_export_last_error_code
+      table: projects
+      data_type: character varying
+      default_value: null
+      max_length: 100
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: workflow_export_last_error_message
+    type: text
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: workflow_export_last_error_message
+      group: null
+      hidden: false
+      interface: input-multiline
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 18
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: workflow_export_last_error_message
+      table: projects
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects
+    field: latest_workflow_export
+    type: integer
+    meta:
+      collection: projects
+      conditions: null
+      display: null
+      display_options: null
+      field: latest_workflow_export
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 19
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: latest_workflow_export
+      table: projects
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: workflow_exports
+      foreign_key_column: id
+  - collection: projects_biospyder_databases
+    field: id
+    type: integer
+    meta:
+      collection: projects_biospyder_databases
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: projects_biospyder_databases
+      data_type: integer
+      default_value: nextval('projects_biospyder_databases_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: projects_biospyder_databases
+    field: projects_id
+    type: integer
+    meta:
+      collection: projects_biospyder_databases
+      conditions: null
+      display: null
+      display_options: null
+      field: projects_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: projects_id
+      table: projects_biospyder_databases
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: projects
+      foreign_key_column: id
+  - collection: projects_biospyder_databases
+    field: biospyder_databases_id
+    type: integer
+    meta:
+      collection: projects_biospyder_databases
+      conditions: null
+      display: null
+      display_options: null
+      field: biospyder_databases_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: biospyder_databases_id
+      table: projects_biospyder_databases
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: biospyder_databases
+      foreign_key_column: id
+  - collection: quantification_methods
+    field: id
+    type: integer
+    meta:
+      collection: quantification_methods
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: quantification_methods
+      data_type: integer
+      default_value: nextval('quantification_methods_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: quantification_methods
+    field: name
+    type: string
+    meta:
+      collection: quantification_methods
+      conditions: null
+      display: null
+      display_options: null
+      field: name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: name
+      table: quantification_methods
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: quantification_methods
+    field: code
+    type: string
+    meta:
+      collection: quantification_methods
+      conditions: null
+      display: null
+      display_options: null
+      field: code
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: code
+      table: quantification_methods
+      data_type: character varying
+      default_value: null
+      max_length: 64
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: id
+    type: integer
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: sample_intake_uploads
+      data_type: integer
+      default_value: nextval('sample_intake_uploads_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: study
+    type: integer
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: study
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: study
+      table: sample_intake_uploads
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: studies
+      foreign_key_column: id
+  - collection: sample_intake_uploads
+    field: file_type
+    type: string
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: file_type
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: file_type
+      table: sample_intake_uploads
+      data_type: character varying
+      default_value: tsv
+      max_length: 10
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: write_mode
+    type: string
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: write_mode
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: null
+      options:
+        choices:
+          - text: Upsert (create/update)
+            value: upsert
+          - text: Create only (fail if exists)
+            value: create_only
+      readonly: false
+      required: true
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: write_mode
+      table: sample_intake_uploads
+      data_type: character varying
+      default_value: upsert
+      max_length: 20
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: source_type
+    type: string
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: source_type
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: source_type
+      table: sample_intake_uploads
+      data_type: character varying
+      default_value: text
+      max_length: 10
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: source_text
+    type: text
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: source_text
+      group: null
+      hidden: false
+      interface: input-multiline
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: source_text
+      table: sample_intake_uploads
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: source_file
+    type: uuid
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: source_file
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 7
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: source_file
+      table: sample_intake_uploads
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_files
+      foreign_key_column: id
+  - collection: sample_intake_uploads
+    field: status
+    type: string
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: status
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 8
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: status
+      table: sample_intake_uploads
+      data_type: character varying
+      default_value: draft
+      max_length: 20
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: validate_requested
+    type: boolean
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: validate_requested
+      group: null
+      hidden: false
+      interface: boolean
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 9
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: validate_requested
+      table: sample_intake_uploads
+      data_type: boolean
+      default_value: false
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: commit_requested
+    type: boolean
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: commit_requested
+      group: null
+      hidden: false
+      interface: boolean
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 10
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: commit_requested
+      table: sample_intake_uploads
+      data_type: boolean
+      default_value: false
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: row_count
+    type: integer
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: row_count
+      group: null
+      hidden: false
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 11
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: row_count
+      table: sample_intake_uploads
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: valid_row_count
+    type: integer
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: valid_row_count
+      group: null
+      hidden: false
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 12
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: valid_row_count
+      table: sample_intake_uploads
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: invalid_row_count
+    type: integer
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: invalid_row_count
+      group: null
+      hidden: false
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 13
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: invalid_row_count
+      table: sample_intake_uploads
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: preview_rows
+    type: json
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: preview_rows
+      group: null
+      hidden: false
+      interface: input-code
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 14
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: preview_rows
+      table: sample_intake_uploads
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: validation_errors
+    type: json
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: validation_errors
+      group: null
+      hidden: false
+      interface: input-code
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 15
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: validation_errors
+      table: sample_intake_uploads
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: validation_summary
+    type: json
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: validation_summary
+      group: null
+      hidden: false
+      interface: input-code
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 16
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: validation_summary
+      table: sample_intake_uploads
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: commit_result
+    type: json
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: commit_result
+      group: null
+      hidden: false
+      interface: input-code
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 17
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: commit_result
+      table: sample_intake_uploads
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: validated_hash
+    type: string
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: validated_hash
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 18
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: validated_hash
+      table: sample_intake_uploads
+      data_type: character varying
+      default_value: null
+      max_length: 128
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: validated_at
+    type: timestamp
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: validated_at
+      group: null
+      hidden: false
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 19
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: validated_at
+      table: sample_intake_uploads
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_intake_uploads
+    field: committed_at
+    type: timestamp
+    meta:
+      collection: sample_intake_uploads
+      conditions: null
+      display: null
+      display_options: null
+      field: committed_at
+      group: null
+      hidden: false
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 20
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: committed_at
+      table: sample_intake_uploads
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_plating
+    field: id
+    type: integer
+    meta:
+      collection: sample_plating
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: sample_plating
+      data_type: integer
+      default_value: nextval('sample_plating_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_plating
+    field: sample
+    type: integer
+    meta:
+      collection: sample_plating
+      conditions: null
+      display: null
+      display_options: null
+      field: sample
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: sample
+      table: sample_plating
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: samples
+      foreign_key_column: id
+  - collection: sample_plating
+    field: plate_number
+    type: string
+    meta:
+      collection: sample_plating
+      conditions: null
+      display: null
+      display_options: null
+      field: plate_number
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: plate_number
+      table: sample_plating
+      data_type: character varying
+      default_value: null
+      max_length: 50
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_plating
+    field: batch
+    type: string
+    meta:
+      collection: sample_plating
+      conditions: null
+      display: null
+      display_options: null
+      field: batch
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: batch
+      table: sample_plating
+      data_type: character varying
+      default_value: null
+      max_length: 50
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_plating
+    field: plate_well
+    type: string
+    meta:
+      collection: sample_plating
+      conditions: null
+      display: null
+      display_options: null
+      field: plate_well
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: plate_well
+      table: sample_plating
+      data_type: character varying
+      default_value: null
+      max_length: 20
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_plating
+    field: row
+    type: integer
+    meta:
+      collection: sample_plating
+      conditions: null
+      display: null
+      display_options: null
+      field: row
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: row
+      table: sample_plating
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sample_plating
+    field: column
+    type: integer
+    meta:
+      collection: sample_plating
+      conditions: null
+      display: null
+      display_options: null
+      field: column
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: column
+      table: sample_plating
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: samples
+    field: id
+    type: integer
+    meta:
+      collection: samples
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: samples
+      data_type: integer
+      default_value: nextval('samples_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: samples
+    field: study
+    type: integer
+    meta:
+      collection: samples
+      conditions: null
+      display: null
+      display_options: null
+      field: study
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: study
+      table: samples
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: studies
+      foreign_key_column: id
+  - collection: samples
+    field: sample_ID
+    type: string
+    meta:
+      collection: samples
+      conditions: null
+      display: null
+      display_options: null
+      field: sample_ID
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: sample_ID
+      table: samples
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: samples
+    field: sample_name
+    type: string
+    meta:
+      collection: samples
+      conditions: null
+      display: null
+      display_options: null
+      field: sample_name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: sample_name
+      table: samples
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: samples
+    field: description
+    type: text
+    meta:
+      collection: samples
+      conditions: null
+      display: null
+      display_options: null
+      field: description
+      group: null
+      hidden: false
+      interface: input-multiline
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: description
+      table: samples
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: samples
+    field: group
+    type: string
+    meta:
+      collection: samples
+      conditions: null
+      display: null
+      display_options: null
+      field: group
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: group
+      table: samples
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: samples
+    field: chemical
+    type: string
+    meta:
+      collection: samples
+      conditions: null
+      display: null
+      display_options: null
+      field: chemical
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: chemical
+      table: samples
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: samples
+    field: chemical_longname
+    type: string
+    meta:
+      collection: samples
+      conditions: null
+      display: null
+      display_options: null
+      field: chemical_longname
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 8
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: chemical_longname
+      table: samples
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: samples
+    field: dose
+    type: string
+    meta:
+      collection: samples
+      conditions: null
+      display: null
+      display_options: null
+      field: dose
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 9
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: dose
+      table: samples
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: species_options
+    field: id
+    type: integer
+    meta:
+      collection: species_options
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: species_options
+      data_type: integer
+      default_value: nextval('species_options_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: species_options
+    field: name
+    type: string
+    meta:
+      collection: species_options
+      conditions: null
+      display: null
+      display_options: null
+      field: name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: name
+      table: species_options
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: species_options
+    field: code
+    type: string
+    meta:
+      collection: species_options
+      conditions: null
+      display: null
+      display_options: null
+      field: code
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: code
+      table: species_options
+      data_type: character varying
+      default_value: null
+      max_length: 64
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: studies
+    field: id
+    type: integer
+    meta:
+      collection: studies
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: studies
+      data_type: integer
+      default_value: nextval('studies_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: studies
+    field: project
+    type: integer
+    meta:
+      collection: studies
+      conditions: null
+      display: null
+      display_options: null
+      field: project
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: project
+      table: studies
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: projects
+      foreign_key_column: id
+  - collection: studies
+    field: species
+    type: string
+    meta:
+      collection: studies
+      conditions: null
+      display: null
+      display_options: null
+      field: species
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: species
+      table: studies
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: studies
+    field: celltype
+    type: string
+    meta:
+      collection: studies
+      conditions: null
+      display: null
+      display_options: null
+      field: celltype
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: celltype
+      table: studies
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: studies
+    field: treatment_var
+    type: string
+    meta:
+      collection: studies
+      conditions: null
+      display: null
+      display_options: null
+      field: treatment_var
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: treatment_var
+      table: studies
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: studies
+    field: batch_var
+    type: string
+    meta:
+      collection: studies
+      conditions: null
+      display: null
+      display_options: null
+      field: batch_var
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: batch_var
+      table: studies
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: studies
+    field: units
+    type: string
+    meta:
+      collection: studies
+      conditions: null
+      display: null
+      display_options: null
+      field: units
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: units
+      table: studies
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: workflow_exports
+    field: id
+    type: integer
+    meta:
+      collection: workflow_exports
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: numeric
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: workflow_exports
+      data_type: integer
+      default_value: nextval('workflow_exports_id_seq'::regclass)
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: true
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: workflow_exports
+    field: project
+    type: integer
+    meta:
+      collection: workflow_exports
+      conditions: null
+      display: null
+      display_options: null
+      field: project
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special:
+        - m2o
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: project
+      table: workflow_exports
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: projects
+      foreign_key_column: id
+  - collection: workflow_exports
+    field: status
+    type: string
+    meta:
+      collection: workflow_exports
+      conditions: null
+      display: null
+      display_options: null
+      field: status
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: status
+      table: workflow_exports
+      data_type: character varying
+      default_value: ready
+      max_length: 20
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: workflow_exports
+    field: schema_version
+    type: string
+    meta:
+      collection: workflow_exports
+      conditions: null
+      display: null
+      display_options: null
+      field: schema_version
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: true
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: schema_version
+      table: workflow_exports
+      data_type: character varying
+      default_value: null
+      max_length: 32
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: workflow_exports
+    field: platform
+    type: string
+    meta:
+      collection: workflow_exports
+      conditions: null
+      display: null
+      display_options: null
+      field: platform
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: true
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: platform
+      table: workflow_exports
+      data_type: character varying
+      default_value: null
+      max_length: 64
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: workflow_exports
+    field: genome_version
+    type: string
+    meta:
+      collection: workflow_exports
+      conditions: null
+      display: null
+      display_options: null
+      field: genome_version
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: genome_version
+      table: workflow_exports
+      data_type: character varying
+      default_value: null
+      max_length: 64
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: workflow_exports
+    field: quantification_method
+    type: string
+    meta:
+      collection: workflow_exports
+      conditions: null
+      display: null
+      display_options: null
+      field: quantification_method
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: quantification_method
+      table: workflow_exports
+      data_type: character varying
+      default_value: null
+      max_length: 64
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: workflow_exports
+    field: read_mode
+    type: string
+    meta:
+      collection: workflow_exports
+      conditions: null
+      display: null
+      display_options: null
+      field: read_mode
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 8
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: read_mode
+      table: workflow_exports
+      data_type: character varying
+      default_value: null
+      max_length: 10
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: workflow_exports
+    field: config_yaml
+    type: text
+    meta:
+      collection: workflow_exports
+      conditions: null
+      display: null
+      display_options: null
+      field: config_yaml
+      group: null
+      hidden: false
+      interface: input-multiline
+      note: null
+      options: null
+      readonly: true
+      required: true
+      searchable: true
+      sort: 9
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: config_yaml
+      table: workflow_exports
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: workflow_exports
+    field: metadata_tsv
+    type: text
+    meta:
+      collection: workflow_exports
+      conditions: null
+      display: null
+      display_options: null
+      field: metadata_tsv
+      group: null
+      hidden: false
+      interface: input-multiline
+      note: null
+      options: null
+      readonly: true
+      required: true
+      searchable: true
+      sort: 10
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: metadata_tsv
+      table: workflow_exports
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: workflow_exports
+    field: contrasts_tsv
+    type: text
+    meta:
+      collection: workflow_exports
+      conditions: null
+      display: null
+      display_options: null
+      field: contrasts_tsv
+      group: null
+      hidden: false
+      interface: input-multiline
+      note: null
+      options: null
+      readonly: true
+      required: true
+      searchable: true
+      sort: 11
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: contrasts_tsv
+      table: workflow_exports
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: workflow_exports
+    field: warnings
+    type: json
+    meta:
+      collection: workflow_exports
+      conditions: null
+      display: null
+      display_options: null
+      field: warnings
+      group: null
+      hidden: false
+      interface: input-code
+      note: null
+      options:
+        language: json
+      readonly: true
+      required: false
+      searchable: true
+      sort: 12
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: warnings
+      table: workflow_exports
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: workflow_exports
+    field: created_at
+    type: timestamp
+    meta:
+      collection: workflow_exports
+      conditions: null
+      display: null
+      display_options: null
+      field: created_at
+      group: null
+      hidden: false
+      interface: datetime
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 13
+      special:
+        - date-created
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: created_at
+      table: workflow_exports
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+systemFields:
+  - collection: directus_activity
+    field: timestamp
+    schema:
+      is_indexed: true
+  - collection: directus_revisions
+    field: activity
+    schema:
+      is_indexed: true
+  - collection: directus_revisions
+    field: parent
+    schema:
+      is_indexed: true
+relations:
+  - collection: assays
+    field: sample
+    related_collection: samples
+    meta:
+      junction_field: null
+      many_collection: assays
+      many_field: sample
+      one_allowed_collections: null
+      one_collection: samples
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: assays
+      column: sample
+      foreign_key_table: samples
+      foreign_key_column: id
+      constraint_name: assays_sample_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: projects
+    field: client_user
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: projects
+      many_field: client_user
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: projects
+      column: client_user
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: projects_client_user_foreign
+      on_update: NO ACTION
+      on_delete: NO ACTION
+  - collection: projects
+    field: bioinformatician_assigned
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: projects
+      many_field: bioinformatician_assigned
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: projects
+      column: bioinformatician_assigned
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: projects_bioinformatician_assigned_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: projects
+    field: biospyder_manifest
+    related_collection: biospyder_manifests
+    meta:
+      junction_field: null
+      many_collection: projects
+      many_field: biospyder_manifest
+      one_allowed_collections: null
+      one_collection: biospyder_manifests
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: projects
+      column: biospyder_manifest
+      foreign_key_table: biospyder_manifests
+      foreign_key_column: id
+      constraint_name: projects_biospyder_manifest_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: projects
+    field: latest_workflow_export
+    related_collection: workflow_exports
+    meta:
+      junction_field: null
+      many_collection: projects
+      many_field: latest_workflow_export
+      one_allowed_collections: null
+      one_collection: workflow_exports
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: latest_for_projects
+      sort_field: null
+    schema:
+      table: projects
+      column: latest_workflow_export
+      foreign_key_table: workflow_exports
+      foreign_key_column: id
+      constraint_name: projects_latest_workflow_export_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: projects_biospyder_databases
+    field: projects_id
+    related_collection: projects
+    meta:
+      junction_field: null
+      many_collection: projects_biospyder_databases
+      many_field: projects_id
+      one_allowed_collections: null
+      one_collection: projects
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: projects_biospyder_databases
+      column: projects_id
+      foreign_key_table: projects
+      foreign_key_column: id
+      constraint_name: projects_biospyder_databases_projects_id_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: projects_biospyder_databases
+    field: biospyder_databases_id
+    related_collection: biospyder_databases
+    meta:
+      junction_field: projects_id
+      many_collection: projects_biospyder_databases
+      many_field: biospyder_databases_id
+      one_allowed_collections: null
+      one_collection: biospyder_databases
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: projects_biospyder_databases
+      column: biospyder_databases_id
+      foreign_key_table: biospyder_databases
+      foreign_key_column: id
+      constraint_name: projects_biospyder_databases_biospyder_databases_id_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: sample_intake_uploads
+    field: study
+    related_collection: studies
+    meta:
+      junction_field: null
+      many_collection: sample_intake_uploads
+      many_field: study
+      one_allowed_collections: null
+      one_collection: studies
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: sample_intake_uploads
+      column: study
+      foreign_key_table: studies
+      foreign_key_column: id
+      constraint_name: sample_intake_uploads_study_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: sample_intake_uploads
+    field: source_file
+    related_collection: directus_files
+    meta:
+      junction_field: null
+      many_collection: sample_intake_uploads
+      many_field: source_file
+      one_allowed_collections: null
+      one_collection: directus_files
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: sample_intake_uploads
+      column: source_file
+      foreign_key_table: directus_files
+      foreign_key_column: id
+      constraint_name: sample_intake_uploads_source_file_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: sample_plating
+    field: sample
+    related_collection: samples
+    meta:
+      junction_field: null
+      many_collection: sample_plating
+      many_field: sample
+      one_allowed_collections: null
+      one_collection: samples
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: sample_plating
+      column: sample
+      foreign_key_table: samples
+      foreign_key_column: id
+      constraint_name: sample_plating_sample_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: samples
+    field: study
+    related_collection: studies
+    meta:
+      junction_field: null
+      many_collection: samples
+      many_field: study
+      one_allowed_collections: null
+      one_collection: studies
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: samples
+      column: study
+      foreign_key_table: studies
+      foreign_key_column: id
+      constraint_name: samples_study_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: studies
+    field: project
+    related_collection: projects
+    meta:
+      junction_field: null
+      many_collection: studies
+      many_field: project
+      one_allowed_collections: null
+      one_collection: projects
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: studies
+      column: project
+      foreign_key_table: projects
+      foreign_key_column: id
+      constraint_name: studies_project_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: workflow_exports
+    field: project
+    related_collection: projects
+    meta:
+      junction_field: null
+      many_collection: workflow_exports
+      many_field: project
+      one_allowed_collections: null
+      one_collection: projects
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: workflow_exports
+      sort_field: null
+    schema:
+      table: workflow_exports
+      column: project
+      foreign_key_table: projects
+      foreign_key_column: id
+      constraint_name: workflow_exports_project_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE

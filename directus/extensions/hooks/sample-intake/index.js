@@ -1,5 +1,3 @@
-import { defineHook } from '@directus/extensions-sdk';
-
 import {
   commitSampleIntakeFromContent,
   previewSampleIntakeFromContent,
@@ -27,9 +25,15 @@ function buildValidationFields(preview) {
   };
 }
 
-export default defineHook(({ filter }, { services, exceptions, database, getSchema, env, logger }) => {
+function invalidPayload(message) {
+  const err = new Error(message);
+  err.status = 400;
+  err.code = 'invalid_payload';
+  return err;
+}
+
+export default ({ filter }, { services, database, getSchema, env, logger }) => {
   const { ItemsService } = services;
-  const { InvalidPayloadException } = exceptions;
   const allowedWriteModes = new Set(['upsert', 'create_only']);
 
   async function getUploadsService(accountability) {
@@ -44,7 +48,7 @@ export default defineHook(({ filter }, { services, exceptions, database, getSche
     if (meta?.collection !== 'sample_intake_uploads') return input;
 
     const studyId = input?.study ?? null;
-    if (!studyId) throw new InvalidPayloadException('study is required');
+    if (!studyId) throw invalidPayload('study is required');
 
     const writeMode = String(input?.write_mode ?? 'upsert');
     if (writeMode && !allowedWriteModes.has(writeMode)) {
@@ -136,7 +140,7 @@ export default defineHook(({ filter }, { services, exceptions, database, getSche
 
     const merged = { ...existing, ...input };
     const studyId = merged?.study ?? null;
-    if (!studyId) throw new InvalidPayloadException('study is required');
+    if (!studyId) throw invalidPayload('study is required');
 
     const writeMode = String(merged?.write_mode ?? 'upsert');
     if (writeMode && !allowedWriteModes.has(writeMode)) {
@@ -271,4 +275,4 @@ export default defineHook(({ filter }, { services, exceptions, database, getSche
       commit_requested: false,
     };
   });
-});
+};

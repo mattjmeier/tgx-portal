@@ -1,12 +1,12 @@
 # Ralph Build Progress Log
-Generated: 2026-04-07T20:26:13Z
+Generated: 2026-04-07T21:41:24Z
 PRD: /home/mmeier/shared2/projects/tgx-portal/.taskmaster/docs/prd.md
 Purpose: PRD-driven implementation loop.
 ---
 
 ## Story Checklist
 - [x] STORY-001: Collaborator Project Intake
-- [!] STORY-002: Bioinformatician Sample Intake
+- [x] STORY-002: Bioinformatician Sample Intake
 - [!] STORY-003: Admin Lookup and Permissions Management
-- [ ] STORY-004: Workflow Configuration Export
+- [x] STORY-004: Workflow Configuration Export
 ---
