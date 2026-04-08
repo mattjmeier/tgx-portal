@@ -9,7 +9,7 @@ It is meant to be a single point of authority on project metadata
 
 ## Tech Stack
 * **Backend**: Django, Django REST Framework (DRF), PostgreSQL, Pydantic (for strict data validation).
-* **Frontend**: React (TypeScript), Vite, TailwindCSS.
+* **Frontend**: React (TypeScript), Vite, TailwindCSS, `shadcn/ui`.
 * **Data Grids**: TanStack Table v8 (fully server-side paginated/sorted/filtered).
 * **Task Queue / Integrations**: Celery + Redis (for emails and webhook triggers).
 * **Containerization**: Docker, Docker Compose (Dev & Prod parity).
@@ -18,6 +18,9 @@ It is meant to be a single point of authority on project metadata
 ## Core Directives for the AI
 1. **Strict Typing**: Use TypeScript for all React code. Use Python Type Hints and Pydantic for validation before data hits the Django ORM.
 2. **Modular Architecture**: Keep React components small. Separate API fetching logic from UI components (use React Query / TanStack Query).
+   * Treat `shadcn/ui` as the default component foundation for frontend work.
+   * Store `shadcn/ui`-managed primitives in `frontend/src/components/ui`.
+   * Keep application-specific composites, page sections, and feature workflows outside the `ui` subfolder so generated primitives remain easy to manage and upgrade.
 3. **RBAC**: Always assume three roles: `Admin` (Bioinformatics Staff), `Client` (Collaborators), `System` (Automated tasks). Clients can only view/edit their own assigned projects.
 4. **Context Routing**: Do not guess implementation details. Refer to the specific markdown files in the `docs/` folder for exact structural requirements:
 
