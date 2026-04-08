@@ -1,155 +1,82 @@
-import { NavLink, Outlet, useLocation, useMatch } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { Outlet, useLocation, useMatch } from "react-router-dom";
 
-import { useAuth } from "../auth/AuthProvider";
-import { fetchProject } from "../api/projects";
-import { fetchStudies } from "../api/studies";
+import { AppSidebar } from "./AppSidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "./ui/sidebar";
+
+function getShellCopy(pathname: string, projectTitle?: string) {
+  if (pathname === "/projects") {
+    return {
+      eyebrow: "Projects",
+      title: "Project registry",
+      description: "Browse collaboration records, then branch into study workspaces as projects mature.",
+    };
+  }
+
+  if (pathname === "/projects/new") {
+    return {
+      eyebrow: "Project intake",
+      title: "Create a new project",
+      description: "Start with a collaboration record, then add studies only when the experimental design diverges.",
+    };
+  }
+
+  if (pathname === "/library") {
+    return {
+      eyebrow: "Reference library",
+      title: "Shared taxonomy",
+      description: "Keep species, platforms, and hierarchy language visible across the portal.",
+    };
+  }
+
+  if (pathname.includes("/studies/new")) {
+    return {
+      eyebrow: "Study intake",
+      title: "Add a study",
+      description: projectTitle ? `Create a new experiment under ${projectTitle}.` : "Create a new experiment under the active project.",
+    };
+  }
+
+  return {
+    eyebrow: "Workspace",
+    title: projectTitle ?? "Project workspace",
+    description: "Navigate the project hierarchy with dedicated sections instead of one overloaded page.",
+  };
+}
 
 export function AppLayout() {
-  const auth = useAuth();
   const location = useLocation();
-  const workspaceMatch = useMatch("/projects/:projectId/*") ?? useMatch("/projects/:projectId");
-  const projectId = Number(workspaceMatch?.params.projectId);
-  const selectedStudyParam = new URLSearchParams(location.search).get("study");
-  const selectedStudyId = selectedStudyParam ? Number(selectedStudyParam) : null;
-
-  const projectQuery = useQuery({
-    queryKey: ["project", projectId],
-    queryFn: () => fetchProject(projectId),
-    enabled: Number.isFinite(projectId),
-  });
-
-  const studiesQuery = useQuery({
-    queryKey: ["studies", projectId],
-    queryFn: () => fetchStudies(projectId),
-    enabled: Number.isFinite(projectId),
-  });
-
-  const sidebarStudies = studiesQuery.data?.results ?? [];
+  const workspaceChildMatch = useMatch("/projects/:projectId/*");
+  const workspaceRootMatch = useMatch("/projects/:projectId");
+  const workspaceRouteMatch = workspaceChildMatch ?? workspaceRootMatch;
+  const matchedProjectId = workspaceRouteMatch?.params.projectId;
+  const isWorkspaceRoute = matchedProjectId !== undefined && /^\d+$/.test(matchedProjectId);
+  const projectTitle = undefined;
+  const shellCopy = getShellCopy(location.pathname, projectTitle);
 
   return (
-    <div className="app-shell">
-      <aside className="app-sidebar">
-        <div className="sidebar-brand">
-          <p className="eyebrow">R-ODAF Portal</p>
-          <h1 className="app-title">TGX Portal</h1>
-          <p className="sidebar-copy">
-            A shared operational home for collaboration intake, experiment structure, sample metadata, assays, and configuration generation.
-          </p>
-        </div>
-
-        <nav className="sidebar-nav">
-          <p className="sidebar-section-label">Navigation</p>
-          <NavLink className={({ isActive }) => (isActive ? "sidebar-link sidebar-link-active" : "sidebar-link")} to="/projects">
-            <span className="sidebar-link-title">Projects</span>
-            <span className="sidebar-link-copy">Create and browse collaboration records</span>
-          </NavLink>
-          {auth.user?.profile.role === "admin" ? (
-            <NavLink className={({ isActive }) => (isActive ? "sidebar-link sidebar-link-active" : "sidebar-link")} to="/admin/users">
-              <span className="sidebar-link-title">Admin</span>
-              <span className="sidebar-link-copy">Manage users, roles, and project ownership</span>
-            </NavLink>
-          ) : null}
-        </nav>
-
-        {workspaceMatch ? (
-          <section className="sidebar-panel sidebar-context-panel">
-            <p className="sidebar-section-label">Project navigator</p>
-            {projectQuery.data ? (
-              <div className="sidebar-tree">
-                <NavLink className="sidebar-tree-link sidebar-tree-root" to={`/projects/${projectId}`}>
-                  <span className="sidebar-tree-label">Project</span>
-                  <strong>{projectQuery.data.title}</strong>
-                </NavLink>
-                <div className="sidebar-tree-branch">
-                  <a className="sidebar-tree-link" href="#project-setup">
-                    View project setup
-                  </a>
-                  <NavLink className="sidebar-tree-link" to={`/projects/${projectId}/studies/new`}>
-                    Create a study
-                  </NavLink>
-                  <a className="sidebar-tree-link" href="#study-directory">
-                    Browse studies
-                  </a>
+    <SidebarProvider>
+      <div className="flex min-h-svh w-full bg-[radial-gradient(circle_at_top_left,rgba(20,108,138,0.12),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0.32),rgba(216,228,234,0.24))]">
+        <AppSidebar />
+        <SidebarInset>
+          <header className="sticky top-0 z-20 border-b border-border/70 bg-background/88 backdrop-blur">
+            <div className="flex items-center gap-3 px-4 py-4 md:px-6">
+              <SidebarTrigger className="md:hidden" />
+              <div className="min-w-0">
+                <p className="text-[0.72rem] font-medium uppercase tracking-[0.2em] text-muted-foreground">{shellCopy.eyebrow}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-xl font-semibold text-foreground md:text-2xl">{shellCopy.title}</h1>
+                  {isWorkspaceRoute ? <span className="rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground">Workspace</span> : null}
                 </div>
-                <div className="sidebar-tree-group">
-                  <p className="sidebar-tree-heading">Studies</p>
-                  {studiesQuery.isLoading ? <p className="sidebar-tree-empty">Loading studies...</p> : null}
-                  {sidebarStudies.length === 0 ? (
-                    <p className="sidebar-tree-empty">No studies yet for this project.</p>
-                  ) : (
-                    sidebarStudies.map((study) => (
-                      <NavLink
-                        key={study.id}
-                        className={study.id === selectedStudyId ? "sidebar-tree-link sidebar-tree-link-active" : "sidebar-tree-link"}
-                        to={`/projects/${projectId}?study=${study.id}#study-directory`}
-                      >
-                        <span className="sidebar-tree-study-title">
-                          {study.species} / {study.celltype}
-                        </span>
-                        <span className="sidebar-tree-copy">{study.treatment_var}</span>
-                      </NavLink>
-                    ))
-                  )}
-                </div>
-                {selectedStudyId !== null && Number.isFinite(selectedStudyId) ? (
-                  <div className="sidebar-tree-branch">
-                    <a className="sidebar-tree-link" href="#sample-intake">
-                      Create or import samples
-                    </a>
-                    <a className="sidebar-tree-link" href="#sample-explorer">
-                      Open sample explorer
-                    </a>
-                    <a className="sidebar-tree-link" href="#sample-detail">
-                      Review sample details
-                    </a>
-                  </div>
-                ) : null}
+                <p className="mt-1 text-sm text-muted-foreground">{shellCopy.description}</p>
               </div>
-            ) : (
-              <p className="sidebar-tree-empty">Loading project navigator...</p>
-            )}
-          </section>
-        ) : (
-          <section className="sidebar-panel">
-            <p className="sidebar-section-label">Hierarchy</p>
-            <dl className="hierarchy-list">
-              <div>
-                <dt>Project</dt>
-                <dd>The collaboration-level container.</dd>
-              </div>
-              <div>
-                <dt>Study</dt>
-                <dd>A distinct experiment within a project.</dd>
-              </div>
-              <div>
-                <dt>Sample</dt>
-                <dd>A biological record inside a study.</dd>
-              </div>
-              <div>
-                <dt>Assay</dt>
-                <dd>The analytical run applied to a sample.</dd>
-              </div>
-            </dl>
-          </section>
-        )}
+            </div>
+          </header>
 
-        <section className="sidebar-panel sidebar-user-panel">
-          <p className="sidebar-section-label">Signed In</p>
-          <div className="user-badge">
-            <span>
-              {auth.user?.username} · {auth.user?.profile.role}
-            </span>
-          </div>
-          <button className="danger-button sidebar-signout" type="button" onClick={() => void auth.logout()}>
-            Sign out
-          </button>
-        </section>
-      </aside>
-
-      <main className="app-main">
-        <Outlet />
-      </main>
-    </div>
+          <main className="flex-1 px-4 py-5 md:px-6 md:py-6">
+            <Outlet />
+          </main>
+        </SidebarInset>
+      </div>
+    </SidebarProvider>
   );
 }

@@ -39,8 +39,12 @@ describe("SampleUploadPanel", () => {
       ]),
     );
 
-    vi.mocked(Papa.parse).mockImplementation((_file, config) => {
-      config.complete?.({
+    vi.mocked(Papa.parse).mockImplementation(((_file: unknown, config?: Papa.ParseConfig<unknown>) => {
+      const parseConfig = config as {
+        complete?: (results: Papa.ParseResult<unknown>, file?: File) => void;
+      } | undefined;
+
+      parseConfig?.complete?.({
         data: [
           {
             sample_ID: "bad sample",
@@ -62,11 +66,12 @@ describe("SampleUploadPanel", () => {
           delimiter: ",",
           fields: [],
           linebreak: "\n",
-          renamedHeaders: null,
+          renamedHeaders: undefined,
           truncated: false,
         },
-      });
-    });
+      }, _file as File);
+      return {} as Papa.Parser;
+    }) as unknown as typeof Papa.parse);
 
     const queryClient = new QueryClient();
 

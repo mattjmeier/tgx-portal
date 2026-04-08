@@ -54,6 +54,8 @@ describe("createSamplesBulk", () => {
       rowErrors: [
         {
           rowNumber: 3,
+          message:
+            "sample_ID: sample_ID may only contain letters, numbers, hyphens, and underscores. | dose: Input should be greater than or equal to 0",
           fieldErrors: {
             sample_ID: ["sample_ID may only contain letters, numbers, hyphens, and underscores."],
             dose: ["Input should be greater than or equal to 0"],

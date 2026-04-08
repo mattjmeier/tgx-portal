@@ -31,6 +31,8 @@ When working on specific features, read the corresponding document:
 * **React Frontend & TanStack Tables**: Read `docs/03-UI_UX_REQUIREMENTS.md`
 * **Snakemake YAML Config Generation**: Read `docs/04-PIPELINE_CONFIG_MAPPING.md`
 
+To locate specific parts of the code, begin with `.codesight/CODESIGHT.md`, a wiki which should help guide you to elements of interest.
+
 5. **Test-Driven Development (TDD)**: You must write tests *before* writing the implementation logic. Follow the Red-Green-Refactor loop. 
 6. **Container-First**: All development, testing, and production execution must occur within Docker containers. Do not assume local system dependencies exist other than Docker.
 7. **DevOps & Testing**: Read `docs/05-DEVOPS_AND_TESTING.md` for exact Docker service definitions and CI/CD pipeline steps.

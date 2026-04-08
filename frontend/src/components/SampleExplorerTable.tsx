@@ -6,8 +6,13 @@ import {
   type PaginationState,
   type SortingState,
 } from "@tanstack/react-table";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import type { Sample } from "../api/samples";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 type SampleExplorerTableProps = {
   samples: Sample[];
@@ -107,32 +112,38 @@ export function SampleExplorerTable({
       </div>
 
       <div className="explorer-toolbar">
-        <label className="explorer-search">
-          <span>Search</span>
-          <input
+        <div className="explorer-search">
+          <Label htmlFor="sample-search">Search</Label>
+          <Input
+            id="sample-search"
             placeholder="Search sample ID, name, group, or chemical"
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
           />
-        </label>
-        <label className="explorer-page-size">
-          <span>Rows per page</span>
-          <select
-            value={pagination.pageSize}
-            onChange={(event) =>
+        </div>
+        <div className="explorer-page-size">
+          <Label htmlFor="sample-page-size">Rows per page</Label>
+          <Select
+            value={String(pagination.pageSize)}
+            onValueChange={(value) =>
               onPaginationChange({
                 pageIndex: 0,
-                pageSize: Number(event.target.value),
+                pageSize: Number(value),
               })
             }
           >
-            {[5, 10, 20, 50].map((pageSizeOption) => (
-              <option key={pageSizeOption} value={pageSizeOption}>
-                {pageSizeOption}
-              </option>
-            ))}
-          </select>
-        </label>
+            <SelectTrigger id="sample-page-size" aria-label="Rows per page" className="w-[140px]">
+              <SelectValue placeholder="Rows per page" />
+            </SelectTrigger>
+            <SelectContent>
+              {[5, 10, 20, 50].map((pageSizeOption) => (
+                <SelectItem key={pageSizeOption} value={String(pageSizeOption)}>
+                  {pageSizeOption}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="explorer-meta-row">
@@ -195,25 +206,27 @@ export function SampleExplorerTable({
       </div>
 
       <div className="explorer-pagination">
-        <button
-          className="secondary-button"
+        <Button
           disabled={pagination.pageIndex === 0}
           type="button"
+          variant="outline"
           onClick={() => table.previousPage()}
         >
+          <ChevronLeft />
           Previous
-        </button>
+        </Button>
         <span className="muted-copy">
           Page {pagination.pageIndex + 1} of {pageCount}
         </span>
-        <button
-          className="secondary-button"
+        <Button
           disabled={pagination.pageIndex + 1 >= pageCount}
           type="button"
+          variant="outline"
           onClick={() => table.nextPage()}
         >
           Next
-        </button>
+          <ChevronRight />
+        </Button>
       </div>
     </section>
   );

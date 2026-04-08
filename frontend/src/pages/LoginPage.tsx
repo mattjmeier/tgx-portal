@@ -2,6 +2,10 @@ import { FormEvent, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthProvider";
+import { Button } from "../components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 
 type LocationState = {
   from?: {
@@ -39,28 +43,32 @@ export function LoginPage() {
   }
 
   return (
-    <section className="login-panel">
-      <div>
+    <Card className="login-panel border-border/70 shadow-sm">
+      <CardHeader className="gap-3">
         <p className="eyebrow">Sign in</p>
-        <h2>Access the portal workspace</h2>
-        <p className="body-copy">
+        <CardTitle className="text-3xl">Access the portal workspace</CardTitle>
+        <CardDescription className="text-base leading-7">
           Local development boots with a default admin account so we can move quickly while we build out the full RBAC flow.
-        </p>
-      </div>
-      <form className="detail-form" onSubmit={handleSubmit}>
-        <label>
-          Username
-          <input value={username} onChange={(event) => setUsername(event.target.value)} />
-        </label>
-        <label>
-          Password
-          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-        </label>
-        <button className="primary-button" disabled={isSubmitting} type="submit">
-          {isSubmitting ? "Signing in..." : "Sign in"}
-        </button>
-        {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
-      </form>
-    </section>
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form className="grid gap-5" onSubmit={handleSubmit}>
+          <div className="grid gap-2">
+            <Label htmlFor="login-username">Username</Label>
+            <Input id="login-username" value={username} onChange={(event) => setUsername(event.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="login-password">Password</Label>
+            <Input id="login-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button disabled={isSubmitting} type="submit">
+              {isSubmitting ? "Signing in..." : "Sign in"}
+            </Button>
+            {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

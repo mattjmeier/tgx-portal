@@ -19,7 +19,10 @@ export type PaginatedResponse<T> = {
   results: T[];
 };
 
-export type CreateProjectPayload = Omit<Project, "id" | "created_at">;
+export type CreateProjectPayload = Pick<
+  Project,
+  "pi_name" | "researcher_name" | "bioinformatician_assigned" | "title" | "description"
+>;
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
 

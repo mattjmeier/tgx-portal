@@ -2,21 +2,25 @@ import { FormEvent, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { createStudy, type CreateStudyPayload } from "../api/studies";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 type StudyFormProps = {
   projectId: number;
 };
 
-const initialFormState = {
+const initialFormState: Omit<CreateStudyPayload, "project"> = {
   species: "human",
   celltype: "",
   treatment_var: "",
   batch_var: "",
-} satisfies Omit<CreateStudyPayload, "project">;
+};
 
 export function StudyForm({ projectId }: StudyFormProps) {
   const queryClient = useQueryClient();
-  const [formState, setFormState] = useState(initialFormState);
+  const [formState, setFormState] = useState<Omit<CreateStudyPayload, "project">>(initialFormState);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const mutation = useMutation<Awaited<ReturnType<typeof createStudy>>, Error, CreateStudyPayload>({
@@ -43,45 +47,57 @@ export function StudyForm({ projectId }: StudyFormProps) {
   return (
     <form className="detail-form" onSubmit={handleSubmit}>
       <h3>Create a study</h3>
-      <label>
-        Species
-        <select
-          value={formState.species}
-          onChange={(event) => setFormState((current) => ({ ...current, species: event.target.value as CreateStudyPayload["species"] }))}
-        >
-          <option value="human">Human</option>
-          <option value="mouse">Mouse</option>
-          <option value="rat">Rat</option>
-          <option value="hamster">Hamster</option>
-        </select>
-      </label>
-      <label>
-        Cell type
-        <input
-          required
-          value={formState.celltype}
-          onChange={(event) => setFormState((current) => ({ ...current, celltype: event.target.value }))}
-        />
-      </label>
-      <label>
-        Treatment variable
-        <input
-          required
-          value={formState.treatment_var}
-          onChange={(event) => setFormState((current) => ({ ...current, treatment_var: event.target.value }))}
-        />
-      </label>
-      <label>
-        Batch variable
-        <input
-          required
-          value={formState.batch_var}
-          onChange={(event) => setFormState((current) => ({ ...current, batch_var: event.target.value }))}
-        />
-      </label>
-      <button className="primary-button" disabled={mutation.isPending} type="submit">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="study-species">Species</Label>
+          <Select
+            value={formState.species}
+            onValueChange={(value) => setFormState((current) => ({ ...current, species: value as CreateStudyPayload["species"] }))}
+          >
+            <SelectTrigger id="study-species" aria-label="Species">
+              <SelectValue placeholder="Select a species" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="human">Human</SelectItem>
+              <SelectItem value="mouse">Mouse</SelectItem>
+              <SelectItem value="rat">Rat</SelectItem>
+              <SelectItem value="hamster">Hamster</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="study-celltype">Cell type</Label>
+          <Input
+            id="study-celltype"
+            required
+            value={formState.celltype}
+            onChange={(event) => setFormState((current) => ({ ...current, celltype: event.target.value }))}
+          />
+        </div>
+      </div>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="study-treatment-var">Treatment variable</Label>
+          <Input
+            id="study-treatment-var"
+            required
+            value={formState.treatment_var}
+            onChange={(event) => setFormState((current) => ({ ...current, treatment_var: event.target.value }))}
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="study-batch-var">Batch variable</Label>
+          <Input
+            id="study-batch-var"
+            required
+            value={formState.batch_var}
+            onChange={(event) => setFormState((current) => ({ ...current, batch_var: event.target.value }))}
+          />
+        </div>
+      </div>
+      <Button disabled={mutation.isPending} type="submit">
         {mutation.isPending ? "Creating..." : "Create study"}
-      </button>
+      </Button>
       {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
     </form>
   );

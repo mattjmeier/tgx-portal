@@ -1,30 +1,55 @@
-import { ProjectForm } from "../components/ProjectForm";
+import { Link } from "react-router-dom";
+
 import { ProjectList } from "../components/ProjectList";
 
 export function ProjectsPage() {
   return (
-    <>
+    <section className="workspace-route">
+      <div className="section-header">
+        <div>
+          <p className="eyebrow">Projects</p>
+          <h2>Project intake</h2>
+        </div>
+      </div>
+
+      <section className="workspace-intro-card">
+        <div>
+          <strong>Registry first</strong>
+          <p>Use this page to browse existing collaboration records and open a workspace with one click.</p>
+        </div>
+        <div>
+          <strong>Intake is now a dedicated route</strong>
+          <p>Creating a project has its own page so the registry and hierarchy navigation stay cleaner and easier to scan.</p>
+        </div>
+      </section>
+
       <section className="dashboard-hero">
         <div className="dashboard-hero-copy">
-          <p className="eyebrow">Projects</p>
-          <h2>Project intake and experiment navigation</h2>
+          <p className="eyebrow">Registry</p>
+          <h2>Open the right workspace faster</h2>
           <p className="body-copy">
-            Use projects for collaboration-level tracking. Create studies inside a project when one collaboration contains multiple experiments, conditions, or species-level branches.
+            Projects hold the collaboration-level record. Once you open a project, the sidebar exposes studies, sample actions, and deeper experimental navigation in a consistent place.
           </p>
           <div className="hero-note-grid">
             <article className="hero-note-card">
-              <strong>Project</strong>
-              <p>Who is involved, what the collaboration is called, and who owns the work.</p>
+              <strong>Modern navigation</strong>
+              <p>Shared sections stay fixed while the workspace hierarchy expands underneath the active project.</p>
             </article>
             <article className="hero-note-card">
-              <strong>Study</strong>
-              <p>The actual experiment nested under that collaboration, with its own species and treatment structure.</p>
+              <strong>Dedicated intake route</strong>
+              <p>Project creation has moved out of the registry so users can browse without competing form noise.</p>
             </article>
           </div>
         </div>
-        <ProjectForm />
+        <div className="project-form">
+          <h2>Next step</h2>
+          <p className="body-copy">Create a new project from its own route, or open an existing record below to continue into the workspace.</p>
+          <Link className="secondary-button" to="/projects/new">
+            Open project intake
+          </Link>
+        </div>
       </section>
       <ProjectList />
-    </>
+    </section>
   );
 }

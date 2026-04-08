@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { PaginatedResponse } from "../api/projects";
 import { BulkSampleImportError, createSamplesBulk, type BulkSampleRowError, type CreateSamplePayload } from "../api/samples";
 import type { Sample } from "../api/samples";
+import { Button } from "./ui/button";
 
 type SampleUploadPanelProps = {
   studyId: number;
@@ -232,9 +233,9 @@ export function SampleUploadPanel({ studyId }: SampleUploadPanelProps) {
 
           <div className="upload-actions">
             <p className="muted-copy">Previewing {rows.length} sample rows.</p>
-            <button className="primary-button" disabled={mutation.isPending} type="button" onClick={handleImport}>
+            <Button disabled={mutation.isPending} type="button" onClick={handleImport}>
               {mutation.isPending ? "Importing..." : "Import samples"}
-            </button>
+            </Button>
           </div>
         </>
       ) : null}
