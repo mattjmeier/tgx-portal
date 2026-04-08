@@ -141,9 +141,6 @@ export function AppSidebar() {
             <h1 className="truncate text-lg font-semibold text-sidebar-foreground">TGX Portal</h1>
           </div>
         </div>
-        <p className="px-2 text-sm leading-6 text-sidebar-foreground/70">
-          Intake, workspace hierarchy, and workflow metadata aligned in one operational shell.
-        </p>
       </SidebarHeader>
 
       <SidebarContent>
