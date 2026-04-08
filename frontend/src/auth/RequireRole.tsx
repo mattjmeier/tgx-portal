@@ -1,5 +1,6 @@
 import { Navigate, Outlet } from "react-router-dom";
 
+import { collaborationRegistryPath } from "../lib/routes";
 import { useAuth } from "./AuthProvider";
 
 type RequireRoleProps = {
@@ -14,7 +15,7 @@ export function RequireRole({ allowedRoles }: RequireRoleProps) {
   }
 
   if (!auth.user || !allowedRoles.includes(auth.user.profile.role)) {
-    return <Navigate replace to="/projects" />;
+    return <Navigate replace to={collaborationRegistryPath} />;
   }
 
   return <Outlet />;

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { collaborationRegistryPath } from "../lib/routes";
 import { ProjectForm } from "../components/ProjectForm";
 
 export function ProjectCreatePage() {
@@ -7,22 +8,22 @@ export function ProjectCreatePage() {
     <section className="workspace-route">
       <div className="section-header">
         <div>
-          <p className="eyebrow">Project intake</p>
+          <p className="eyebrow">Collaboration intake</p>
           <h2>Create a collaboration record</h2>
         </div>
-        <Link className="ghost-link" to="/projects">
+        <Link className="ghost-link" to={collaborationRegistryPath}>
           Back to registry
         </Link>
       </div>
 
       <section className="workspace-intro-card">
         <div>
-          <strong>Start with the collaboration</strong>
-          <p>Capture the PI, researcher, assigned bioinformatician, and ownership context before branching into studies.</p>
+          <strong>Collaboration</strong>
+          <p>Use this form for the ownership, intake, PI, researcher, and bioinformatics context that sits above all studies.</p>
         </div>
         <div>
-          <strong>Studies stay separate</strong>
-          <p>Add studies from the workspace once the project needs distinct species, cell systems, or treatment structures.</p>
+          <strong>Study</strong>
+          <p>Add studies later when the collaboration needs a distinct experiment, species, cell system, or treatment structure.</p>
         </div>
       </section>
 

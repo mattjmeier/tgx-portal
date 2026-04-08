@@ -8,6 +8,7 @@ import { deleteAssay, fetchAssays, type Assay } from "../api/assays";
 import { downloadProjectConfig, type Project } from "../api/projects";
 import { deleteSample, fetchSamples } from "../api/samples";
 import { deleteStudy, fetchStudies, type Study } from "../api/studies";
+import { collaborationStudyCreatePath } from "../lib/routes";
 import { AssayForm } from "./AssayForm";
 import { SampleForm } from "./SampleForm";
 import { SampleExplorerTable } from "./SampleExplorerTable";
@@ -217,15 +218,15 @@ export function ProjectWorkspace({
 
       {projects.length === 0 ? (
         <article className="empty-card">
-          <h3>No project selected yet</h3>
-          <p>Create a project above to unlock study and sample intake.</p>
+          <h3>No collaboration selected yet</h3>
+          <p>Create a collaboration above to unlock study and sample intake.</p>
         </article>
       ) : (
         <div className="workspace-stack">
           {selectedProject ? (
             <section className="workspace-overview" id="project-setup">
               <div className="workspace-overview-copy">
-                <p className="eyebrow">Active project</p>
+                <p className="eyebrow">Overview</p>
                 <h3>{selectedProject.title}</h3>
                 <p className="workspace-overview-meta">
                   PI: {selectedProject.pi_name}
@@ -235,8 +236,8 @@ export function ProjectWorkspace({
                   {selectedProject.description || "Use this workspace to move from collaboration-level setup into experiment-level intake, then into sample and assay records for downstream pipeline generation."}
                 </p>
                 <div className="workspace-overview-actions">
-                  <Link className="primary-button" to={`/projects/${selectedProject.id}/studies/new`}>
-                    Create study
+                  <Link className="primary-button" to={collaborationStudyCreatePath(selectedProject.id)}>
+                    Add study
                   </Link>
                   {auth.user?.profile.role === "admin" ? (
                     <button className="secondary-button overview-secondary-button" type="button" onClick={() => handleDownloadConfig(selectedProject.id)}>
@@ -272,7 +273,7 @@ export function ProjectWorkspace({
           {showProjectSelector ? (
           <div className="workspace-column">
               <div className="selector-group">
-                <h3>Select a project</h3>
+                <h3>Select a collaboration</h3>
                 <div className="chip-row">
                   {projects.map((project) => (
                     <button
@@ -293,11 +294,11 @@ export function ProjectWorkspace({
             <div className="selector-group" id="study-directory">
               <div className="section-header compact-header">
                 <div>
-                  <h3>Studies for the selected project</h3>
+                  <h3>Studies for the selected collaboration</h3>
                   <p className="muted-copy">Select one to explore samples and assays for that experiment.</p>
                 </div>
                 {selectedProject ? (
-                  <Link className="secondary-button" to={`/projects/${selectedProject.id}/studies/new`}>
+                  <Link className="secondary-button" to={collaborationStudyCreatePath(selectedProject.id)}>
                     New study
                   </Link>
                 ) : null}
@@ -308,7 +309,7 @@ export function ProjectWorkspace({
                 {studies.length === 0 ? (
                   <article className="empty-card">
                     <h3>No studies yet</h3>
-                    <p>Create the first study for this project to continue to sample intake.</p>
+                    <p>Create the first study for this collaboration to continue to sample intake.</p>
                   </article>
                 ) : (
                   studies.map((study) => (

@@ -34,10 +34,10 @@ export function ProjectForm() {
 
   return (
     <form className="project-form" onSubmit={handleSubmit}>
-      <h2>Create a project</h2>
+      <h2>Create a collaboration</h2>
       <div className="grid gap-5">
         <div className="grid gap-2">
-          <Label htmlFor="project-title">Project title</Label>
+          <Label htmlFor="project-title">Collaboration title</Label>
           <Input
             id="project-title"
           required
@@ -95,9 +95,9 @@ export function ProjectForm() {
         </div>
       </div>
       <Button disabled={mutation.isPending} type="submit">
-        {mutation.isPending ? "Creating..." : "Create project"}
+        {mutation.isPending ? "Creating..." : "Create collaboration"}
       </Button>
-      {mutation.isError ? <p className="error-text">Unable to create the project right now.</p> : null}
+      {mutation.isError ? <p className="error-text">Unable to create the collaboration right now.</p> : null}
     </form>
   );
 }

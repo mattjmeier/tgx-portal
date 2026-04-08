@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthProvider";
+import { collaborationRegistryPath } from "../lib/routes";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
@@ -23,7 +24,7 @@ export function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (auth.isAuthenticated) {
-    return <Navigate replace to="/projects" />;
+    return <Navigate replace to={collaborationRegistryPath} />;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -34,7 +35,7 @@ export function LoginPage() {
     try {
       await auth.login(username, password);
       const state = location.state as LocationState | null;
-      navigate(state?.from?.pathname ?? "/projects", { replace: true });
+      navigate(state?.from?.pathname ?? collaborationRegistryPath, { replace: true });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to sign in.");
     } finally {

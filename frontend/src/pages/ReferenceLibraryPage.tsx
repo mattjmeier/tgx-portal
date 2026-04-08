@@ -1,8 +1,8 @@
 const species = ["human", "mouse", "rat", "hamster"];
 const platforms = ["RNA-Seq", "TempO-Seq"];
 const hierarchy = [
-  ["Project", "Collaboration-level container used for ownership, intake, and reporting."],
-  ["Study", "Distinct experiment inside a project, defined by species, cell type, or treatment design."],
+  ["Collaboration", "Top-level container used for ownership, intake, and reporting."],
+  ["Study", "Distinct experiment inside a collaboration, defined by species, cell type, or treatment design."],
   ["Sample", "Biological record inside a study, ready for assay attachment and bulk upload."],
   ["Assay", "Analytical run applied to a sample for downstream configuration generation."],
 ];
@@ -20,7 +20,7 @@ export function ReferenceLibraryPage() {
       <section className="workspace-intro-card">
         <div>
           <strong>Common selections</strong>
-          <p>Use this page as a quick operator reference for species, platforms, and the hierarchy users see across the portal.</p>
+          <p>Use this page as a quick operator reference for species, platforms, and the collaboration hierarchy users see across the portal.</p>
         </div>
         <div>
           <strong>Designed for consistency</strong>
