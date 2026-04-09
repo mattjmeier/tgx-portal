@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, Outlet, useLocation, useMatch } from "react-router-dom";
 
 import { fetchProject } from "../api/projects";
-import { fetchStudies, type Study } from "../api/studies";
+import { fetchStudy, fetchStudies, type Study } from "../api/studies";
 import {
   collaborationCreatePath,
   collaborationRegistryPath,
@@ -38,7 +38,7 @@ function getShellCopy(pathname: string, projectId?: number | null, projectTitle?
 
   if (pathname === "/studies") {
     return {
-      breadcrumbs: [],
+      breadcrumbs: [{ label: "Studies", to: studiesIndexPath }],
       eyebrow: "Studies",
       titleHelp: null,
       title: null,
@@ -105,6 +105,20 @@ function getShellCopy(pathname: string, projectId?: number | null, projectTitle?
     };
   }
 
+  if (pathname.startsWith("/studies/")) {
+    return {
+      breadcrumbs: [
+        { label: "Studies", to: studiesIndexPath },
+        studyLabel ? { label: studyLabel } : { label: "Study" },
+      ],
+      eyebrow: "Studies",
+      titleHelp: null,
+      title: null,
+      description: null,
+      badge: null,
+    };
+  }
+
   return {
     breadcrumbs: [
       { label: "Collaborations", to: collaborationRegistryPath },
@@ -120,6 +134,7 @@ function getShellCopy(pathname: string, projectId?: number | null, projectTitle?
 
 export function AppLayout() {
   const location = useLocation();
+  const pathname = location.pathname !== "/" ? location.pathname.replace(/\/$/, "") : location.pathname;
   const workspaceChildMatch = useMatch("/collaborations/:projectId/*");
   const workspaceRootMatch = useMatch("/collaborations/:projectId");
   const workspaceRouteMatch = workspaceChildMatch ?? workspaceRootMatch;
@@ -140,6 +155,13 @@ export function AppLayout() {
     enabled: Number.isFinite(projectId),
   });
 
+  const currentStudyId = isStudyWorkspaceRoute ? Number(matchedStudyId) : NaN;
+  const currentStudyQuery = useQuery({
+    queryKey: ["study", currentStudyId],
+    queryFn: () => fetchStudy(currentStudyId),
+    enabled: Number.isFinite(currentStudyId),
+  });
+
   const studiesQuery = useQuery({
     queryKey: ["studies", projectId],
     queryFn: () => fetchStudies(projectId),
@@ -150,7 +172,12 @@ export function AppLayout() {
     Number.isFinite(selectedStudyId) && studiesQuery.data
       ? studiesQuery.data.results.find((study) => study.id === selectedStudyId) ?? null
       : null;
-  const shellCopy = getShellCopy(location.pathname, Number.isFinite(projectId) ? projectId : null, projectQuery.data?.title, formatStudyLabel(selectedStudy));
+  const shellCopy = getShellCopy(
+    pathname,
+    Number.isFinite(projectId) ? projectId : null,
+    projectQuery.data?.title,
+    currentStudyQuery.data ? formatStudyLabel(currentStudyQuery.data) : formatStudyLabel(selectedStudy),
+  );
 
   return (
     <SidebarProvider>

@@ -463,13 +463,22 @@ describe("AppLayout", () => {
     expect(screen.queryByText(/add a study/i)).not.toBeInTheDocument();
   });
 
+  it("keeps the studies index breadcrumb linked back to the studies page", () => {
+    renderLayout("/studies/");
+
+    expect(screen.getByText("Studies page")).toBeInTheDocument();
+    const breadcrumb = screen.getByRole("navigation", { name: /breadcrumb/i });
+    expect(within(breadcrumb).getByRole("link", { name: /^studies$/i })).toHaveAttribute("href", "/studies");
+    expect(screen.queryByText(/active collaboration/i)).not.toBeInTheDocument();
+  });
+
   it("navigates to the global study creation flow from the sidebar", () => {
     renderLayout("/collaborations");
 
     fireEvent.click(screen.getByRole("link", { name: /^new study$/i }));
 
     expect(screen.getByText("Global study page")).toBeInTheDocument();
-    expect(screen.getByText(/new study/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /new study/i })).toBeInTheDocument();
   });
 
   it("reveals study actions beneath the selected study in workspace routes", async () => {
@@ -508,6 +517,8 @@ describe("AppLayout", () => {
     renderLayout("/studies/11");
 
     expect(await screen.findByText("Study workspace page")).toBeInTheDocument();
+    const breadcrumb = screen.getByRole("navigation", { name: /breadcrumb/i });
+    expect(within(breadcrumb).getByRole("link", { name: /^studies$/i })).toHaveAttribute("href", "/studies");
     expect(screen.getByRole("link", { name: /back to studies/i })).toHaveAttribute("href", "/studies");
     expect(screen.queryByRole("link", { name: /back to collaborations/i })).not.toBeInTheDocument();
   });
