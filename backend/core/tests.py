@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from .models import Assay, Project, Sample, Study, UserProfile
+from .models import Assay, Project, Sample, Study, StudyOnboardingState, UserProfile
 
 User = get_user_model()
 
@@ -28,6 +28,7 @@ class SampleModelTests(TestCase):
         )
         study = Study.objects.create(
             project=project,
+            title="Hepatocyte study",
             species=Study.Species.HUMAN,
             celltype="Hepatocyte",
             treatment_var="dose",
@@ -68,6 +69,34 @@ class ProjectApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("results", response.json())
         self.assertEqual(response.json()["count"], 1)
+
+    def test_list_projects_supports_search_and_ordering(self) -> None:
+        Project.objects.create(
+            pi_name="Dr. Curie",
+            researcher_name="Researcher A",
+            bioinformatician_assigned="Bioinfo A",
+            title="Alpha collaboration",
+            description="A test project",
+        )
+        Project.objects.create(
+            pi_name="Dr. Sagan",
+            researcher_name="Researcher B",
+            bioinformatician_assigned="Bioinfo B",
+            title="Beta collaboration",
+            description="A second project",
+        )
+
+        response = self.client.get("/api/projects/?search=beta")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual(response.json()["results"][0]["title"], "Beta collaboration")
+
+        response = self.client.get("/api/projects/?ordering=title")
+
+        self.assertEqual(response.status_code, 200)
+        titles = [project["title"] for project in response.json()["results"]]
+        self.assertEqual(titles, sorted(titles))
 
     def test_create_project_returns_created_project(self) -> None:
         payload = {
@@ -202,6 +231,7 @@ class StudyApiTests(TestCase):
     def test_list_studies_can_be_filtered_by_project(self) -> None:
         Study.objects.create(
             project=self.project_alpha,
+            title="Alpha study 1",
             species=Study.Species.HUMAN,
             celltype="Hepatocyte",
             treatment_var="dose",
@@ -209,6 +239,7 @@ class StudyApiTests(TestCase):
         )
         Study.objects.create(
             project=self.project_beta,
+            title="Beta study 1",
             species=Study.Species.MOUSE,
             celltype="Neuron",
             treatment_var="timepoint",
@@ -224,6 +255,7 @@ class StudyApiTests(TestCase):
     def test_create_study_returns_created_study(self) -> None:
         payload = {
             "project": self.project_alpha.id,
+            "title": "Hepatocyte dose response",
             "species": Study.Species.HUMAN,
             "celltype": "Hepatocyte",
             "treatment_var": "dose",
@@ -235,9 +267,24 @@ class StudyApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Study.objects.count(), 1)
 
+    def test_create_study_requires_title(self) -> None:
+        payload = {
+            "project": self.project_alpha.id,
+            "species": Study.Species.HUMAN,
+            "celltype": "Hepatocyte",
+            "treatment_var": "dose",
+            "batch_var": "plate",
+        }
+
+        response = self.client.post("/api/studies/", payload, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("title", response.json())
+
     def test_duplicate_study_returns_bad_request(self) -> None:
         Study.objects.create(
             project=self.project_alpha,
+            title="Alpha hepatocyte study",
             species=Study.Species.HUMAN,
             celltype="Hepatocyte",
             treatment_var="dose",
@@ -245,6 +292,7 @@ class StudyApiTests(TestCase):
         )
         payload = {
             "project": self.project_alpha.id,
+            "title": "Different title but same metadata",
             "species": Study.Species.HUMAN,
             "celltype": "Hepatocyte",
             "treatment_var": "dose",
@@ -259,6 +307,7 @@ class StudyApiTests(TestCase):
     def test_delete_study_removes_record(self) -> None:
         study = Study.objects.create(
             project=self.project_alpha,
+            title="Disposable study",
             species=Study.Species.HUMAN,
             celltype="Hepatocyte",
             treatment_var="dose",
@@ -288,6 +337,7 @@ class SampleApiTests(TestCase):
         )
         self.study = Study.objects.create(
             project=self.project,
+            title="Sample validation study",
             species=Study.Species.HUMAN,
             celltype="Hepatocyte",
             treatment_var="dose",
@@ -333,6 +383,7 @@ class SampleApiTests(TestCase):
     def test_list_samples_can_be_filtered_by_study(self) -> None:
         other_study = Study.objects.create(
             project=self.project,
+            title="Other study",
             species=Study.Species.MOUSE,
             celltype="Neuron",
             treatment_var="timepoint",
@@ -565,6 +616,7 @@ class AssayApiTests(TestCase):
         )
         self.study = Study.objects.create(
             project=self.project,
+            title="Assay study",
             species=Study.Species.HUMAN,
             celltype="Hepatocyte",
             treatment_var="dose",
@@ -639,10 +691,17 @@ class ConfigGenerationApiTests(TestCase):
         )
         self.study = Study.objects.create(
             project=self.project,
+            title="Config generation study",
             species=Study.Species.HUMAN,
             celltype="Hepatocyte",
             treatment_var="dose",
             batch_var="plate",
+        )
+        StudyOnboardingState.objects.create(
+            study=self.study,
+            status=StudyOnboardingState.Status.FINAL,
+            metadata_columns=["group", "plate"],
+            mappings={"treatment_level_1": "group", "batch": "plate"},
         )
         self.sample_control = Sample.objects.create(
             study=self.study,

@@ -27,3 +27,19 @@ The `.github/workflows/ci.yml` must execute the following jobs on every Pull Req
 2. **Backend Tests**: Build the `db`, `redis`, and `api` containers. Run `docker compose exec api pytest`.
 3. **Frontend Tests**: Run `npm run test` (Vitest).
 4. **E2E Tests**: Spin up the full Docker stack. Run Playwright against `localhost`. Upload artifacts (Playwright traces/videos) if tests fail to aid debugging.
+
+## 4. Seeded QA Reset Flow
+Use the deterministic mock seed when you need a clean collaboration/study workspace for manual QA or demos.
+
+From the repository root:
+
+```bash
+docker compose exec api python manage.py reset_seed_data
+```
+
+This command preserves users and lookup definitions, but replaces the current project hierarchy with:
+- 2 collaborations
+- 3 studies per collaboration
+- seeded samples, assays, and finalized onboarding states
+
+The seeded records are mock QA fixtures inspired by the examples in `mocks/metadata.csv`, `mocks/contrasts.txt`, and `mocks/config.yaml`, adapted to the fields currently stored by the Django app.

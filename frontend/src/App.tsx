@@ -8,6 +8,7 @@ import {
   collaborationRegistryPath,
   globalStudyCreateRoute,
   legacyProjectPathToCollaborationPath,
+  studiesIndexPath,
 } from "./lib/routes";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -15,7 +16,10 @@ import { ProjectCreatePage } from "./pages/ProjectCreatePage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { ProjectWorkspacePage } from "./pages/ProjectWorkspacePage";
 import { ReferenceLibraryPage } from "./pages/ReferenceLibraryPage";
+import { StudiesPage } from "./pages/StudiesPage";
+import { StudyOnboardingPage } from "./pages/StudyOnboardingPage";
 import { StudyCreatePage } from "./pages/StudyCreatePage";
+import { StudyWorkspacePage } from "./pages/StudyWorkspacePage";
 
 function LegacyProjectRedirect() {
   const location = useLocation();
@@ -41,7 +45,10 @@ export default function App() {
           <Route index element={<Navigate replace to={collaborationRegistryPath} />} />
           <Route path={collaborationRegistryPath} element={<ProjectsPage />} />
           <Route path={collaborationCreatePath} element={<ProjectCreatePage />} />
+          <Route path={studiesIndexPath} element={<StudiesPage />} />
           <Route path="/library" element={<ReferenceLibraryPage />} />
+          <Route path="/studies/:studyId/onboarding" element={<StudyOnboardingPage />} />
+          <Route path="/studies/:studyId" element={<StudyWorkspacePage />} />
           <Route path={`${collaborationRegistryPath}/:projectId`} element={<ProjectWorkspacePage />} />
           <Route path={`${collaborationRegistryPath}/:projectId/studies/new`} element={<StudyCreatePage />} />
           <Route path={globalStudyCreateRoute} element={<StudyCreatePage />} />

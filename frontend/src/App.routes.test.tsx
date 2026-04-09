@@ -50,6 +50,10 @@ vi.mock("./pages/ProjectsPage", () => ({
   ProjectsPage: () => <div>Collaborations page</div>,
 }));
 
+vi.mock("./pages/StudiesPage", () => ({
+  StudiesPage: () => <div>Studies page</div>,
+}));
+
 vi.mock("./pages/ProjectWorkspacePage", () => ({
   ProjectWorkspacePage: () => <div>Collaboration workspace page</div>,
 }));
@@ -62,6 +66,14 @@ vi.mock("./pages/StudyCreatePage", () => ({
   StudyCreatePage: () => <div>Global study page</div>,
 }));
 
+vi.mock("./pages/StudyWorkspacePage", () => ({
+  StudyWorkspacePage: () => <div>Study workspace page</div>,
+}));
+
+vi.mock("./pages/StudyOnboardingPage", () => ({
+  StudyOnboardingPage: () => <div>Study onboarding page</div>,
+}));
+
 function renderApp(initialEntry: string) {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
@@ -71,11 +83,18 @@ function renderApp(initialEntry: string) {
 }
 
 describe("App routes", () => {
-  it("serves the collaboration registry from the new alias", () => {
+  it("serves the collaborations browse route", () => {
     renderApp("/collaborations");
 
     expect(screen.getByText("Collaborations page")).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/collaborations");
+  });
+
+  it("serves the studies browse route", () => {
+    renderApp("/studies");
+
+    expect(screen.getByText("Studies page")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/studies");
   });
 
   it("redirects legacy project registry URLs to collaboration URLs", () => {
@@ -97,5 +116,19 @@ describe("App routes", () => {
 
     expect(screen.getByText("Global study page")).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/studies/new");
+  });
+
+  it("serves the study workspace route", () => {
+    renderApp("/studies/11");
+
+    expect(screen.getByText("Study workspace page")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/studies/11");
+  });
+
+  it("serves the study onboarding wizard route", () => {
+    renderApp("/studies/11/onboarding");
+
+    expect(screen.getByText("Study onboarding page")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/studies/11/onboarding");
   });
 });

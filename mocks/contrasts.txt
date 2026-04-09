@@ -1,0 +1,5 @@
+1uM_2D	C_2D
+2uM_2D	C_2D
+2uM_3D	C_3D
+1uM_3D	C_3D
+C_3D	C_2D

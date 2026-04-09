@@ -1,0 +1,18 @@
+# Ralph Loop Progress
+Generated: 2026-04-08T22:33:41Z
+Plan: /home/mmeier/shared2/projects/tgx-portal/ralph-loop/task-plan.json
+Project: TGX Portal UX Reorientation And Intake Workflow Refactor
+---
+
+## Task Checklist
+- [x] TASK-001: Refactor sidebar IA around collaborations and studies
+- [x] TASK-002: Add collaboration index page and server-side table flow
+- [x] TASK-003: Add explicit study title support and study index grouping
+- [x] TASK-004: Restructure study workspace into samples, contrasts, and collaboration info
+- [x] TASK-005: Make create flows collaboration-aware and redirect-forward
+- [x] TASK-006: Build onboarding wizard shell from the PRD stages
+- [x] TASK-007: Implement lookup-driven template setup and bounded create-or-select behavior
+- [x] TASK-008: Implement metadata upload preview and aggregate validation
+- [x] TASK-009: Implement mapping, contrast suggestion, and draft/final gating
+- [x] TASK-010: Add deterministic seed data, reset flow, and end-to-end test hardening
+---

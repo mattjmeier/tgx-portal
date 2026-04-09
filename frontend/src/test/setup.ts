@@ -23,3 +23,7 @@ if (!window.matchMedia) {
     }),
   });
 }
+
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => undefined;
+}

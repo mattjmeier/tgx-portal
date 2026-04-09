@@ -26,8 +26,29 @@ export type CreateProjectPayload = Pick<
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
 
-export async function fetchProjects(): Promise<PaginatedResponse<Project>> {
-  const response = await apiFetch(`${apiBaseUrl}/api/projects/`);
+export type FetchProjectsOptions = {
+  page?: number;
+  pageSize?: number;
+  ordering?: string;
+  search?: string;
+};
+
+export async function fetchProjects(options?: FetchProjectsOptions): Promise<PaginatedResponse<Project>> {
+  const params = new URLSearchParams();
+  if (options?.page) {
+    params.set("page", String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set("page_size", String(options.pageSize));
+  }
+  if (options?.ordering) {
+    params.set("ordering", options.ordering);
+  }
+  if (options?.search) {
+    params.set("search", options.search);
+  }
+  const query = params.toString();
+  const response = await apiFetch(`${apiBaseUrl}/api/projects/${query ? `?${query}` : ""}`);
   if (!response.ok) {
     throw new Error("Failed to load projects.");
   }

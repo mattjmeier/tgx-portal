@@ -1,41 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 
+import { fetchProjects } from "../api/projects";
 import { ProjectsPage } from "./ProjectsPage";
 
 vi.mock("../api/projects", () => ({
-  fetchProjects: vi.fn(async () => ({
-    count: 2,
-    next: null,
-    previous: null,
-    results: [
-      {
-        id: 7,
-        title: "Mercury tox study",
-        pi_name: "Dr. Stone",
-        owner: "client",
-        owner_id: 3,
-        researcher_name: "Kim",
-        bioinformatician_assigned: "A. Chen",
-        description: "A project description",
-        created_at: "2026-04-08T00:00:00Z",
-      },
-      {
-        id: 8,
-        title: "Cadmium follow-up",
-        pi_name: "Dr. Li",
-        owner: "client",
-        owner_id: 5,
-        researcher_name: "Alex",
-        bioinformatician_assigned: "J. Singh",
-        description: "A second project description",
-        created_at: "2026-04-08T00:00:00Z",
-      },
-    ],
-  })),
-  deleteProject: vi.fn(async () => undefined),
+  fetchProjects: vi.fn(),
 }));
 
 function renderPage() {
@@ -57,14 +29,82 @@ function renderPage() {
 }
 
 describe("ProjectsPage", () => {
-  it("opens directly on the collaboration table with compact shortcuts", async () => {
+  it("supports server-side browsing, search, sorting, and pagination", async () => {
+    vi.mocked(fetchProjects).mockImplementation(
+      async (options?: { page?: number; pageSize?: number; ordering?: string; search?: string }) => {
+        const page = options?.page ?? 1;
+
+        if (page === 2) {
+          return {
+            count: 25,
+            next: null,
+            previous: "http://example.com/api/projects/?page=1",
+            results: [
+              {
+                id: 21,
+                title: "Page 2 collaboration",
+                pi_name: "Dr. Page",
+                owner: "client",
+                owner_id: 3,
+                researcher_name: "Kim",
+                bioinformatician_assigned: "A. Chen",
+                description: "A project description",
+                created_at: "2026-04-08T00:00:00Z",
+              },
+            ],
+          };
+        }
+
+        return {
+          count: 25,
+          next: "http://example.com/api/projects/?page=2",
+          previous: null,
+          results: [
+            {
+              id: 7,
+              title: "Mercury tox study",
+              pi_name: "Dr. Stone",
+              owner: "client",
+              owner_id: 3,
+              researcher_name: "Kim",
+              bioinformatician_assigned: "A. Chen",
+              description: "A project description",
+              created_at: "2026-04-08T00:00:00Z",
+            },
+            {
+              id: 8,
+              title: "Cadmium follow-up",
+              pi_name: "Dr. Li",
+              owner: "client",
+              owner_id: 5,
+              researcher_name: "Alex",
+              bioinformatician_assigned: "J. Singh",
+              description: "A second project description",
+              created_at: "2026-04-08T00:00:00Z",
+            },
+          ],
+        };
+      },
+    );
+
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: /collaboration catalog/i })).toBeInTheDocument();
-    expect(screen.getByText(/browse current collaborations first/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /collaborations/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /new collaboration/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^new study$/i })).toBeInTheDocument();
-    expect((await screen.findAllByRole("link", { name: /open workspace/i })).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/choose this when/i)).not.toBeInTheDocument();
+    expect(fetchProjects).toHaveBeenCalled();
+
+    const searchInput = screen.getByRole("textbox", { name: /search/i });
+    fireEvent.change(searchInput, { target: { value: "cadmium" } });
+    await waitFor(() => {
+      expect(fetchProjects).toHaveBeenLastCalledWith(expect.objectContaining({ search: "cadmium" }));
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^pi$/i }));
+    await waitFor(() => {
+      expect(fetchProjects).toHaveBeenLastCalledWith(expect.objectContaining({ ordering: "pi_name" }));
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /next page/i }));
+    expect(await screen.findByText(/page 2 collaboration/i)).toBeInTheDocument();
   });
 });

@@ -1,9 +1,9 @@
-import { ProjectList } from "../components/ProjectList";
+import { CollaborationIndexPanel } from "../components/CollaborationIndexPanel";
 
 export function ProjectsPage() {
   return (
     <section className="workspace-route">
-      <ProjectList />
+      <CollaborationIndexPanel />
     </section>
   );
 }

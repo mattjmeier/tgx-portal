@@ -1,7 +1,9 @@
 import { FormEvent, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 
-import { createStudy, type CreateStudyPayload } from "../api/studies";
+import { createStudy, type CreateStudyPayload, type Study } from "../api/studies";
+import { collaborationPath, studyWorkspacePath } from "../lib/routes";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -9,26 +11,45 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 
 type StudyFormProps = {
   projectId: number;
+  projectTitle?: string;
 };
 
 const initialFormState: Omit<CreateStudyPayload, "project"> = {
+  title: "",
   species: "human",
   celltype: "",
   treatment_var: "",
   batch_var: "",
 };
 
-export function StudyForm({ projectId }: StudyFormProps) {
+export function StudyForm({ projectId, projectTitle }: StudyFormProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [formState, setFormState] = useState<Omit<CreateStudyPayload, "project">>(initialFormState);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const mutation = useMutation<Awaited<ReturnType<typeof createStudy>>, Error, CreateStudyPayload>({
+  const mutation = useMutation<Study, Error, CreateStudyPayload>({
     mutationFn: (payload: CreateStudyPayload) => createStudy(payload),
-    onSuccess: () => {
+    onSuccess: (createdStudy) => {
       setFormState(initialFormState);
       setErrorMessage(null);
       void queryClient.invalidateQueries({ queryKey: ["studies", projectId] });
+      navigate(`${studyWorkspacePath(createdStudy.id)}?intake=open`, {
+        replace: true,
+        state: {
+          flash: {
+            variant: "success",
+            title: "Study created",
+            description: projectTitle
+              ? `"${createdStudy.title}" is ready under ${projectTitle}. Start sample intake in the workspace.`
+              : `"${createdStudy.title}" is ready. Start sample intake in the workspace.`,
+            action: {
+              label: "Back to collaboration",
+              to: collaborationPath(createdStudy.project),
+            },
+          },
+        },
+      });
     },
     onError: (error) => {
       setErrorMessage(error.message);
@@ -47,6 +68,15 @@ export function StudyForm({ projectId }: StudyFormProps) {
   return (
     <form className="detail-form" onSubmit={handleSubmit}>
       <h3>Create a study</h3>
+      <div className="grid gap-2">
+        <Label htmlFor="study-title">Study title</Label>
+        <Input
+          id="study-title"
+          required
+          value={formState.title}
+          onChange={(event) => setFormState((current) => ({ ...current, title: event.target.value }))}
+        />
+      </div>
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label htmlFor="study-species">Species</Label>

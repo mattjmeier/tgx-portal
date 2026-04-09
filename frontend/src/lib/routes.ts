@@ -1,6 +1,15 @@
 export const collaborationRegistryPath = "/collaborations";
 export const collaborationCreatePath = "/collaborations/new";
+export const studiesIndexPath = "/studies";
 export const globalStudyCreateRoute = "/studies/new";
+
+export function studyWorkspacePath(studyId: number | string): string {
+  return `${studiesIndexPath}/${studyId}`;
+}
+
+export function studyOnboardingPath(studyId: number | string): string {
+  return `${studyWorkspacePath(studyId)}/onboarding`;
+}
 
 export function collaborationPath(projectId: number | string): string {
   return `${collaborationRegistryPath}/${projectId}`;

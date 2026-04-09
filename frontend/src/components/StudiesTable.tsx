@@ -1,0 +1,127 @@
+import type { ReactNode } from "react";
+
+import type { Study } from "../api/studies";
+
+type StudySortState = false | "asc" | "desc";
+
+type StudiesTableProps = {
+  studies: Study[];
+  isLoading: boolean;
+  isError: boolean;
+  emptyMessage: string;
+  loadingMessage?: string;
+  errorMessage?: string;
+  showProjectGroups?: boolean;
+  titleSortState?: StudySortState;
+  onToggleTitleSort?: () => void;
+  renderStudyTitle: (study: Study) => ReactNode;
+  renderStudyActions?: (study: Study) => ReactNode;
+  renderGroupAction?: (study: Study) => ReactNode;
+  getRowClassName?: (study: Study) => string | undefined;
+};
+
+function SortIndicator({ state }: { state: StudySortState }) {
+  return <span aria-hidden className="ml-1 text-xs text-muted-foreground">{state === "asc" ? "↑" : state === "desc" ? "↓" : "↕"}</span>;
+}
+
+export function StudiesTable({
+  studies,
+  isLoading,
+  isError,
+  emptyMessage,
+  loadingMessage = "Loading studies...",
+  errorMessage = "The study list could not be loaded.",
+  showProjectGroups = false,
+  titleSortState = false,
+  onToggleTitleSort,
+  renderStudyTitle,
+  renderStudyActions,
+  renderGroupAction,
+  getRowClassName,
+}: StudiesTableProps) {
+  const hasActions = Boolean(renderStudyActions);
+  const visibleColCount = hasActions ? 2 : 1;
+
+  return (
+    <div className="mt-4 overflow-hidden rounded-md border border-border">
+      <table className="w-full caption-bottom text-sm">
+        <thead className="[&_tr]:border-b">
+          <tr className="border-b border-border">
+            <th className="h-12 px-4 text-left align-middle font-medium text-foreground">
+              {onToggleTitleSort ? (
+                <button
+                  aria-label="Study"
+                  className="inline-flex items-center text-left hover:text-foreground"
+                  type="button"
+                  onClick={onToggleTitleSort}
+                >
+                  Study
+                  <SortIndicator state={titleSortState} />
+                </button>
+              ) : (
+                "Study"
+              )}
+            </th>
+            {hasActions ? <th className="h-12 px-4 text-left align-middle font-medium text-foreground">Actions</th> : null}
+          </tr>
+        </thead>
+        <tbody className="[&_tr:last-child]:border-0">
+          {isLoading ? (
+            <tr className="border-b border-border">
+              <td className="p-4 text-muted-foreground" colSpan={visibleColCount}>
+                {loadingMessage}
+              </td>
+            </tr>
+          ) : isError ? (
+            <tr className="border-b border-border">
+              <td className="p-4 text-destructive" colSpan={visibleColCount}>
+                {errorMessage}
+              </td>
+            </tr>
+          ) : studies.length === 0 ? (
+            <tr className="border-b border-border">
+              <td className="p-4 text-muted-foreground" colSpan={visibleColCount}>
+                {emptyMessage}
+              </td>
+            </tr>
+          ) : (
+            (() => {
+              let lastProjectId: number | null = null;
+
+              return studies.flatMap((study) => {
+                const showGroupHeading = showProjectGroups && lastProjectId !== study.project;
+                lastProjectId = study.project;
+
+                const groupRow = showGroupHeading ? (
+                  <tr className="border-b border-border bg-muted/20" key={`group-${study.project}`}>
+                    <td className="p-4" colSpan={visibleColCount}>
+                      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                        <h3 className="text-sm font-semibold text-foreground">{study.project_title}</h3>
+                        {renderGroupAction ? renderGroupAction(study) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ) : null;
+
+                const rowClassName = getRowClassName ? getRowClassName(study) : undefined;
+                const rowClasses = ["border-b border-border hover:bg-muted/40"];
+                if (rowClassName) {
+                  rowClasses.push(rowClassName);
+                }
+
+                const dataRow = (
+                  <tr className={rowClasses.join(" ")} key={study.id}>
+                    <td className="p-4 align-middle">{renderStudyTitle(study)}</td>
+                    {hasActions ? <td className="p-4 align-middle">{renderStudyActions?.(study)}</td> : null}
+                  </tr>
+                );
+
+                return groupRow ? [groupRow, dataRow] : [dataRow];
+              });
+            })()
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}

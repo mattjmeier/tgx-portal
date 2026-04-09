@@ -1,7 +1,9 @@
 import { FormEvent, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 
-import { createProject, type CreateProjectPayload } from "../api/projects";
+import { createProject, type CreateProjectPayload, type Project } from "../api/projects";
+import { collaborationPath, collaborationStudyCreatePath } from "../lib/routes";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -17,13 +19,28 @@ const initialFormState: CreateProjectPayload = {
 
 export function ProjectForm() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [formState, setFormState] = useState<CreateProjectPayload>(initialFormState);
 
-  const mutation = useMutation({
+  const mutation = useMutation<Project, Error, CreateProjectPayload>({
     mutationFn: createProject,
-    onSuccess: () => {
+    onSuccess: (createdProject) => {
       setFormState(initialFormState);
       void queryClient.invalidateQueries({ queryKey: ["projects"] });
+      navigate(collaborationPath(createdProject.id), {
+        replace: true,
+        state: {
+          flash: {
+            variant: "success",
+            title: "Collaboration created",
+            description: "Next: add a study to start capturing experimental design and samples.",
+            action: {
+              label: "Add a study",
+              to: collaborationStudyCreatePath(createdProject.id),
+            },
+          },
+        },
+      });
     },
   });
 

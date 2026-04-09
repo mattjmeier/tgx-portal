@@ -85,7 +85,7 @@ export function StudyCreatePage() {
             </div>
           </section>
           <section className="study-create-layout">
-            <StudyForm projectId={query.data.id} />
+            <StudyForm projectId={query.data.id} projectTitle={query.data.title} />
           </section>
         </>
       ) : selectedProjectId === null ? (

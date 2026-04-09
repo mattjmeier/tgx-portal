@@ -46,6 +46,28 @@ class SampleInputSchema(BaseModel):
     solvent_control: bool = False
 
 
+_TRUE_STRINGS = {"true", "t", "1", "yes", "y"}
+_FALSE_STRINGS = {"false", "f", "0", "no", "n"}
+
+
+def normalize_spreadsheet_boolean(value: Any) -> Any:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized == "":
+            return False
+        if normalized in _TRUE_STRINGS:
+            return True
+        if normalized in _FALSE_STRINGS:
+            return False
+    return value
+
+
 def validate_sample_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = SampleInputSchema.model_validate(payload).model_dump()
     sample_id_validator(normalized["sample_ID"])
@@ -145,6 +167,91 @@ def create_samples_from_validated_rows(normalized_rows: list[dict[str, Any]]) ->
 def create_samples_from_rows(rows: list[dict[str, Any]]) -> list[Sample]:
     normalized_rows = validate_sample_import_rows(rows)
     return create_samples_from_validated_rows(normalized_rows)
+
+
+def _build_metadata_upload_row(row: dict[str, Any], *, study_id: int) -> dict[str, Any]:
+    normalized: dict[str, Any] = {"study": study_id}
+    for raw_key, value in row.items():
+        if not isinstance(raw_key, str):
+            continue
+        key = raw_key.strip()
+        if not key:
+            continue
+        normalized[key] = value
+
+    for bool_key in ("technical_control", "reference_rna", "solvent_control"):
+        if bool_key in normalized:
+            normalized[bool_key] = normalize_spreadsheet_boolean(normalized[bool_key])
+
+    return normalized
+
+
+def _row_errors_to_validation_issues(row_errors: list[dict[str, list[str]]]) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    for row_index, field_errors in enumerate(row_errors):
+        for column_key, messages in field_errors.items():
+            for message in messages:
+                issues.append(
+                    {
+                        "row_index": row_index,
+                        "column_key": column_key,
+                        "message": message,
+                        "severity": "error",
+                    }
+                )
+    return issues
+
+
+def validate_metadata_upload(
+    *,
+    study_id: int,
+    rows: list[dict[str, Any]],
+    expected_columns: list[str] | None = None,
+) -> tuple[bool, list[dict[str, Any]]]:
+    issues: list[dict[str, Any]] = []
+
+    column_keys = {
+        key.strip()
+        for row in rows
+        for key in row.keys()
+        if isinstance(key, str) and key.strip()
+    }
+
+    expected_set = {key.strip() for key in (expected_columns or []) if isinstance(key, str) and key.strip()}
+    if expected_columns:
+        missing = sorted(expected_set - column_keys)
+        if missing:
+            for key in missing:
+                issues.append(
+                    {
+                        "row_index": -1,
+                        "column_key": key,
+                        "message": f"Missing required column: {key}",
+                        "severity": "error",
+                    }
+                )
+            return False, issues
+
+        unexpected = sorted(column_keys - expected_set)
+        for key in unexpected:
+            issues.append(
+                {
+                    "row_index": -1,
+                    "column_key": key,
+                    "message": f"Unexpected column not in selected template: {key}",
+                    "severity": "warning",
+                }
+            )
+
+    prepared_rows = [_build_metadata_upload_row(row, study_id=study_id) for row in rows]
+
+    try:
+        validate_sample_import_rows(prepared_rows)
+    except SampleImportValidationError as exc:
+        issues.extend(_row_errors_to_validation_issues(exc.errors))
+
+    is_valid = not any(issue["severity"] == "error" for issue in issues)
+    return is_valid, issues
 
 
 def _build_config_payload(project: Project, assays: list[Assay], samples: list[Sample]) -> dict:

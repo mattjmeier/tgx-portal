@@ -3,9 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PaginationState, SortingState } from "@tanstack/react-table";
 import { Link } from "react-router-dom";
 
-import { useAuth } from "../auth/AuthProvider";
 import { deleteAssay, fetchAssays, type Assay } from "../api/assays";
-import { downloadProjectConfig, type Project } from "../api/projects";
+import type { Project } from "../api/projects";
 import { deleteSample, fetchSamples } from "../api/samples";
 import { deleteStudy, fetchStudies, type Study } from "../api/studies";
 import { collaborationStudyCreatePath } from "../lib/routes";
@@ -13,6 +12,9 @@ import { AssayForm } from "./AssayForm";
 import { SampleForm } from "./SampleForm";
 import { SampleExplorerTable } from "./SampleExplorerTable";
 import { SampleUploadPanel } from "./SampleUploadPanel";
+import { StudiesTable } from "./StudiesTable";
+import { Button } from "./ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 
 type ProjectWorkspaceProps = {
   projects: Project[];
@@ -29,7 +31,6 @@ export function ProjectWorkspace({
   showProjectSelector = true,
   onStudyChange,
 }: ProjectWorkspaceProps) {
-  const auth = useAuth();
   const queryClient = useQueryClient();
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(initialProjectId ?? projects[0]?.id ?? null);
   const [selectedStudyId, setSelectedStudyId] = useState<number | null>(initialStudyId ?? null);
@@ -140,21 +141,6 @@ export function ProjectWorkspace({
     },
   });
 
-  const configMutation = useMutation<Blob, Error, number>({
-    mutationFn: downloadProjectConfig,
-    onSuccess: (blob, projectId) => {
-      const project = projects.find((item) => item.id === projectId);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `config_bundle_${project?.title.toLowerCase().replace(/\s+/g, "_") ?? projectId}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    },
-  });
-
   function handleProjectSelect(projectId: number) {
     setSelectedProjectId(projectId);
     setSelectedStudyId(null);
@@ -169,7 +155,7 @@ export function ProjectWorkspace({
   }
 
   function handleDeleteStudy(study: Study) {
-    const confirmed = window.confirm(`Delete this study for ${study.celltype} (${study.species})?`);
+    const confirmed = window.confirm(`Delete the study "${study.title}"?`);
     if (!confirmed) {
       return;
     }
@@ -195,10 +181,6 @@ export function ProjectWorkspace({
     deleteAssayMutation.mutate(assayId);
   }
 
-  function handleDownloadConfig(projectId: number) {
-    configMutation.mutate(projectId);
-  }
-
   const assaysBySample = (assaysQuery.data?.results ?? []).reduce<Record<number, Assay[]>>((accumulator, assay) => {
     accumulator[assay.sample] = [...(accumulator[assay.sample] ?? []), assay];
     return accumulator;
@@ -209,13 +191,6 @@ export function ProjectWorkspace({
 
   return (
     <section className="workspace-panel">
-      <div className="section-header">
-        <div>
-          <p className="eyebrow">Workspace</p>
-          <h2>Studies and samples</h2>
-        </div>
-      </div>
-
       {projects.length === 0 ? (
         <article className="empty-card">
           <h3>No collaboration selected yet</h3>
@@ -224,49 +199,58 @@ export function ProjectWorkspace({
       ) : (
         <div className="workspace-stack">
           {selectedProject ? (
-            <section className="workspace-overview" id="project-setup">
-              <div className="workspace-overview-copy">
-                <p className="eyebrow">Overview</p>
-                <h3>{selectedProject.title}</h3>
-                <p className="workspace-overview-meta">
-                  PI: {selectedProject.pi_name}
-                  {selectedProject.owner ? ` · Owner: ${selectedProject.owner}` : ""}
-                </p>
-                <p className="body-copy">
-                  {selectedProject.description || "Use this workspace to move from collaboration-level setup into experiment-level intake, then into sample and assay records for downstream pipeline generation."}
-                </p>
-                <div className="workspace-overview-actions">
-                  <Link className="primary-button" to={collaborationStudyCreatePath(selectedProject.id)}>
-                    Add study
-                  </Link>
-                  {auth.user?.profile.role === "admin" ? (
-                    <button className="secondary-button overview-secondary-button" type="button" onClick={() => handleDownloadConfig(selectedProject.id)}>
-                      {configMutation.isPending ? "Preparing bundle..." : "Download config bundle"}
-                    </button>
-                  ) : (
-                    <span className="workspace-overview-note">Config bundle export is currently limited to admin users.</span>
-                  )}
+            <Card className="workspace-summary-card" id="project-setup">
+              <CardHeader className="workspace-summary-header">
+                <div className="workspace-summary-copy">
+                  <p className="eyebrow">Collaboration record</p>
+                  <CardTitle className="text-3xl">{selectedProject.title}</CardTitle>
+                  <CardDescription className="text-base">
+                    PI: {selectedProject.pi_name}
+                    {selectedProject.owner ? ` · Owner: ${selectedProject.owner}` : ""}
+                  </CardDescription>
                 </div>
-                {configMutation.isError ? <p className="error-text">{configMutation.error.message}</p> : null}
-              </div>
-              <div className="workspace-stat-grid">
-                <article className="workspace-stat-card">
-                  <span className="workspace-stat-label">Studies</span>
-                  <strong>{studies.length}</strong>
-                  <p>{selectedProject.owner ? `Owned by ${selectedProject.owner}` : "No client owner assigned yet."}</p>
-                </article>
-                <article className="workspace-stat-card">
-                  <span className="workspace-stat-label">Samples in current study</span>
-                  <strong>{selectedStudy ? sampleCount : 0}</strong>
-                  <p>{selectedStudy ? `${selectedStudy.species} / ${selectedStudy.celltype}` : "Select a study to explore its sample table."}</p>
-                </article>
-                <article className="workspace-stat-card">
-                  <span className="workspace-stat-label">Assays on selected sample</span>
-                  <strong>{assayCountForSelectedSample}</strong>
-                  <p>{selectedSample ? selectedSample.sample_ID : "Choose a sample row to review assay coverage."}</p>
-                </article>
-              </div>
-            </section>
+                <div className="workspace-summary-actions">
+                  <Button asChild>
+                    <Link to={collaborationStudyCreatePath(selectedProject.id)}>Add study</Link>
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="workspace-summary-content">
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {selectedProject.description ||
+                    "Use this collaboration workspace to move from high-level intake into experiment setup, sample registration, and assay tracking for downstream pipeline generation."}
+                </p>
+                <div className="workspace-summary-stats">
+                  <Card className="bg-muted/30 shadow-none">
+                    <CardHeader className="gap-2 p-4">
+                      <CardDescription className="workspace-stat-label">Studies</CardDescription>
+                      <CardTitle className="text-4xl">{studies.length}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 text-sm text-muted-foreground">
+                      {selectedProject.owner ? `Owned by ${selectedProject.owner}` : "No client owner assigned yet."}
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-muted/30 shadow-none">
+                    <CardHeader className="gap-2 p-4">
+                      <CardDescription className="workspace-stat-label">Samples in current study</CardDescription>
+                      <CardTitle className="text-4xl">{selectedStudy ? sampleCount : 0}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 text-sm text-muted-foreground">
+                      {selectedStudy ? selectedStudy.title : "Select a study to explore its sample table."}
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-muted/30 shadow-none">
+                    <CardHeader className="gap-2 p-4">
+                      <CardDescription className="workspace-stat-label">Assays on selected sample</CardDescription>
+                      <CardTitle className="text-4xl">{assayCountForSelectedSample}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 text-sm text-muted-foreground">
+                      {selectedSample ? selectedSample.sample_ID : "Choose a sample row to review assay coverage."}
+                    </CardContent>
+                  </Card>
+                </div>
+              </CardContent>
+            </Card>
           ) : null}
 
           <div className={showProjectSelector ? "workspace-grid" : "workspace-grid workspace-grid-single"}>
@@ -294,41 +278,30 @@ export function ProjectWorkspace({
             <div className="selector-group" id="study-directory">
               <div className="section-header compact-header">
                 <div>
-                  <h3>Studies for the selected collaboration</h3>
+                  <h3>Studies in this collaboration</h3>
                   <p className="muted-copy">Select one to explore samples and assays for that experiment.</p>
                 </div>
-                {selectedProject ? (
-                  <Link className="secondary-button" to={collaborationStudyCreatePath(selectedProject.id)}>
-                    New study
-                  </Link>
-                ) : null}
               </div>
-              {studiesQuery.isLoading ? <p>Loading studies...</p> : null}
-              {studiesQuery.isError ? <p className="error-text">Unable to load studies.</p> : null}
-              <div className="study-list">
-                {studies.length === 0 ? (
-                  <article className="empty-card">
-                    <h3>No studies yet</h3>
-                    <p>Create the first study for this collaboration to continue to sample intake.</p>
-                  </article>
-                ) : (
-                  studies.map((study) => (
-                    <article className={study.id === selectedStudyId ? "study-card study-card-active" : "study-card"} key={study.id}>
-                      <button className="study-select-button" type="button" onClick={() => handleStudySelect(study)}>
-                        <strong>{study.species}</strong>
-                        <span>{study.celltype}</span>
-                        <span>Treatment: {study.treatment_var}</span>
-                        <span>Batch: {study.batch_var}</span>
-                      </button>
-                      <div className="card-actions">
-                        <button className="danger-button" type="button" onClick={() => handleDeleteStudy(study)}>
-                          Delete study
-                        </button>
-                      </div>
-                    </article>
-                  ))
+              <StudiesTable
+                studies={studies}
+                isLoading={studiesQuery.isLoading}
+                isError={studiesQuery.isError}
+                emptyMessage="No studies yet. Create the first study for this collaboration to continue to sample intake."
+                renderStudyTitle={(study) => (
+                  <button className="text-left" type="button" onClick={() => handleStudySelect(study)}>
+                    <span className="block font-medium text-primary hover:underline">{study.title}</span>
+                    <span className="block text-sm text-muted-foreground">
+                      {study.species} · {study.celltype}
+                    </span>
+                  </button>
                 )}
-              </div>
+                renderStudyActions={(study) => (
+                  <button className="danger-button" type="button" onClick={() => handleDeleteStudy(study)}>
+                    Delete study
+                  </button>
+                )}
+                getRowClassName={(study) => (study.id === selectedStudyId ? "bg-muted/45" : undefined)}
+              />
               {deleteStudyMutation.isError ? <p className="error-text">{deleteStudyMutation.error.message}</p> : null}
             </div>
 

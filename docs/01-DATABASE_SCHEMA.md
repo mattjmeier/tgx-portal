@@ -10,7 +10,7 @@ We use a relational structure inspired by the `SummarizedExperiment` object. Met
   * Fields: `id`, `pi_name`, `researcher_name`, `bioinformatician_assigned`, `title`, `description`, `created_at`.
   * *Constraint*: PI Name and title are used to route to Plane PM.
 * **`Study`**: A distinct experiment within a project.
-  * Fields: `id`, `project_id`, `species` (Enum: human, mouse, rat, hamster), `celltype`, `treatment_var`, `batch_var`.
+  * Fields: `id`, `project_id`, `title`, `species` (Enum: human, mouse, rat, hamster), `celltype`, `treatment_var`, `batch_var`.
 
 ### 2. The Sample Tensor
 * **`Sample`**: The biological entity. 

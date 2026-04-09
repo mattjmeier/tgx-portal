@@ -31,11 +31,15 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 
 class StudySerializer(serializers.ModelSerializer):
+    project_title = serializers.CharField(source="project.title", read_only=True)
+
     class Meta:
         model = Study
         fields = [
             "id",
             "project",
+            "project_title",
+            "title",
             "species",
             "celltype",
             "treatment_var",

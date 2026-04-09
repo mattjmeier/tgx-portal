@@ -1,0 +1,18 @@
+OpenAI Codex v0.118.0 (research preview)
+--------
+workdir: /home/mmeier/shared2/projects/tgx-portal
+model: gpt-5.2
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /home/mmeier/.codex/memories]
+reasoning effort: high
+reasoning summaries: none
+session id: 019d6f25-d3b6-7850-9d98-1ec648403f75
+--------
+user
+Respond with exactly: OK
+codex
+OK
+tokens used
+517
+OK

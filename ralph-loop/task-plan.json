@@ -1,0 +1,116 @@
+{
+  "project": "TGX Portal UX Reorientation And Intake Workflow Refactor",
+  "description": "PRD-driven Ralph loop for collaboration/study IA cleanup, staged intake workflow, and test hardening.",
+  "userStories": [
+    {
+      "id": "TASK-001",
+      "title": "Refactor sidebar IA around collaborations and studies",
+      "description": "Reshape the sidebar so `Collaborations` and `Studies` are the primary browse entries, preserve `Reference library` and `Admin`, and remove duplicated registry/directory navigation patterns.",
+      "prd_section": "Story 1: Browse collaborations from one obvious home; Story 2: Browse studies in a way that preserves collaboration context; REQ-001; REQ-002",
+      "acceptance": "Sidebar exposes `Collaborations` and `Studies` as the main browse model, supports preview/collapse behavior, and no longer depends on duplicated registry/directory links.",
+      "output": "ralph-loop/results/01-sidebar-ia.md",
+      "priority": 1,
+      "passes": false,
+      "notes": "Read AGENTS.md and docs/03-UI_UX_REQUIREMENTS.md first. Frontend work must use shadcn/ui patterns and update relevant Vitest coverage."
+    },
+    {
+      "id": "TASK-002",
+      "title": "Add collaboration index page and server-side table flow",
+      "description": "Create or refactor the collaboration browse page so it becomes the single main entry for collaboration discovery, search, pagination, and creation.",
+      "prd_section": "Story 1: Browse collaborations from one obvious home; REQ-003; REQ-011",
+      "acceptance": "A collaboration index page exists, uses server-side table patterns, and provides a clear create action and click-through path.",
+      "output": "ralph-loop/results/02-collaboration-index.md",
+      "priority": 2,
+      "passes": false,
+      "notes": "Use shadcn/ui table-adjacent primitives. Follow TanStack Query + TanStack Table server-side patterns."
+    },
+    {
+      "id": "TASK-003",
+      "title": "Add explicit study title support and study index grouping",
+      "description": "Introduce an explicit study title/name into the user flow and adjust the study browse page so studies are grouped by collaboration with title-first labeling.",
+      "prd_section": "Story 2: Browse studies in a way that preserves collaboration context; REQ-004; D2",
+      "acceptance": "Study title is the primary label in navigation and lists, species/cell line are secondary, and the study index is grouped or context-rich by collaboration.",
+      "output": "ralph-loop/results/03-study-title-and-index.md",
+      "priority": 3,
+      "passes": false,
+      "notes": "Read docs/01-DATABASE_SCHEMA.md, docs/02-API_AND_INTEGRATIONS.md, and docs/03-UI_UX_REQUIREMENTS.md. Apply TDD if schema or API changes are needed."
+    },
+    {
+      "id": "TASK-004",
+      "title": "Restructure study workspace into samples, contrasts, and collaboration info",
+      "description": "Refocus the study workspace around a samples-first layout with tabs for contrasts and collaboration information, plus a study-specific submenu in the sidebar.",
+      "prd_section": "Story 3: Open a study into a focused workspace; REQ-005",
+      "acceptance": "Opening a study lands on a samples-first workspace with the required tabs and predictable submenu actions.",
+      "output": "ralph-loop/results/04-study-workspace.md",
+      "priority": 4,
+      "passes": false,
+      "notes": "Preserve shadcn/ui tabs and table patterns. Convert secondary hints into tooltips or progressive disclosure where appropriate."
+    },
+    {
+      "id": "TASK-005",
+      "title": "Make create flows collaboration-aware and redirect-forward",
+      "description": "Keep the global `New study` entry but require collaboration selection as step 1, then redirect collaboration and study creation into the next meaningful workspace step.",
+      "prd_section": "Story 4: Create collaboration and study records with forward momentum; REQ-006; D1",
+      "acceptance": "Global study create requires collaboration selection first, and both create flows redirect into the new route model with clear success messaging.",
+      "output": "ralph-loop/results/05-create-flows.md",
+      "priority": 5,
+      "passes": false,
+      "notes": "Update routing tests and mutation success flows. Respect permissions and preserve context from collaboration-scoped entry points."
+    },
+    {
+      "id": "TASK-006",
+      "title": "Build onboarding wizard shell from the PRD stages",
+      "description": "Implement the staged onboarding flow shell and route/state persistence for high-level details, template selection, upload/validation, mappings, and review.",
+      "prd_section": "Story 5: Complete metadata onboarding through a staged wizard; REQ-007",
+      "acceptance": "A multi-step wizard exists with clear stage progression, shadcn/ui composition, and route-safe state handling.",
+      "output": "ralph-loop/results/06-onboarding-shell.md",
+      "priority": 6,
+      "passes": false,
+      "notes": "Use shadcn/ui composition, keep styling close to defaults, and test the shell before deeper workflow logic."
+    },
+    {
+      "id": "TASK-007",
+      "title": "Implement lookup-driven template setup and bounded create-or-select behavior",
+      "description": "Add the template setup step and the lookup contract needed for required/optional fields, admin-managed metadata definitions, and hybrid create-or-select rules.",
+      "prd_section": "Story 5: Complete metadata onboarding through a staged wizard; Story 6: Reuse controlled values without losing flexibility; REQ-008; REQ-013; D3",
+      "acceptance": "Template setup supports required and optional fields, bounded custom metadata definitions, and the hybrid lookup policy for inline value creation.",
+      "output": "ralph-loop/results/07-template-and-lookups.md",
+      "priority": 7,
+      "passes": false,
+      "notes": "Controlled vocabularies remain admin-managed. Softer recurring values can use scoped select-or-create patterns."
+    },
+    {
+      "id": "TASK-008",
+      "title": "Implement metadata upload preview and aggregate validation",
+      "description": "Build the drag-and-drop upload step with local preview plus backend aggregate validation that returns all discovered issues in one pass.",
+      "prd_section": "Story 5: Complete metadata onboarding through a staged wizard; REQ-009",
+      "acceptance": "Users can upload CSV/TSV metadata, preview it, and receive user-readable row/cell validation feedback with aggregated errors.",
+      "output": "ralph-loop/results/08-upload-validation.md",
+      "priority": 8,
+      "passes": false,
+      "notes": "Read docs/02-API_AND_INTEGRATIONS.md and docs/03-UI_UX_REQUIREMENTS.md. Use Pydantic-driven validation and user-readable error mapping."
+    },
+    {
+      "id": "TASK-009",
+      "title": "Implement mapping, contrast suggestion, and draft/final gating",
+      "description": "Support multiple treatment and batch mappings derived from metadata, allow draft save, suggest candidate contrasts, and block final output generation until mappings are valid.",
+      "prd_section": "Story 5: Complete metadata onboarding through a staged wizard; REQ-010; D4",
+      "acceptance": "Mapping options come from uploaded metadata, draft save works before final validity, suggested contrasts are reviewable, and final generation remains validation-gated.",
+      "output": "ralph-loop/results/09-mapping-and-contrasts.md",
+      "priority": 9,
+      "passes": false,
+      "notes": "Read docs/04-PIPELINE_CONFIG_MAPPING.md. Be explicit about draft versus final-ready states in both UI and backend logic."
+    },
+    {
+      "id": "TASK-010",
+      "title": "Add deterministic seed data, reset flow, and end-to-end test hardening",
+      "description": "Create the seeded validation environment described in the PRD and strengthen backend, frontend, and E2E tests around the new navigation and onboarding flow.",
+      "prd_section": "Story 7: Validate and test against realistic seeded data; REQ-012",
+      "acceptance": "Two collaborations with three studies each can be seeded through a documented reset flow, and the main UX journeys are covered by container-first tests.",
+      "output": "ralph-loop/results/10-seeds-and-tests.md",
+      "priority": 10,
+      "passes": false,
+      "notes": "Follow AGENTS.md Docker-first rules and docs/05-DEVOPS_AND_TESTING.md. Prefer reproducible factories and deterministic seeds."
+    }
+  ]
+}
