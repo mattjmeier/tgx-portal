@@ -79,6 +79,7 @@ describe("StudyCreatePage", () => {
 
     expect(await screen.findByRole("combobox", { name: /collaboration/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /choose a collaboration first/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /back to collaborations/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /species/i })).not.toBeInTheDocument();
   });
 
@@ -87,6 +88,8 @@ describe("StudyCreatePage", () => {
 
     expect(await screen.findByText(/you are adding a study under/i)).toBeInTheDocument();
     expect(screen.getByText(/mercury tox study/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /back to collaboration/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /definitions/i })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /collaboration/i })).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /study title/i })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: /species/i })).toBeInTheDocument();
@@ -98,5 +101,7 @@ describe("StudyCreatePage", () => {
     expect(await screen.findByRole("combobox", { name: /species/i })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /study title/i })).toBeInTheDocument();
     expect(screen.getByText(/you are adding a study under/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /back to collaborations/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /definitions/i })).toBeInTheDocument();
   });
 });

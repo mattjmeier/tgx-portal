@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi } from "vitest";
@@ -445,7 +445,22 @@ describe("AppLayout", () => {
     renderLayout("/collaborations/new");
 
     expect(screen.getByText("New collaboration page")).toBeInTheDocument();
+    const breadcrumb = screen.getByRole("navigation", { name: /breadcrumb/i });
+    expect(within(breadcrumb).getByRole("link", { name: /^collaborations$/i })).toHaveAttribute("href", "/collaborations");
+    expect(screen.getByRole("heading", { name: /new collaboration/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /back to collaborations/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/active collaboration/i)).not.toBeInTheDocument();
+  });
+
+  it("shows studies breadcrumbs on the global study creation route", () => {
+    renderLayout("/studies/new");
+
+    expect(screen.getByText("Global study page")).toBeInTheDocument();
+    const breadcrumb = screen.getByRole("navigation", { name: /breadcrumb/i });
+    expect(within(breadcrumb).getByRole("link", { name: /^studies$/i })).toHaveAttribute("href", "/studies");
+    expect(screen.getByRole("heading", { name: /new study/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /back to studies/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/add a study/i)).not.toBeInTheDocument();
   });
 
   it("navigates to the global study creation flow from the sidebar", () => {
@@ -454,7 +469,7 @@ describe("AppLayout", () => {
     fireEvent.click(screen.getByRole("link", { name: /^new study$/i }));
 
     expect(screen.getByText("Global study page")).toBeInTheDocument();
-    expect(screen.getByText(/add a study/i)).toBeInTheDocument();
+    expect(screen.getByText(/new study/i)).toBeInTheDocument();
   });
 
   it("reveals study actions beneath the selected study in workspace routes", async () => {
@@ -470,10 +485,12 @@ describe("AppLayout", () => {
     expect(screen.getByRole("link", { name: /^studies$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /toggle studies/i })).toBeInTheDocument();
     expect((await screen.findAllByText(/hepatocyte mercury dose response/i)).length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: /samples/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /contrasts/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^samples$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^contrasts$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /collaboration info/i })).toBeInTheDocument();
-    expect(screen.getByText(/metadata onboarding/i)).toBeInTheDocument();
+    expect(screen.getByText(/add samples/i)).toBeInTheDocument();
+    expect(screen.getByText(/add contrasts/i)).toBeInTheDocument();
+    expect(screen.queryByText(/metadata onboarding/i)).not.toBeInTheDocument();
     expect(screen.getByText(/study information/i)).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /download config bundle/i }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: /add study/i })).not.toBeInTheDocument();

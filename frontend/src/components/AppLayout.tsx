@@ -6,6 +6,7 @@ import { fetchStudies, type Study } from "../api/studies";
 import {
   collaborationCreatePath,
   collaborationRegistryPath,
+  collaborationPath,
   globalStudyCreateRoute,
   studiesIndexPath,
 } from "../lib/routes";
@@ -23,14 +24,14 @@ function formatStudyLabel(study: Study | null) {
   return `Study: ${study.title}`;
 }
 
-function getShellCopy(pathname: string, projectTitle?: string, studyLabel?: string | null) {
+function getShellCopy(pathname: string, projectId?: number | null, projectTitle?: string, studyLabel?: string | null) {
   if (pathname === collaborationRegistryPath) {
     return {
       breadcrumbs: [],
       eyebrow: "Collaborations",
       titleHelp: null,
       title: null,
-      description: "Browse, search, and create collaborations without relying on duplicate registry links.",
+      description: "Browse, search, and create collaborations.",
       badge: null,
     };
   }
@@ -48,8 +49,11 @@ function getShellCopy(pathname: string, projectTitle?: string, studyLabel?: stri
 
   if (pathname === collaborationCreatePath) {
     return {
-      breadcrumbs: ["Collaborations", "New collaboration"],
-      eyebrow: "Create",
+      breadcrumbs: [
+        { label: "Collaborations", to: collaborationRegistryPath },
+        { label: "New collaboration" },
+      ],
+      eyebrow: "Collaborations",
       titleHelp: null,
       title: "New collaboration",
       description: "Create the ownership container first, then add studies when the experimental design branches.",
@@ -59,7 +63,7 @@ function getShellCopy(pathname: string, projectTitle?: string, studyLabel?: stri
 
   if (pathname === "/library") {
     return {
-      breadcrumbs: ["Reference library"],
+      breadcrumbs: [{ label: "Reference library" }],
       eyebrow: "Reference library",
       titleHelp: null,
       title: "Shared taxonomy",
@@ -70,28 +74,42 @@ function getShellCopy(pathname: string, projectTitle?: string, studyLabel?: stri
 
   if (pathname === globalStudyCreateRoute) {
     return {
-      breadcrumbs: projectTitle ? ["Create", "New study", projectTitle] : ["Create", "New study"],
-      eyebrow: "Create",
+      breadcrumbs: [
+        { label: "Studies", to: studiesIndexPath },
+        { label: "New study" },
+      ],
+      eyebrow: "Studies",
       titleHelp: null,
-      title: "Add a study",
+      title: "New study",
       description: projectTitle ? `Create a new experiment under ${projectTitle}.` : "Select a collaboration, then define the new experiment.",
       badge: null,
     };
   }
 
   if (pathname.includes("/studies/new")) {
+    const collaborationBreadcrumb = Number.isFinite(projectId)
+      ? { label: projectTitle ?? "Active collaboration", to: collaborationPath(projectId as number) }
+      : { label: projectTitle ?? "Active collaboration" };
+
     return {
-      breadcrumbs: ["Collaborations", projectTitle ?? "Active collaboration", "New study"],
-      eyebrow: "Study intake",
+      breadcrumbs: [
+        { label: "Collaborations", to: collaborationRegistryPath },
+        collaborationBreadcrumb,
+        { label: "New study" },
+      ],
+      eyebrow: "Collaborations",
       titleHelp: null,
-      title: "Add a study",
+      title: "New study",
       description: projectTitle ? `Create a new experiment under ${projectTitle}.` : "Create a new experiment under the active collaboration.",
       badge: null,
     };
   }
 
   return {
-    breadcrumbs: ["Collaborations", projectTitle ?? "Active collaboration"],
+    breadcrumbs: [
+      { label: "Collaborations", to: collaborationRegistryPath },
+      Number.isFinite(projectId) ? { label: projectTitle ?? "Active collaboration", to: collaborationPath(projectId as number) } : { label: projectTitle ?? "Active collaboration" },
+    ],
     eyebrow: "Collaborations",
     titleHelp: null,
     title: null,
@@ -132,7 +150,7 @@ export function AppLayout() {
     Number.isFinite(selectedStudyId) && studiesQuery.data
       ? studiesQuery.data.results.find((study) => study.id === selectedStudyId) ?? null
       : null;
-  const shellCopy = getShellCopy(location.pathname, projectQuery.data?.title, formatStudyLabel(selectedStudy));
+  const shellCopy = getShellCopy(location.pathname, Number.isFinite(projectId) ? projectId : null, projectQuery.data?.title, formatStudyLabel(selectedStudy));
 
   return (
     <SidebarProvider>

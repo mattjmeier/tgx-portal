@@ -5,6 +5,14 @@ import { vi } from "vitest";
 
 import { StudyWorkspacePage } from "./StudyWorkspacePage";
 
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+
 vi.mock("../api/studies", async () => {
   const actual = await vi.importActual<typeof import("../api/studies")>("../api/studies");
   return {
@@ -117,6 +125,10 @@ describe("StudyWorkspacePage", () => {
     expect(samplesTab).toHaveAttribute("aria-selected", "true");
 
     expect(await screen.findByText(/sample explorer/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add samples/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add contrasts/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /onboarding wizard/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /metadata onboarding/i })).not.toBeInTheDocument();
   });
 
   it("syncs the selected tab with the route search params", async () => {
@@ -129,5 +141,14 @@ describe("StudyWorkspacePage", () => {
     fireEvent.click(screen.getByRole("tab", { name: /collaboration info/i }));
     expect(await screen.findByText(/collaboration context/i)).toBeInTheDocument();
   });
-});
 
+  it("opens the intake tools from add samples and switches tabs from add contrasts", async () => {
+    renderPage("/studies/11");
+
+    fireEvent.click(await screen.findByRole("button", { name: /add samples/i }));
+    expect(await screen.findByText(/sample metadata onboarding/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /add contrasts/i }));
+    expect(await screen.findByText(/contrasts for this study/i)).toBeInTheDocument();
+  });
+});

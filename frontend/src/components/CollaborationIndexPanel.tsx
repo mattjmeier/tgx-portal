@@ -141,7 +141,7 @@ export function CollaborationIndexPanel() {
           <p className="eyebrow">Registry</p>
           <h2 className="text-xl font-semibold">Collaborations</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Browse collaborations you can access. Search and sort are server-side to stay responsive as your data grows.
+            This table shows your current collaborations.
           </p>
         </div>
 

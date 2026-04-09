@@ -32,6 +32,8 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 class StudySerializer(serializers.ModelSerializer):
     project_title = serializers.CharField(source="project.title", read_only=True)
+    sample_count = serializers.IntegerField(read_only=True)
+    assay_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Study
@@ -44,6 +46,8 @@ class StudySerializer(serializers.ModelSerializer):
             "celltype",
             "treatment_var",
             "batch_var",
+            "sample_count",
+            "assay_count",
         ]
         read_only_fields = ["id"]
         validators = [

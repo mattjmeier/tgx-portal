@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PaginationState } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { fetchStudiesIndex } from "../api/studies";
+import { deleteStudy, fetchStudiesIndex, type Study } from "../api/studies";
 import { collaborationPath, globalStudyCreateRoute, studyWorkspacePath } from "../lib/routes";
 import { StudiesTable } from "./StudiesTable";
 import { Button } from "./ui/button";
@@ -18,6 +18,7 @@ function getStudyOrderingParam(titleSort: "asc" | "desc"): string {
 }
 
 export function StudyIndexPanel() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [titleSort, setTitleSort] = useState<"asc" | "desc">("asc");
@@ -39,6 +40,22 @@ export function StudyIndexPanel() {
   const pageCount = Math.max(1, Math.ceil(totalCount / pagination.pageSize));
   const firstRow = totalCount === 0 ? 0 : pagination.pageIndex * pagination.pageSize + 1;
   const lastRow = Math.min(totalCount, (pagination.pageIndex + 1) * pagination.pageSize);
+
+  const deleteStudyMutation = useMutation<void, Error, number>({
+    mutationFn: deleteStudy,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["studies"] });
+    },
+  });
+
+  function handleDeleteStudy(study: Study) {
+    const confirmed = window.confirm(`Delete the study "${study.title}"?`);
+    if (!confirmed) {
+      return;
+    }
+
+    deleteStudyMutation.mutate(study.id);
+  }
 
   return (
     <section className="rounded-lg border border-border bg-background px-6 py-6 shadow-sm">
@@ -129,17 +146,31 @@ export function StudyIndexPanel() {
             </span>
           </div>
         )}
-        renderStudyActions={(study) => (
-          <Button asChild size="sm" variant="outline">
-            <Link to={studyWorkspacePath(study.id)}>Open</Link>
-          </Button>
+        renderGroupTitle={(study) => (
+          <Link className="text-sm font-semibold text-foreground underline-offset-2 hover:underline" to={collaborationPath(study.project)}>
+            {study.project_title}
+          </Link>
         )}
-        renderGroupAction={(study) => (
-          <Button asChild size="sm" variant="ghost">
-            <Link to={collaborationPath(study.project)}>Open collaboration</Link>
-          </Button>
+        renderStudyActions={(study) => (
+          <div className="flex items-center gap-2">
+            <Button asChild size="icon" variant="outline">
+              <Link aria-label={`Edit study ${study.title}`} to={`${studyWorkspacePath(study.id)}?tab=collaboration`}>
+                <Pencil />
+              </Link>
+            </Button>
+            <Button
+              aria-label={`Delete study ${study.title}`}
+              size="icon"
+              type="button"
+              variant="destructive"
+              onClick={() => handleDeleteStudy(study)}
+            >
+              <Trash2 />
+            </Button>
+          </div>
         )}
       />
+      {deleteStudyMutation.isError ? <p className="mt-2 text-sm text-destructive">{deleteStudyMutation.error.message}</p> : null}
 
       <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <p className="text-sm text-muted-foreground">

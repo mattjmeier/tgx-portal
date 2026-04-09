@@ -2,6 +2,7 @@ from django.http import HttpResponse, JsonResponse
 import logging
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
+from django.db.models import Count
 from django.utils.text import slugify
 from rest_framework import filters
 from rest_framework.authtoken.models import Token
@@ -410,7 +411,10 @@ class StudyViewSet(viewsets.ModelViewSet):
     ordering = ["project__title", "title", "id"]
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().annotate(
+            sample_count=Count("samples", distinct=True),
+            assay_count=Count("samples__assays", distinct=True),
+        )
         role = _get_user_role(self.request.user)
         if role == UserProfile.Role.CLIENT:
             queryset = queryset.filter(project__owner=self.request.user)

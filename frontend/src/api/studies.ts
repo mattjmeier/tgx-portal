@@ -10,6 +10,8 @@ export type Study = {
   celltype: string;
   treatment_var: string;
   batch_var: string;
+  sample_count?: number;
+  assay_count?: number;
 };
 
 export type CreateStudyPayload = {

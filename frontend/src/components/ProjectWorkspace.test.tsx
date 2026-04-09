@@ -23,6 +23,8 @@ vi.mock("../api/studies", async () => {
           celltype: "breast epithelial",
           treatment_var: "estrogen",
           batch_var: "batch-a",
+          sample_count: 3,
+          assay_count: 2,
         },
         {
           id: 12,
@@ -33,61 +35,12 @@ vi.mock("../api/studies", async () => {
           celltype: "breast epithelial",
           treatment_var: "recovery",
           batch_var: "batch-b",
+          sample_count: 4,
+          assay_count: 1,
         },
       ],
     })),
     deleteStudy: vi.fn(async () => undefined),
-  };
-});
-
-vi.mock("../api/samples", async () => {
-  const actual = await vi.importActual<typeof import("../api/samples")>("../api/samples");
-  return {
-    ...actual,
-    fetchSamples: vi.fn(async () => ({
-      count: 3,
-      next: null,
-      previous: null,
-      results: [
-        {
-          id: 101,
-          study: 11,
-          sample_ID: "S-001",
-          sample_name: "Vehicle control 1",
-          description: "",
-          group: "control",
-          dose: "0",
-          chemical: "",
-          chemical_longname: "",
-          technical_control: false,
-          reference_rna: false,
-          solvent_control: false,
-        },
-      ],
-    })),
-    deleteSample: vi.fn(async () => undefined),
-  };
-});
-
-vi.mock("../api/assays", async () => {
-  const actual = await vi.importActual<typeof import("../api/assays")>("../api/assays");
-  return {
-    ...actual,
-    fetchAssays: vi.fn(async () => ({
-      count: 1,
-      next: null,
-      previous: null,
-      results: [
-        {
-          id: 501,
-          sample: 101,
-          platform: "rna_seq" as const,
-          genome_version: "hg38",
-          quantification_method: "salmon",
-        },
-      ],
-    })),
-    deleteAssay: vi.fn(async () => undefined),
   };
 });
 
@@ -110,22 +63,6 @@ vi.mock("../auth/AuthProvider", () => ({
   }),
 }));
 
-vi.mock("./SampleForm", () => ({
-  SampleForm: () => <div>Sample form</div>,
-}));
-
-vi.mock("./SampleUploadPanel", () => ({
-  SampleUploadPanel: () => <div>Sample upload panel</div>,
-}));
-
-vi.mock("./SampleExplorerTable", () => ({
-  SampleExplorerTable: () => <div>Sample explorer table</div>,
-}));
-
-vi.mock("./AssayForm", () => ({
-  AssayForm: () => <div>Assay form</div>,
-}));
-
 function renderWorkspace() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -136,7 +73,6 @@ function renderWorkspace() {
       <MemoryRouter>
         <ProjectWorkspace
           initialProjectId={7}
-          initialStudyId={11}
           projects={[
             {
               id: 7,
@@ -163,8 +99,11 @@ describe("ProjectWorkspace", () => {
     expect(screen.queryByText(/^workspace$/i)).not.toBeInTheDocument();
     expect(screen.getByText(/collaboration record/i)).toBeInTheDocument();
     expect(screen.getByText(/dr\. priya shah/i)).toBeInTheDocument();
-    expect(screen.getByText(/^2$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^3$/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/^2$/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^7$/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^3$/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/samples in collaboration/i)).toBeInTheDocument();
+    expect(screen.getByText(/assays in collaboration/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /add study/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /new study/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /download config bundle/i })).not.toBeInTheDocument();
@@ -174,9 +113,17 @@ describe("ProjectWorkspace", () => {
     renderWorkspace();
 
     expect(await screen.findByRole("columnheader", { name: /study/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /samples/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /assays/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /actions/i })).toBeInTheDocument();
-    expect(await screen.findByText(/mcf7 estrogen pulse/i)).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /^mcf7 estrogen pulse$/i })).toHaveAttribute("href", "/studies/11");
     expect(screen.getAllByText(/breast epithelial/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/^4$/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^open$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /open collaboration/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^collaboration$/i)).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /edit study/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /delete study/i }).length).toBeGreaterThan(0);
   });
 
   it("does not show explanatory tooltip affordances in the streamlined layout", async () => {

@@ -148,10 +148,12 @@ describe("AppSidebar (study workspace)", () => {
 
     expect(await screen.findByText(/hepatocyte mercury dose response/i)).toBeInTheDocument();
     expect(screen.getByText(/hepatocyte mercury dose response/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /samples/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /contrasts/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^samples$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^contrasts$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /collaboration info/i })).toBeInTheDocument();
-    expect(screen.getByText(/metadata onboarding/i)).toBeInTheDocument();
+    expect(screen.getByText(/add samples/i)).toBeInTheDocument();
+    expect(screen.getByText(/add contrasts/i)).toBeInTheDocument();
+    expect(screen.queryByText(/metadata onboarding/i)).not.toBeInTheDocument();
     expect(screen.getByText(/download config bundle/i)).toBeInTheDocument();
     expect(screen.getByText(/study information/i)).toBeInTheDocument();
     expect(screen.queryByText(/active study/i)).not.toBeInTheDocument();
@@ -180,15 +182,15 @@ describe("AppSidebar (study workspace)", () => {
     const activeStudyLink = (await screen.findByText(/hepatocyte mercury dose response/i)).closest("a");
     expect(activeStudyLink).not.toBeNull();
     expect(screen.getByText(/kidney cadmium follow-up/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /samples/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^samples$/i })).toBeInTheDocument();
 
     fireEvent.click(activeStudyLink as HTMLAnchorElement);
-    expect(screen.queryByRole("link", { name: /samples/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^samples$/i })).not.toBeInTheDocument();
     expect(screen.getByText(/hepatocyte mercury dose response/i)).toBeInTheDocument();
     expect(screen.getByText(/kidney cadmium follow-up/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByText(/kidney cadmium follow-up/i).closest("a") as HTMLAnchorElement);
-    expect(await screen.findByRole("link", { name: /samples/i })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /^samples$/i })).toBeInTheDocument();
     expect(screen.getByText(/hepatocyte mercury dose response/i)).toBeInTheDocument();
     expect(screen.getByText(/kidney cadmium follow-up/i)).toBeInTheDocument();
     expect(screen.getByText(/mouse cortex lead pilot/i)).toBeInTheDocument();

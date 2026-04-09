@@ -573,6 +573,15 @@ select {
   padding: 0;
 }
 
+.workspace-panel-flat {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: 0;
+}
+
 .workspace-stack {
   display: grid;
   gap: 1.5rem;
@@ -864,6 +873,41 @@ select {
 .sample-list {
   display: grid;
   gap: 0.8rem;
+}
+
+.workspace-study-directory {
+  display: grid;
+  gap: 0;
+}
+
+.workspace-study-directory-card {
+  overflow: hidden;
+}
+
+.workspace-study-directory-card-header {
+  padding-bottom: 0.75rem;
+}
+
+.workspace-study-directory-card-content {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.workspace-study-directory-header {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.workspace-study-directory-title {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.25;
+  color: #13212d;
+}
+
+.workspace-study-directory-copy {
+  margin: 0;
+  color: #506b7d;
 }
 
 .chip-row {

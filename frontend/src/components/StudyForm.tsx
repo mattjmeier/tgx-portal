@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { createStudy, type CreateStudyPayload, type Study } from "../api/studies";
-import { collaborationPath, studyWorkspacePath } from "../lib/routes";
+import { collaborationPath, studyOnboardingPath } from "../lib/routes";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -34,15 +34,15 @@ export function StudyForm({ projectId, projectTitle }: StudyFormProps) {
       setFormState(initialFormState);
       setErrorMessage(null);
       void queryClient.invalidateQueries({ queryKey: ["studies", projectId] });
-      navigate(`${studyWorkspacePath(createdStudy.id)}?intake=open`, {
+      navigate(studyOnboardingPath(createdStudy.id), {
         replace: true,
         state: {
           flash: {
             variant: "success",
             title: "Study created",
             description: projectTitle
-              ? `"${createdStudy.title}" is ready under ${projectTitle}. Start sample intake in the workspace.`
-              : `"${createdStudy.title}" is ready. Start sample intake in the workspace.`,
+              ? `"${createdStudy.title}" is ready under ${projectTitle}. Continue in the onboarding wizard.`
+              : `"${createdStudy.title}" is ready. Continue in the onboarding wizard.`,
             action: {
               label: "Back to collaboration",
               to: collaborationPath(createdStudy.project),
@@ -67,7 +67,7 @@ export function StudyForm({ projectId, projectTitle }: StudyFormProps) {
 
   return (
     <form className="detail-form" onSubmit={handleSubmit}>
-      <h3>Create a study</h3>
+      <h3>Create study and open wizard</h3>
       <div className="grid gap-2">
         <Label htmlFor="study-title">Study title</Label>
         <Input
@@ -126,7 +126,7 @@ export function StudyForm({ projectId, projectTitle }: StudyFormProps) {
         </div>
       </div>
       <Button disabled={mutation.isPending} type="submit">
-        {mutation.isPending ? "Creating..." : "Create study"}
+        {mutation.isPending ? "Creating..." : "Create study and open wizard"}
       </Button>
       {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
     </form>

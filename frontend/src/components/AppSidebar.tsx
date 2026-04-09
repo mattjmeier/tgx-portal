@@ -95,8 +95,8 @@ function SidebarBrowseBranch({
 }: SidebarBrowseBranchProps) {
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="flex items-center gap-2">
-        <SidebarMenuButton asChild className="min-w-0 flex-1" isActive={isActive}>
+      <div className="relative">
+        <SidebarMenuButton asChild className="min-w-0 pr-10" isActive={isActive}>
           <NavLink to={routeTarget}>
             <Icon className={sidebarIconClassName} />
             <span>{label}</span>
@@ -105,8 +105,7 @@ function SidebarBrowseBranch({
         <SidebarMenuButton
           aria-expanded={open}
           aria-label={`Toggle ${label}`}
-          className="w-10 justify-center px-0"
-          isActive={isActive}
+          className="absolute right-1 top-1/2 z-10 h-8 w-8 -translate-y-1/2 justify-center rounded-sm border-transparent bg-transparent px-0 hover:bg-sidebar-accent data-[active=true]:border-transparent data-[active=true]:bg-transparent"
           size="sm"
           type="button"
           onClick={() => setOpen(!open)}
@@ -236,7 +235,7 @@ export function AppSidebar() {
             <Layers3 className="size-5 shrink-0 stroke-[1.9]" />
           </div>
           <div className="min-w-0">
-            <p className="text-[0.68rem] uppercase tracking-[0.24em] text-sidebar-foreground/55">Metadata tracker</p>
+            <p className="text-[0.68rem] uppercase tracking-[0.24em] text-sidebar-foreground/55">Genomics Lab</p>
             <h1 className="truncate text-lg font-semibold text-sidebar-foreground">TGx Portal</h1>
           </div>
         </div>
@@ -412,7 +411,21 @@ export function AppSidebar() {
                                 <SidebarMenuSubButton asChild isActive={location.search.includes("intake=open")}>
                                   <NavLink to={getStudyIntakePath(study.id)}>
                                     <TestTubeDiagonal className={sidebarIconClassName} />
-                                    <span>Metadata onboarding</span>
+                                    <span>Add samples</span>
+                                  </NavLink>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                              <SidebarMenuSubItem>
+                                <SidebarMenuSubButton
+                                  asChild
+                                  isActive={
+                                    location.pathname === studyWorkspacePath(study.id) &&
+                                    location.search.includes("tab=contrasts")
+                                  }
+                                >
+                                  <NavLink to={getStudyTabPath(study.id, "contrasts")}>
+                                    <PlusCircle className={sidebarIconClassName} />
+                                    <span>Add contrasts</span>
                                   </NavLink>
                                 </SidebarMenuSubButton>
                               </SidebarMenuSubItem>

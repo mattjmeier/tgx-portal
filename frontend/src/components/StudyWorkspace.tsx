@@ -8,14 +8,13 @@ import { fetchProject } from "../api/projects";
 import { fetchSamples, type Sample } from "../api/samples";
 import { fetchStudy } from "../api/studies";
 import { useAuth } from "../auth/AuthProvider";
-import { collaborationPath, studyOnboardingPath } from "../lib/routes";
+import { collaborationPath } from "../lib/routes";
 import { AssayForm } from "./AssayForm";
 import { SampleForm } from "./SampleForm";
 import { SampleExplorerTable } from "./SampleExplorerTable";
 import { SampleUploadPanel } from "./SampleUploadPanel";
 import { Button } from "./ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 
 type StudyWorkspaceTab = "samples" | "contrasts" | "collaboration";
 
@@ -134,198 +133,190 @@ export function StudyWorkspace() {
   const study = studyQuery.data;
 
   return (
-    <TooltipProvider>
-      <section className="workspace-route">
-        <div className="min-w-0">
-          <p className="eyebrow">Study workspace</p>
-          <h2 className="truncate">{study?.title ?? "Study"}</h2>
-          {study ? (
-            <p className="mt-1 text-sm text-muted-foreground">
-              <span>
-                {study.species} · {study.celltype}
-              </span>
-              <span className="mx-2">·</span>
-              <Link className="text-primary hover:underline" to={collaborationPath(study.project)}>
-                {study.project_title}
-              </Link>
-            </p>
-          ) : null}
-        </div>
-
-        {studyQuery.isLoading ? <p>Loading study workspace...</p> : null}
-        {studyQuery.isError ? <p className="error-text">Unable to load this study.</p> : null}
-
+    <section className="workspace-route">
+      <div className="min-w-0">
+        <p className="eyebrow">Study workspace</p>
+        <h2 className="truncate">{study?.title ?? "Study"}</h2>
         {study ? (
-          <Tabs className="mt-4" value={activeTab} onValueChange={(value) => setTab(parseTab(value))}>
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <TabsList>
-                <TabsTrigger value="samples">Samples</TabsTrigger>
-                <TabsTrigger value="contrasts">Contrasts</TabsTrigger>
-                <TabsTrigger value="collaboration">Collaboration info</TabsTrigger>
-              </TabsList>
+          <p className="mt-1 text-sm text-muted-foreground">
+            <span>
+              {study.species} · {study.celltype}
+            </span>
+            <span className="mx-2">·</span>
+            <Link className="text-primary hover:underline" to={collaborationPath(study.project)}>
+              {study.project_title}
+            </Link>
+          </p>
+        ) : null}
+      </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button type="button" variant="outline" onClick={() => setIntake(!intakeOpen)}>
-                      {intakeOpen ? "Hide onboarding" : "Metadata onboarding"}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Progressive sample intake tools for adding/editing records.</TooltipContent>
-                </Tooltip>
+      {studyQuery.isLoading ? <p>Loading study workspace...</p> : null}
+      {studyQuery.isError ? <p className="error-text">Unable to load this study.</p> : null}
 
-                <Button asChild type="button">
-                  <Link to={studyOnboardingPath(study.id)}>Onboarding wizard</Link>
-                </Button>
-              </div>
+      {study ? (
+        <Tabs className="mt-4" value={activeTab} onValueChange={(value) => setTab(parseTab(value))}>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <TabsList>
+              <TabsTrigger value="samples">Samples</TabsTrigger>
+              <TabsTrigger value="contrasts">Contrasts</TabsTrigger>
+              <TabsTrigger value="collaboration">Collaboration info</TabsTrigger>
+            </TabsList>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" onClick={() => setIntake(!intakeOpen)}>
+                {intakeOpen ? "Hide sample tools" : "Add samples"}
+              </Button>
+              <Button type="button" onClick={() => setTab("contrasts")}>
+                Add contrasts
+              </Button>
             </div>
+          </div>
 
-            <TabsContent value="samples">
-              <div className="mt-4 space-y-6">
-                {intakeOpen ? (
-                  <section className="rounded-lg border border-border bg-background p-5 shadow-sm">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                      <div>
-                        <h3 className="text-base font-semibold text-foreground">Sample metadata onboarding</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Add samples one-by-one or upload a sheet for bulk intake. These panels are hidden by default to keep the workspace focused on the samples table.
-                        </p>
-                      </div>
-                      <Button type="button" variant="ghost" onClick={() => setIntake(false)}>
-                        Close
-                      </Button>
+          <TabsContent value="samples">
+            <div className="mt-4 space-y-6">
+              {intakeOpen ? (
+                <section className="rounded-lg border border-border bg-background p-5 shadow-sm">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <h3 className="text-base font-semibold text-foreground">Sample metadata onboarding</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Add samples one-by-one or upload a sheet for bulk intake. These panels are hidden by default to keep the workspace focused on the samples table.
+                      </p>
                     </div>
-                    <div className="mt-5 grid gap-6 lg:grid-cols-2">
-                      <SampleForm studyId={study.id} />
-                      <SampleUploadPanel studyId={study.id} />
-                    </div>
-                  </section>
-                ) : null}
+                    <Button type="button" variant="ghost" onClick={() => setIntake(false)}>
+                      Close
+                    </Button>
+                  </div>
+                  <div className="mt-5 grid gap-6 lg:grid-cols-2">
+                    <SampleForm studyId={study.id} />
+                    <SampleUploadPanel studyId={study.id} />
+                  </div>
+                </section>
+              ) : null}
 
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-                  <SampleExplorerTable
-                    samples={samplesQuery.data?.results ?? []}
-                    totalCount={samplesQuery.data?.count ?? 0}
-                    isLoading={samplesQuery.isLoading}
-                    pagination={samplePagination}
-                    sorting={sampleSorting}
-                    search={sampleSearch}
-                    selectedSampleId={selectedSampleId}
-                    onPaginationChange={setSamplePagination}
-                    onSortingChange={setSampleSorting}
-                    onSearchChange={setSampleSearch}
-                    onSelectSample={(sample) => setSelectedSampleId(sample.id)}
-                  />
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+                <SampleExplorerTable
+                  samples={samplesQuery.data?.results ?? []}
+                  totalCount={samplesQuery.data?.count ?? 0}
+                  isLoading={samplesQuery.isLoading}
+                  pagination={samplePagination}
+                  sorting={sampleSorting}
+                  search={sampleSearch}
+                  selectedSampleId={selectedSampleId}
+                  onPaginationChange={setSamplePagination}
+                  onSortingChange={setSampleSorting}
+                  onSearchChange={setSampleSearch}
+                  onSelectSample={(sample) => setSelectedSampleId(sample.id)}
+                />
 
-                  <aside className="sample-detail-rail">
-                    <div className="section-header compact-header">
-                      <div>
-                        <p className="eyebrow">Detail panel</p>
-                        <h3>Selected sample</h3>
-                      </div>
-                    </div>
-                    {samplesQuery.isError ? <p className="error-text">Unable to load samples.</p> : null}
-                    {assaysQuery.isError ? <p className="error-text">Unable to load assays.</p> : null}
-                    {selectedSample ? (
-                      <article className="project-card detail-card">
-                        <p className="project-meta">{selectedSample.sample_ID}</p>
-                        <h3>{selectedSample.sample_name}</h3>
-                        <p>{selectedSample.description || "No description yet."}</p>
-
-                        <div className="detail-pill-row">
-                          <span className="detail-pill">Group: {selectedSample.group}</span>
-                          <span className="detail-pill">Dose: {selectedSample.dose}</span>
-                          <span className="detail-pill">Chemical: {selectedSample.chemical || "None"}</span>
-                        </div>
-
-                        <dl className="detail-definition-list">
-                          <div>
-                            <dt>Long chemical name</dt>
-                            <dd>{selectedSample.chemical_longname || "Not provided"}</dd>
-                          </div>
-                          <div>
-                            <dt>Technical control</dt>
-                            <dd>{selectedSample.technical_control ? "Yes" : "No"}</dd>
-                          </div>
-                          <div>
-                            <dt>Reference RNA</dt>
-                            <dd>{selectedSample.reference_rna ? "Yes" : "No"}</dd>
-                          </div>
-                          <div>
-                            <dt>Solvent control</dt>
-                            <dd>{selectedSample.solvent_control ? "Yes" : "No"}</dd>
-                          </div>
-                        </dl>
-
-                        <div className="assay-section">
-                          <h4>Assays</h4>
-                          {assaysBySample[selectedSample.id]?.length ? (
-                            <div className="assay-list">
-                              {assaysBySample[selectedSample.id].map((assay) => (
-                                <article className="assay-chip" key={assay.id}>
-                                  <div>
-                                    <strong>{assay.platform === "rna_seq" ? "RNA-Seq" : "TempO-Seq"}</strong>
-                                    <p>
-                                      {assay.genome_version} / {assay.quantification_method}
-                                    </p>
-                                  </div>
-                                </article>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="muted-copy">No assays yet for this sample.</p>
-                          )}
-                          {auth.user?.profile.role === "admin" ? <AssayForm sampleId={selectedSample.id} studyId={study.id} /> : null}
-                        </div>
-                      </article>
-                    ) : (
-                      <article className="empty-card detail-empty-card">
-                        <h3>No sample selected</h3>
-                        <p>Select a row in the explorer to review metadata and assay coverage.</p>
-                      </article>
-                    )}
-                  </aside>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="contrasts">
-              <section className="rounded-lg border border-border bg-background p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-foreground">Contrasts for this study</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Contrast configuration will live here once metadata onboarding (template + upload + mapping) is implemented. For now, use the sample table to confirm intake.
-                </p>
-              </section>
-            </TabsContent>
-
-            <TabsContent value="collaboration">
-              <section className="rounded-lg border border-border bg-background p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-foreground">Collaboration context</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Keep collaboration ownership and high-level context close while working in the study workspace.
-                </p>
-                <div className="mt-5 grid gap-3">
-                  <div className="rounded-md border border-border bg-muted/20 p-4">
-                    <p className="text-sm font-semibold text-foreground">{projectQuery.data?.title ?? study.project_title}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      PI {projectQuery.data?.pi_name ?? "Unknown"}
-                      {projectQuery.data?.owner ? ` · Owner: ${projectQuery.data.owner}` : ""}
-                    </p>
-                    {projectQuery.data?.description ? (
-                      <p className="mt-2 text-sm text-muted-foreground">{projectQuery.data.description}</p>
-                    ) : null}
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <Button asChild size="sm" variant="outline">
-                        <Link to={collaborationPath(study.project)}>Open collaboration</Link>
-                      </Button>
+                <aside className="sample-detail-rail">
+                  <div className="section-header compact-header">
+                    <div>
+                      <p className="eyebrow">Detail panel</p>
+                      <h3>Selected sample</h3>
                     </div>
                   </div>
+                  {samplesQuery.isError ? <p className="error-text">Unable to load samples.</p> : null}
+                  {assaysQuery.isError ? <p className="error-text">Unable to load assays.</p> : null}
+                  {selectedSample ? (
+                    <article className="project-card detail-card">
+                      <p className="project-meta">{selectedSample.sample_ID}</p>
+                      <h3>{selectedSample.sample_name}</h3>
+                      <p>{selectedSample.description || "No description yet."}</p>
+
+                      <div className="detail-pill-row">
+                        <span className="detail-pill">Group: {selectedSample.group}</span>
+                        <span className="detail-pill">Dose: {selectedSample.dose}</span>
+                        <span className="detail-pill">Chemical: {selectedSample.chemical || "None"}</span>
+                      </div>
+
+                      <dl className="detail-definition-list">
+                        <div>
+                          <dt>Long chemical name</dt>
+                          <dd>{selectedSample.chemical_longname || "Not provided"}</dd>
+                        </div>
+                        <div>
+                          <dt>Technical control</dt>
+                          <dd>{selectedSample.technical_control ? "Yes" : "No"}</dd>
+                        </div>
+                        <div>
+                          <dt>Reference RNA</dt>
+                          <dd>{selectedSample.reference_rna ? "Yes" : "No"}</dd>
+                        </div>
+                        <div>
+                          <dt>Solvent control</dt>
+                          <dd>{selectedSample.solvent_control ? "Yes" : "No"}</dd>
+                        </div>
+                      </dl>
+
+                      <div className="assay-section">
+                        <h4>Assays</h4>
+                        {assaysBySample[selectedSample.id]?.length ? (
+                          <div className="assay-list">
+                            {assaysBySample[selectedSample.id].map((assay) => (
+                              <article className="assay-chip" key={assay.id}>
+                                <div>
+                                  <strong>{assay.platform === "rna_seq" ? "RNA-Seq" : "TempO-Seq"}</strong>
+                                  <p>
+                                    {assay.genome_version} / {assay.quantification_method}
+                                  </p>
+                                </div>
+                              </article>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="muted-copy">No assays yet for this sample.</p>
+                        )}
+                        {auth.user?.profile.role === "admin" ? <AssayForm sampleId={selectedSample.id} studyId={study.id} /> : null}
+                      </div>
+                    </article>
+                  ) : (
+                    <article className="empty-card detail-empty-card">
+                      <h3>No sample selected</h3>
+                      <p>Select a row in the explorer to review metadata and assay coverage.</p>
+                    </article>
+                  )}
+                </aside>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="contrasts">
+            <section className="rounded-lg border border-border bg-background p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-foreground">Contrasts for this study</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Contrast configuration will live here once metadata onboarding (template + upload + mapping) is implemented. For now, use the sample table to confirm intake.
+              </p>
+            </section>
+          </TabsContent>
+
+          <TabsContent value="collaboration">
+            <section className="rounded-lg border border-border bg-background p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-foreground">Collaboration context</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Keep collaboration ownership and high-level context close while working in the study workspace.
+              </p>
+              <div className="mt-5 grid gap-3">
+                <div className="rounded-md border border-border bg-muted/20 p-4">
+                  <p className="text-sm font-semibold text-foreground">{projectQuery.data?.title ?? study.project_title}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    PI {projectQuery.data?.pi_name ?? "Unknown"}
+                    {projectQuery.data?.owner ? ` · Owner: ${projectQuery.data.owner}` : ""}
+                  </p>
+                  {projectQuery.data?.description ? (
+                    <p className="mt-2 text-sm text-muted-foreground">{projectQuery.data.description}</p>
+                  ) : null}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button asChild size="sm" variant="outline">
+                      <Link to={collaborationPath(study.project)}>Open collaboration</Link>
+                    </Button>
+                  </div>
                 </div>
-              </section>
-            </TabsContent>
-          </Tabs>
-        ) : null}
-      </section>
-    </TooltipProvider>
+              </div>
+            </section>
+          </TabsContent>
+        </Tabs>
+      ) : null}
+    </section>
   );
 }

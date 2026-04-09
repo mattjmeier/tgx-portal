@@ -1,17 +1,11 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { PaginationState, SortingState } from "@tanstack/react-table";
+import { Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { deleteAssay, fetchAssays, type Assay } from "../api/assays";
 import type { Project } from "../api/projects";
-import { deleteSample, fetchSamples } from "../api/samples";
 import { deleteStudy, fetchStudies, type Study } from "../api/studies";
-import { collaborationStudyCreatePath } from "../lib/routes";
-import { AssayForm } from "./AssayForm";
-import { SampleForm } from "./SampleForm";
-import { SampleExplorerTable } from "./SampleExplorerTable";
-import { SampleUploadPanel } from "./SampleUploadPanel";
+import { collaborationStudyCreatePath, studyWorkspacePath } from "../lib/routes";
 import { StudiesTable } from "./StudiesTable";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
@@ -19,28 +13,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 type ProjectWorkspaceProps = {
   projects: Project[];
   initialProjectId?: number;
-  initialStudyId?: number;
   showProjectSelector?: boolean;
-  onStudyChange?: (studyId: number | null) => void;
 };
 
 export function ProjectWorkspace({
   projects,
   initialProjectId,
-  initialStudyId,
   showProjectSelector = true,
-  onStudyChange,
 }: ProjectWorkspaceProps) {
   const queryClient = useQueryClient();
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(initialProjectId ?? projects[0]?.id ?? null);
-  const [selectedStudyId, setSelectedStudyId] = useState<number | null>(initialStudyId ?? null);
-  const [selectedSampleId, setSelectedSampleId] = useState<number | null>(null);
-  const [sampleSearch, setSampleSearch] = useState("");
-  const [samplePagination, setSamplePagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: 5,
-  });
-  const [sampleSorting, setSampleSorting] = useState<SortingState>([]);
 
   useEffect(() => {
     const selectedProjectStillExists = projects.some((project) => project.id === selectedProjectId);
@@ -64,94 +46,15 @@ export function ProjectWorkspace({
 
   const studies = studiesQuery.data?.results ?? [];
 
-  useEffect(() => {
-    if (initialStudyId === undefined) {
-      return;
-    }
-
-    if (studies.some((study) => study.id === initialStudyId)) {
-      setSelectedStudyId(initialStudyId);
-    }
-  }, [initialStudyId, studies]);
-
-  useEffect(() => {
-    if (selectedStudyId !== null && !studies.some((study) => study.id === selectedStudyId)) {
-      setSelectedStudyId(null);
-      onStudyChange?.(null);
-    }
-  }, [onStudyChange, selectedStudyId, studies]);
-
-  const selectedStudy = studies.find((study) => study.id === selectedStudyId) ?? null;
-
-  const samplesQuery = useQuery({
-    queryKey: ["samples", selectedStudyId, samplePagination.pageIndex, samplePagination.pageSize, sampleSearch, sampleSorting],
-    queryFn: () =>
-      fetchSamples(selectedStudyId as number, {
-        page: samplePagination.pageIndex + 1,
-        pageSize: samplePagination.pageSize,
-        search: sampleSearch,
-        ordering: sampleSorting[0]
-          ? `${sampleSorting[0].desc ? "-" : ""}${sampleSorting[0].id}`
-          : undefined,
-      }),
-    enabled: selectedStudyId !== null,
-  });
-  const assaysQuery = useQuery({
-    queryKey: ["assays", selectedStudyId],
-    queryFn: () => fetchAssays(selectedStudyId as number),
-    enabled: selectedStudyId !== null,
-  });
-
-  useEffect(() => {
-    setSamplePagination((current) => ({ ...current, pageIndex: 0 }));
-  }, [sampleSearch, sampleSorting, selectedStudyId]);
-
-  useEffect(() => {
-    const currentSamples = samplesQuery.data?.results ?? [];
-    if (currentSamples.length === 0) {
-      setSelectedSampleId(null);
-      return;
-    }
-
-    if (!currentSamples.some((sample) => sample.id === selectedSampleId)) {
-      setSelectedSampleId(currentSamples[0].id);
-    }
-  }, [samplesQuery.data, selectedSampleId]);
-
   const deleteStudyMutation = useMutation<void, Error, number>({
     mutationFn: deleteStudy,
     onSuccess: async () => {
-      setSelectedStudyId(null);
       await queryClient.invalidateQueries({ queryKey: ["studies", selectedProjectId] });
-    },
-  });
-
-  const deleteSampleMutation = useMutation<void, Error, number>({
-    mutationFn: deleteSample,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["samples", selectedStudyId] });
-      await queryClient.invalidateQueries({ queryKey: ["assays", selectedStudyId] });
-    },
-  });
-
-  const deleteAssayMutation = useMutation<void, Error, number>({
-    mutationFn: deleteAssay,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["assays", selectedStudyId] });
     },
   });
 
   function handleProjectSelect(projectId: number) {
     setSelectedProjectId(projectId);
-    setSelectedStudyId(null);
-    setSelectedSampleId(null);
-    onStudyChange?.(null);
-  }
-
-  function handleStudySelect(study: Study) {
-    setSelectedStudyId(study.id);
-    setSelectedSampleId(null);
-    onStudyChange?.(study.id);
   }
 
   function handleDeleteStudy(study: Study) {
@@ -162,35 +65,11 @@ export function ProjectWorkspace({
 
     deleteStudyMutation.mutate(study.id);
   }
-
-  function handleDeleteSample(sampleId: number, sampleName: string) {
-    const confirmed = window.confirm(`Delete sample "${sampleName}"?`);
-    if (!confirmed) {
-      return;
-    }
-
-    deleteSampleMutation.mutate(sampleId);
-  }
-
-  function handleDeleteAssay(assayId: number) {
-    const confirmed = window.confirm("Delete this assay?");
-    if (!confirmed) {
-      return;
-    }
-
-    deleteAssayMutation.mutate(assayId);
-  }
-
-  const assaysBySample = (assaysQuery.data?.results ?? []).reduce<Record<number, Assay[]>>((accumulator, assay) => {
-    accumulator[assay.sample] = [...(accumulator[assay.sample] ?? []), assay];
-    return accumulator;
-  }, {});
-  const selectedSample = (samplesQuery.data?.results ?? []).find((sample) => sample.id === selectedSampleId) ?? null;
-  const sampleCount = samplesQuery.data?.count ?? 0;
-  const assayCountForSelectedSample = selectedSample ? assaysBySample[selectedSample.id]?.length ?? 0 : 0;
+  const collaborationSampleCount = studies.reduce((total, study) => total + (study.sample_count ?? 0), 0);
+  const collaborationAssayCount = studies.reduce((total, study) => total + (study.assay_count ?? 0), 0);
 
   return (
-    <section className="workspace-panel">
+    <section className="workspace-panel workspace-panel-flat">
       {projects.length === 0 ? (
         <article className="empty-card">
           <h3>No collaboration selected yet</h3>
@@ -232,20 +111,20 @@ export function ProjectWorkspace({
                   </Card>
                   <Card className="bg-muted/30 shadow-none">
                     <CardHeader className="gap-2 p-4">
-                      <CardDescription className="workspace-stat-label">Samples in current study</CardDescription>
-                      <CardTitle className="text-4xl">{selectedStudy ? sampleCount : 0}</CardTitle>
+                      <CardDescription className="workspace-stat-label">Samples in collaboration</CardDescription>
+                      <CardTitle className="text-4xl">{collaborationSampleCount}</CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0 text-sm text-muted-foreground">
-                      {selectedStudy ? selectedStudy.title : "Select a study to explore its sample table."}
+                      {studies.length > 0 ? "Total registered samples across every study in this collaboration." : "Add a study to start registering samples."}
                     </CardContent>
                   </Card>
                   <Card className="bg-muted/30 shadow-none">
                     <CardHeader className="gap-2 p-4">
-                      <CardDescription className="workspace-stat-label">Assays on selected sample</CardDescription>
-                      <CardTitle className="text-4xl">{assayCountForSelectedSample}</CardTitle>
+                      <CardDescription className="workspace-stat-label">Assays in collaboration</CardDescription>
+                      <CardTitle className="text-4xl">{collaborationAssayCount}</CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0 text-sm text-muted-foreground">
-                      {selectedSample ? selectedSample.sample_ID : "Choose a sample row to review assay coverage."}
+                      {studies.length > 0 ? "Total assay coverage recorded across all studies in this collaboration." : "Assay totals will appear after samples are added."}
                     </CardContent>
                   </Card>
                 </div>
@@ -275,147 +154,52 @@ export function ProjectWorkspace({
           ) : null}
 
           <div className="workspace-column">
-            <div className="selector-group" id="study-directory">
-              <div className="section-header compact-header">
-                <div>
-                  <h3>Studies in this collaboration</h3>
-                  <p className="muted-copy">Select one to explore samples and assays for that experiment.</p>
+            <Card className="workspace-study-directory-card" id="study-directory">
+              <CardHeader className="workspace-study-directory-card-header">
+                <div className="workspace-study-directory-header">
+                  <h3 className="workspace-study-directory-title">Studies in this collaboration</h3>
+                  <p className="workspace-study-directory-copy">Select one to explore samples and assays for that experiment.</p>
                 </div>
-              </div>
-              <StudiesTable
+              </CardHeader>
+              <CardContent className="workspace-study-directory-card-content">
+                <StudiesTable
+                  className="mt-0"
                 studies={studies}
                 isLoading={studiesQuery.isLoading}
                 isError={studiesQuery.isError}
                 emptyMessage="No studies yet. Create the first study for this collaboration to continue to sample intake."
                 renderStudyTitle={(study) => (
-                  <button className="text-left" type="button" onClick={() => handleStudySelect(study)}>
-                    <span className="block font-medium text-primary hover:underline">{study.title}</span>
-                    <span className="block text-sm text-muted-foreground">
+                  <div className="flex min-w-0 flex-col">
+                    <Link className="truncate font-medium text-primary hover:underline" to={studyWorkspacePath(study.id)}>
+                      {study.title}
+                    </Link>
+                    <span className="truncate text-sm text-muted-foreground">
                       {study.species} · {study.celltype}
                     </span>
-                  </button>
+                  </div>
                 )}
                 renderStudyActions={(study) => (
-                  <button className="danger-button" type="button" onClick={() => handleDeleteStudy(study)}>
-                    Delete study
-                  </button>
-                )}
-                getRowClassName={(study) => (study.id === selectedStudyId ? "bg-muted/45" : undefined)}
-              />
-              {deleteStudyMutation.isError ? <p className="error-text">{deleteStudyMutation.error.message}</p> : null}
-            </div>
-
-            {selectedStudy ? (
-              <>
-                <section className="workspace-subgrid">
-                  <div className="workspace-subgrid-main">
-                    <section className="intake-stack" id="sample-intake">
-                      <SampleForm studyId={selectedStudy.id} />
-                      <SampleUploadPanel studyId={selectedStudy.id} />
-                    </section>
-                    <section id="sample-explorer">
-                      <SampleExplorerTable
-                        samples={samplesQuery.data?.results ?? []}
-                        totalCount={samplesQuery.data?.count ?? 0}
-                        isLoading={samplesQuery.isLoading}
-                        pagination={samplePagination}
-                        sorting={sampleSorting}
-                        search={sampleSearch}
-                        selectedSampleId={selectedSampleId}
-                        onPaginationChange={setSamplePagination}
-                        onSortingChange={setSampleSorting}
-                        onSearchChange={setSampleSearch}
-                        onSelectSample={(sample) => setSelectedSampleId(sample.id)}
-                      />
-                    </section>
+                  <div className="flex items-center gap-2">
+                    <Button asChild size="icon" variant="outline">
+                      <Link aria-label={`Edit study ${study.title}`} to={`${studyWorkspacePath(study.id)}?tab=collaboration`}>
+                        <Pencil />
+                      </Link>
+                    </Button>
+                    <Button
+                      aria-label={`Delete study ${study.title}`}
+                      size="icon"
+                      type="button"
+                      variant="destructive"
+                      onClick={() => handleDeleteStudy(study)}
+                    >
+                      <Trash2 />
+                    </Button>
                   </div>
-
-                  <aside className="sample-detail-rail" id="sample-detail">
-                    <div className="section-header compact-header">
-                      <div>
-                        <p className="eyebrow">Detail panel</p>
-                        <h3>Selected sample</h3>
-                      </div>
-                    </div>
-                    {samplesQuery.isError ? <p className="error-text">Unable to load samples.</p> : null}
-                    {assaysQuery.isError ? <p className="error-text">Unable to load assays.</p> : null}
-                    {selectedSample ? (
-                      <article className="project-card detail-card">
-                        <p className="project-meta">{selectedSample.sample_ID}</p>
-                        <h3>{selectedSample.sample_name}</h3>
-                        <p>{selectedSample.description || "No description yet."}</p>
-
-                        <div className="detail-pill-row">
-                          <span className="detail-pill">Group: {selectedSample.group}</span>
-                          <span className="detail-pill">Dose: {selectedSample.dose}</span>
-                          <span className="detail-pill">Chemical: {selectedSample.chemical || "None"}</span>
-                        </div>
-
-                        <dl className="detail-definition-list">
-                          <div>
-                            <dt>Long chemical name</dt>
-                            <dd>{selectedSample.chemical_longname || "Not provided"}</dd>
-                          </div>
-                          <div>
-                            <dt>Technical control</dt>
-                            <dd>{selectedSample.technical_control ? "Yes" : "No"}</dd>
-                          </div>
-                          <div>
-                            <dt>Reference RNA</dt>
-                            <dd>{selectedSample.reference_rna ? "Yes" : "No"}</dd>
-                          </div>
-                          <div>
-                            <dt>Solvent control</dt>
-                            <dd>{selectedSample.solvent_control ? "Yes" : "No"}</dd>
-                          </div>
-                        </dl>
-
-                        <div className="assay-section">
-                          <h4>Assays</h4>
-                          {assaysBySample[selectedSample.id]?.length ? (
-                            <div className="assay-list">
-                              {assaysBySample[selectedSample.id].map((assay) => (
-                                <article className="assay-chip" key={assay.id}>
-                                  <div>
-                                    <strong>{assay.platform === "rna_seq" ? "RNA-Seq" : "TempO-Seq"}</strong>
-                                    <p>
-                                      {assay.genome_version} / {assay.quantification_method}
-                                    </p>
-                                  </div>
-                                  <button className="danger-button" type="button" onClick={() => handleDeleteAssay(assay.id)}>
-                                    Delete assay
-                                  </button>
-                                </article>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="muted-copy">No assays yet for this sample.</p>
-                          )}
-                          <AssayForm sampleId={selectedSample.id} studyId={selectedStudy.id} />
-                        </div>
-                        <div className="card-actions">
-                          <button className="danger-button" type="button" onClick={() => handleDeleteSample(selectedSample.id, selectedSample.sample_name)}>
-                            Delete sample
-                          </button>
-                        </div>
-                      </article>
-                    ) : (
-                      <article className="empty-card detail-empty-card">
-                        <h3>No sample selected</h3>
-                        <p>Select a row in the explorer to review metadata, manage assays, and remove records when needed.</p>
-                      </article>
-                    )}
-                    {deleteSampleMutation.isError ? <p className="error-text">{deleteSampleMutation.error.message}</p> : null}
-                    {deleteAssayMutation.isError ? <p className="error-text">{deleteAssayMutation.error.message}</p> : null}
-                  </aside>
-                </section>
-              </>
-            ) : studies.length > 0 ? (
-              <article className="empty-card">
-                <h3>Select a study</h3>
-                <p>Choose one of the studies to start adding samples.</p>
-              </article>
-            ) : null}
+                )}
+              />
+                {deleteStudyMutation.isError ? <p className="error-text">{deleteStudyMutation.error.message}</p> : null}
+              </CardContent>
+            </Card>
           </div>
           </div>
         </div>

@@ -229,7 +229,7 @@ class StudyApiTests(TestCase):
         )
 
     def test_list_studies_can_be_filtered_by_project(self) -> None:
-        Study.objects.create(
+        alpha_study = Study.objects.create(
             project=self.project_alpha,
             title="Alpha study 1",
             species=Study.Species.HUMAN,
@@ -245,12 +245,28 @@ class StudyApiTests(TestCase):
             treatment_var="timepoint",
             batch_var="operator",
         )
+        sample = Sample.objects.create(
+            study=alpha_study,
+            sample_ID="alpha-1",
+            sample_name="Alpha sample",
+            description="Included sample",
+            group="control",
+            dose=0,
+        )
+        Assay.objects.create(
+            sample=sample,
+            platform=Assay.Platform.RNA_SEQ,
+            genome_version="hg38",
+            quantification_method="salmon",
+        )
 
         response = self.client.get(f"/api/studies/?project_id={self.project_alpha.id}")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["count"], 1)
         self.assertEqual(response.json()["results"][0]["project"], self.project_alpha.id)
+        self.assertEqual(response.json()["results"][0]["sample_count"], 1)
+        self.assertEqual(response.json()["results"][0]["assay_count"], 1)
 
     def test_create_study_returns_created_study(self) -> None:
         payload = {

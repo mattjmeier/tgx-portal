@@ -1,15 +1,11 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 
 import { fetchProject, fetchProjects } from "../api/projects";
-import {
-  collaborationPath,
-  collaborationRegistryPath,
-  globalStudyCreateRoute,
-} from "../lib/routes";
 import { CollaborationPicker } from "../components/CollaborationPicker";
 import { StudyForm } from "../components/StudyForm";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 
 export function StudyCreatePage() {
   const params = useParams();
@@ -52,9 +48,6 @@ export function StudyCreatePage() {
           <p className="eyebrow">Study intake</p>
           <h2>Add a study</h2>
         </div>
-        <Link className="ghost-link" to={selectedProjectId ? collaborationPath(selectedProjectId) : collaborationRegistryPath}>
-          {selectedProjectId ? "Back to collaboration" : "Back to collaborations"}
-        </Link>
       </div>
 
       {!hasPinnedCollaboration ? (
@@ -71,23 +64,46 @@ export function StudyCreatePage() {
       {query.isError && selectedProjectId !== null ? <p className="error-text">Unable to load this collaboration.</p> : null}
 
       {query.data ? (
-        <>
-          <section className="workspace-intro-card">
-            <div>
-              <strong>Collaboration</strong>
-              <p>
-                You are adding a study under <strong>{query.data.title}</strong>.
-              </p>
-            </div>
-            <div>
-              <strong>When to create a study</strong>
-              <p>Create one when the collaboration branches into a distinct experiment, species, cell system, or treatment design.</p>
-            </div>
-          </section>
-          <section className="study-create-layout">
-            <StudyForm projectId={query.data.id} projectTitle={query.data.title} />
-          </section>
-        </>
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.8fr)] lg:items-start">
+          <StudyForm projectId={query.data.id} projectTitle={query.data.title} />
+          <Card className="lg:sticky lg:top-6">
+            <CardHeader>
+              <p className="eyebrow">Reference</p>
+              <CardTitle>Definitions</CardTitle>
+              <CardDescription>These labels describe the study-level fields before the onboarding wizard opens.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
+                <strong>Collaboration</strong>
+                <p className="text-sm text-muted-foreground">
+                  You are adding a study under <strong>{query.data.title}</strong>.
+                </p>
+              </div>
+              <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
+                <strong>Study</strong>
+                <p className="text-sm text-muted-foreground">
+                  A distinct experiment within the collaboration, usually separated by design, species, or cell system.
+                </p>
+              </div>
+              <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
+                <strong>Species</strong>
+                <p className="text-sm text-muted-foreground">The organism context for the study, such as human, mouse, or rat.</p>
+              </div>
+              <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
+                <strong>Cell type</strong>
+                <p className="text-sm text-muted-foreground">The biological model or tissue context used in the experiment.</p>
+              </div>
+              <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
+                <strong>Treatment variable</strong>
+                <p className="text-sm text-muted-foreground">The experimental variable that distinguishes treatment groups in the study.</p>
+              </div>
+              <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
+                <strong>Batch variable</strong>
+                <p className="text-sm text-muted-foreground">The variable used to track batch structure for normalization and analysis.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
       ) : selectedProjectId === null ? (
         <section className="workspace-intro-card">
           <div>
@@ -96,7 +112,7 @@ export function StudyCreatePage() {
           </div>
           <div>
             <strong>Need a new top-level record?</strong>
-            <p>Start with a collaboration when the PI or intake context does not exist yet, then return to {globalStudyCreateRoute}.</p>
+            <p>Start with a collaboration when the PI or intake context does not exist yet, then return to Studies from the breadcrumb above.</p>
           </div>
         </section>
       ) : null}

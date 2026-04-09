@@ -40,6 +40,7 @@ function renderForm() {
           >
             <Route path="/studies/new" element={<StudyForm projectId={7} projectTitle="Mercury tox study" />} />
             <Route path="/studies/:studyId" element={<div>Study workspace</div>} />
+            <Route path="/studies/:studyId/onboarding" element={<div>Study onboarding wizard</div>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -48,7 +49,7 @@ function renderForm() {
 }
 
 describe("StudyForm", () => {
-  it("redirects into the study workspace after creation", async () => {
+  it("redirects into the onboarding wizard after creation", async () => {
     vi.mocked(createStudy).mockResolvedValueOnce({
       id: 11,
       project: 7,
@@ -68,11 +69,9 @@ describe("StudyForm", () => {
     fireEvent.change(screen.getByRole("textbox", { name: /batch variable/i }), { target: { value: "batch-1" } });
     fireEvent.click(screen.getByRole("button", { name: /create study/i }));
 
-    expect(await screen.findByText("Study workspace")).toBeInTheDocument();
-    expect(screen.getByTestId("location")).toHaveTextContent("/studies/11");
-    expect(screen.getByTestId("location")).toHaveTextContent("intake=open");
+    expect(await screen.findByText("Study onboarding wizard")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/studies/11/onboarding");
     expect(screen.getByText(/study created/i)).toBeInTheDocument();
     expect(screen.getByText(/hepatocyte mercury dose response/i)).toBeInTheDocument();
   });
 });
-
