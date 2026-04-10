@@ -32,6 +32,10 @@ class Project(models.Model):
 
 
 class Study(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        ACTIVE = "active", "Active"
+
     class Species(models.TextChoices):
         HUMAN = "human", "Human"
         MOUSE = "mouse", "Mouse"
@@ -39,11 +43,13 @@ class Study(models.Model):
         HAMSTER = "hamster", "Hamster"
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="studies")
-    title = models.CharField(max_length=255)
-    species = models.CharField(max_length=20, choices=Species.choices)
-    celltype = models.CharField(max_length=255)
-    treatment_var = models.CharField(max_length=255)
-    batch_var = models.CharField(max_length=255)
+    title = models.CharField(max_length=255, unique=True)
+    description = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    species = models.CharField(max_length=20, choices=Species.choices, null=True, blank=True)
+    celltype = models.CharField(max_length=255, null=True, blank=True)
+    treatment_var = models.CharField(max_length=255, null=True, blank=True)
+    batch_var = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         ordering = ["id"]

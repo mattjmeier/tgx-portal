@@ -7,10 +7,11 @@ import { Link } from "react-router-dom";
 import { deleteStudy, fetchStudiesIndex, type Study } from "../api/studies";
 import { collaborationPath, globalStudyCreateRoute, studyWorkspacePath } from "../lib/routes";
 import { StudiesTable } from "./StudiesTable";
+import { WorkspaceSectionCard } from "./WorkspaceSectionCard";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 function getStudyOrderingParam(titleSort: "asc" | "desc"): string {
   const grouping = "project__title";
@@ -58,24 +59,18 @@ export function StudyIndexPanel() {
   }
 
   return (
-    <section className="rounded-lg border border-border bg-background px-6 py-6 shadow-sm">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <p className="eyebrow">Directory</p>
-          <h2 className="text-xl font-semibold">Studies</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Studies are grouped by collaboration, with the study title as the primary label.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild>
-            <Link to={globalStudyCreateRoute}>New study</Link>
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <WorkspaceSectionCard
+      action={
+        <Button asChild>
+          <Link to={globalStudyCreateRoute}>New study</Link>
+        </Button>
+      }
+      contentClassName="flex flex-col gap-4"
+      description="Studies are grouped by collaboration, with the study title as the primary label."
+      eyebrow="Directory"
+      title="Studies"
+    >
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="w-full md:max-w-md">
           <Label htmlFor="study-search">Search</Label>
           <Input
@@ -105,18 +100,20 @@ export function StudyIndexPanel() {
                 <SelectValue placeholder="Rows per page" />
               </SelectTrigger>
               <SelectContent>
-                {[5, 10, 20, 50].map((pageSizeOption) => (
-                  <SelectItem key={pageSizeOption} value={String(pageSizeOption)}>
-                    {pageSizeOption}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {[5, 10, 20, 50].map((pageSizeOption) => (
+                    <SelectItem key={pageSizeOption} value={String(pageSizeOption)}>
+                      {pageSizeOption}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col gap-1 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-1 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
         <p>
           {totalCount} study record{totalCount === 1 ? "" : "s"}
         </p>
@@ -142,7 +139,7 @@ export function StudyIndexPanel() {
               {study.title}
             </Link>
             <span className="truncate text-sm text-muted-foreground">
-              {study.species} · {study.celltype}
+              {study.species && study.celltype ? `${study.species} · ${study.celltype}` : "Draft metadata pending"}
             </span>
           </div>
         )}
@@ -170,9 +167,9 @@ export function StudyIndexPanel() {
           </div>
         )}
       />
-      {deleteStudyMutation.isError ? <p className="mt-2 text-sm text-destructive">{deleteStudyMutation.error.message}</p> : null}
+      {deleteStudyMutation.isError ? <p className="text-sm text-destructive">{deleteStudyMutation.error.message}</p> : null}
 
-      <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <p className="text-sm text-muted-foreground">
           Page {pagination.pageIndex + 1} of {pageCount}
         </p>
@@ -189,7 +186,7 @@ export function StudyIndexPanel() {
               }))
             }
           >
-            <ChevronLeft />
+            <ChevronLeft data-icon="inline-start" />
             Previous
           </Button>
           <Button
@@ -205,10 +202,10 @@ export function StudyIndexPanel() {
             }
           >
             Next
-            <ChevronRight />
+            <ChevronRight data-icon="inline-end" />
           </Button>
         </div>
       </div>
-    </section>
+    </WorkspaceSectionCard>
   );
 }

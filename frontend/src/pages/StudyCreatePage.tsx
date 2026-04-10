@@ -45,8 +45,11 @@ export function StudyCreatePage() {
     <section className="workspace-route">
       <div className="section-header">
         <div>
-          <p className="eyebrow">Study intake</p>
-          <h2>Add a study</h2>
+          <p className="eyebrow">New study onboarding</p>
+          <h2>Start a study</h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Create a draft study and continue into the wizard for high-level details, template setup, upload, and mappings.
+          </p>
         </div>
       </div>
 
@@ -65,18 +68,18 @@ export function StudyCreatePage() {
 
       {query.data ? (
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.8fr)] lg:items-start">
-          <StudyForm projectId={query.data.id} projectTitle={query.data.title} />
+          <StudyForm projectId={query.data.id} />
           <Card className="lg:sticky lg:top-6">
             <CardHeader>
               <p className="eyebrow">Reference</p>
               <CardTitle>Definitions</CardTitle>
-              <CardDescription>These labels describe the study-level fields before the onboarding wizard opens.</CardDescription>
+              <CardDescription>Enter a title on the left to continue. The rest of your study setup, including metadata import, will take place in the onbarding wizard.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
                 <strong>Collaboration</strong>
                 <p className="text-sm text-muted-foreground">
-                  You are adding a study under <strong>{query.data.title}</strong>.
+                  You are starting a study under <strong>{query.data.title}</strong>.
                 </p>
               </div>
               <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
@@ -84,22 +87,6 @@ export function StudyCreatePage() {
                 <p className="text-sm text-muted-foreground">
                   A distinct experiment within the collaboration, usually separated by design, species, or cell system.
                 </p>
-              </div>
-              <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
-                <strong>Species</strong>
-                <p className="text-sm text-muted-foreground">The organism context for the study, such as human, mouse, or rat.</p>
-              </div>
-              <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
-                <strong>Cell type</strong>
-                <p className="text-sm text-muted-foreground">The biological model or tissue context used in the experiment.</p>
-              </div>
-              <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
-                <strong>Treatment variable</strong>
-                <p className="text-sm text-muted-foreground">The experimental variable that distinguishes treatment groups in the study.</p>
-              </div>
-              <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
-                <strong>Batch variable</strong>
-                <p className="text-sm text-muted-foreground">The variable used to track batch structure for normalization and analysis.</p>
               </div>
             </CardContent>
           </Card>

@@ -88,13 +88,13 @@ export function FlashBanner() {
           {flash.description ? <p className="mt-1 text-sm text-muted-foreground">{flash.description}</p> : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
           {action ? (
             <Button asChild size="sm">
               <Link to={action.to}>{action.label}</Link>
             </Button>
           ) : null}
-          <Button size="sm" type="button" variant="ghost" onClick={() => setFlash(null)}>
+          <Button size="sm" type="button" variant="outline" onClick={() => setFlash(null)}>
             Dismiss
           </Button>
         </div>
@@ -102,4 +102,3 @@ export function FlashBanner() {
     </Card>
   );
 }
-

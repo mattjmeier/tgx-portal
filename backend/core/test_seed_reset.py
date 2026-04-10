@@ -45,11 +45,11 @@ class ResetSeedDataCommandTests(TestCase):
 
         call_command("reset_seed_data")
 
-        self.assertEqual(Project.objects.count(), 2)
-        self.assertEqual(Study.objects.count(), 6)
-        self.assertEqual(Sample.objects.count(), 18)
-        self.assertEqual(Assay.objects.count(), 18)
-        self.assertEqual(StudyOnboardingState.objects.count(), 6)
+        self.assertEqual(Project.objects.count(), 4)
+        self.assertEqual(Study.objects.count(), 12)
+        self.assertEqual(Sample.objects.count(), 36)
+        self.assertEqual(Assay.objects.count(), 36)
+        self.assertEqual(StudyOnboardingState.objects.count(), 12)
         self.assertFalse(Project.objects.filter(title="Existing collaboration").exists())
 
         project_titles = list(Project.objects.order_by("title").values_list("title", flat=True))
@@ -58,6 +58,8 @@ class ResetSeedDataCommandTests(TestCase):
             [
                 "Aflatoxin Response Atlas",
                 "Endocrine Resilience Screen",
+                "Neuroinflammation Reference Panel",
+                "Pulmonary Stress Sentinel",
             ],
         )
 
@@ -82,4 +84,3 @@ class ResetSeedDataCommandTests(TestCase):
         self.assertIn("platform: rna_seq", config_yaml)
         self.assertIn("sample_ID\tsample_name\tgroup\tdose", metadata_tsv)
         self.assertIn("C_2D\t1uM_2D", contrasts_tsv)
-

@@ -174,7 +174,7 @@ export function ProjectWorkspace({
                       {study.title}
                     </Link>
                     <span className="truncate text-sm text-muted-foreground">
-                      {study.species} · {study.celltype}
+                      {study.species && study.celltype ? `${study.species} · ${study.celltype}` : "Draft metadata pending"}
                     </span>
                   </div>
                 )}

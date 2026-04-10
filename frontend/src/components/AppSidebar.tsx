@@ -1,22 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  ChevronRight,
-  ClipboardList,
-  Download,
-  FlaskConical,
-  Layers3,
-  LibraryBig,
-  LogOut,
-  PlusCircle,
-  ShieldCheck,
-  TestTubeDiagonal,
-} from "lucide-react";
+import { ChevronRight, ClipboardList, FlaskConical, Layers3, LibraryBig, LogOut, PlusCircle, ShieldCheck } from "lucide-react";
 import { NavLink, useLocation, useMatch } from "react-router-dom";
 
 import { downloadProjectConfig, fetchProject, fetchProjects } from "../api/projects";
 import { fetchStudiesIndex, fetchStudy, type Study } from "../api/studies";
 import { useAuth } from "../auth/AuthProvider";
+import { StudyActionsMenu } from "./StudyActionsMenu";
 import {
   collaborationCreatePath,
   collaborationPath,
@@ -52,26 +42,13 @@ function formatStudyLabel(study: Study) {
 }
 
 function formatStudySecondary(study: Study, collaborationTitle?: string) {
-  const speciesAndCelltype = `${study.species} · ${study.celltype}`;
+  const speciesAndCelltype =
+    study.species && study.celltype ? `${study.species} · ${study.celltype}` : "Draft metadata pending";
   return collaborationTitle ? `${speciesAndCelltype} · ${collaborationTitle}` : speciesAndCelltype;
 }
 
 function isActiveCollaborationPath(pathname: string, projectId: number) {
   return pathname === collaborationPath(projectId) || pathname.startsWith(`${collaborationPath(projectId)}/`);
-}
-
-function getStudyTabPath(studyId: number, tab?: "contrasts" | "collaboration") {
-  const params = new URLSearchParams();
-  if (tab) {
-    params.set("tab", tab);
-  }
-
-  const query = params.toString();
-  return `${studyWorkspacePath(studyId)}${query ? `?${query}` : ""}`;
-}
-
-function getStudyIntakePath(studyId: number) {
-  return `${studyWorkspacePath(studyId)}?intake=open`;
 }
 
 type SidebarBrowseBranchProps = {
@@ -160,7 +137,6 @@ export function AppSidebar() {
   const [collaborationsOpen, setCollaborationsOpen] = useState(false);
   const [studiesOpen, setStudiesOpen] = useState(false);
   const [studiesExpanded, setStudiesExpanded] = useState(false);
-  const [expandedStudyId, setExpandedStudyId] = useState<number | null>(null);
 
   useEffect(() => {
     if (activeProjectId !== null) {
@@ -171,7 +147,6 @@ export function AppSidebar() {
   useEffect(() => {
     if (activeStudyId !== null) {
       setStudiesOpen(true);
-      setExpandedStudyId(activeStudyId);
     }
   }, [activeStudyId]);
 
@@ -192,9 +167,6 @@ export function AppSidebar() {
 
   const visibleStudies = useMemo(() => studiesPreviewQuery.data?.results ?? [], [studiesPreviewQuery.data?.results]);
 
-  const selectedStudy =
-    studyQuery.data ?? (activeStudyId !== null ? visibleStudies.find((study) => study.id === activeStudyId) ?? null : null);
-
   const collaborationTitleById = new Map<number, string>(
     (collaborationsPreviewQuery.data?.results ?? []).map((project) => [project.id, project.title]),
   );
@@ -205,7 +177,11 @@ export function AppSidebar() {
   const configMutation = useMutation({
     mutationFn: downloadProjectConfig,
     onSuccess: (blob, projectIdForDownload) => {
-      const safeTitle = (projectQuery.data?.title ?? `collaboration_${projectIdForDownload ?? "unknown"}`)
+      const safeTitle = (
+        collaborationTitleById.get(projectIdForDownload) ??
+        projectQuery.data?.title ??
+        `collaboration_${projectIdForDownload ?? "unknown"}`
+      )
         .toLowerCase()
         .replace(/\s+/g, "_");
       const url = URL.createObjectURL(blob);
@@ -218,18 +194,6 @@ export function AppSidebar() {
       URL.revokeObjectURL(url);
     },
   });
-
-  function handleStudyClick(event: React.MouseEvent<HTMLAnchorElement>, studyId: number) {
-    setStudiesOpen(true);
-
-    if (activeStudyId === studyId) {
-      event.preventDefault();
-      setExpandedStudyId((current) => (current === studyId ? null : studyId));
-      return;
-    }
-
-    setExpandedStudyId(studyId);
-  }
 
   return (
     <Sidebar>
@@ -362,109 +326,29 @@ export function AppSidebar() {
                       ) : null}
                       {visibleStudies.map((study) => (
                         <SidebarMenuSubItem key={study.id}>
-                          <SidebarMenuSubButton asChild isActive={activeStudyId === study.id || expandedStudyId === study.id}>
-                            <NavLink to={studyWorkspacePath(study.id)} onClick={(event) => handleStudyClick(event, study.id)}>
-                              <FlaskConical className={sidebarIconClassName} />
-                              <span className="flex min-w-0 flex-col">
-                                <span>{formatStudyLabel(study)}</span>
-                                <span className="truncate text-xs text-sidebar-foreground/60">
-                                  {formatStudySecondary(
-                                    study,
-                                    collaborationTitleById.get(study.project) ?? study.project_title ?? `Collaboration ${study.project}`,
-                                  )}
+                          <div className="flex items-start gap-1">
+                            <SidebarMenuSubButton asChild className="min-w-0 flex-1" isActive={activeStudyId === study.id}>
+                              <NavLink to={studyWorkspacePath(study.id)}>
+                                <FlaskConical className={sidebarIconClassName} />
+                                <span className="flex min-w-0 flex-col">
+                                  <span>{formatStudyLabel(study)}</span>
+                                  <span className="truncate text-xs text-sidebar-foreground/60">
+                                    {formatStudySecondary(
+                                      study,
+                                      collaborationTitleById.get(study.project) ?? study.project_title ?? `Collaboration ${study.project}`,
+                                    )}
+                                  </span>
                                 </span>
-                              </span>
-                            </NavLink>
-                          </SidebarMenuSubButton>
-                          {expandedStudyId === study.id ? (
-                            <SidebarMenuSub className="mt-1">
-                              <SidebarMenuSubItem>
-                                <SidebarMenuSubButton
-                                  asChild
-                                  isActive={location.pathname === studyWorkspacePath(study.id) && location.search === ""}
-                                >
-                                  <NavLink to={studyWorkspacePath(study.id)}>
-                                    <ClipboardList className={sidebarIconClassName} />
-                                    <span>Samples</span>
-                                  </NavLink>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                              <SidebarMenuSubItem>
-                                <SidebarMenuSubButton
-                                  asChild
-                                  isActive={
-                                    location.pathname === studyWorkspacePath(study.id) &&
-                                    location.search.includes("tab=contrasts")
-                                  }
-                                >
-                                  <NavLink to={getStudyTabPath(study.id, "contrasts")}>
-                                    <FlaskConical className={sidebarIconClassName} />
-                                    <span>Contrasts</span>
-                                  </NavLink>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                              <SidebarMenuSubItem>
-                                <SidebarMenuSubButton
-                                  asChild
-                                  isActive={
-                                    location.pathname === studyWorkspacePath(study.id) &&
-                                    location.search.includes("tab=collaboration")
-                                  }
-                                >
-                                  <NavLink to={getStudyTabPath(study.id, "collaboration")}>
-                                    <Layers3 className={sidebarIconClassName} />
-                                    <span>Collaboration info</span>
-                                  </NavLink>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                              <SidebarMenuSubItem>
-                                <SidebarMenuSubButton asChild isActive={location.search.includes("intake=open")}>
-                                  <NavLink to={getStudyIntakePath(study.id)}>
-                                    <TestTubeDiagonal className={sidebarIconClassName} />
-                                    <span>Add samples</span>
-                                  </NavLink>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                              <SidebarMenuSubItem>
-                                <SidebarMenuSubButton
-                                  asChild
-                                  isActive={
-                                    location.pathname === studyWorkspacePath(study.id) &&
-                                    location.search.includes("tab=contrasts")
-                                  }
-                                >
-                                  <NavLink to={getStudyTabPath(study.id, "contrasts")}>
-                                    <PlusCircle className={sidebarIconClassName} />
-                                    <span>Add contrasts</span>
-                                  </NavLink>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                              <SidebarMenuSubItem>
-                                <SidebarMenuSubButton asChild>
-                                  <NavLink to={getStudyTabPath(study.id, "collaboration")}>
-                                    <Layers3 className={sidebarIconClassName} />
-                                    <span>Study information</span>
-                                  </NavLink>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                              {isAdmin ? (
-                                <SidebarMenuSubItem>
-                                  <SidebarMenuButton
-                                    className="justify-between"
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => configMutation.mutate(study.project)}
-                                  >
-                                    <span className="flex items-center gap-3">
-                                      <Download className={sidebarIconClassName} />
-                                      <span>{configMutation.isPending ? "Preparing bundle..." : "Download config bundle"}</span>
-                                    </span>
-                                    <ChevronRight className={cn(sidebarIconClassName, "opacity-0")} />
-                                  </SidebarMenuButton>
-                                </SidebarMenuSubItem>
-                              ) : null}
-                            </SidebarMenuSub>
-                          ) : null}
+                              </NavLink>
+                            </SidebarMenuSubButton>
+                            <StudyActionsMenu
+                              collaborationId={study.project}
+                              onDownloadConfig={isAdmin ? () => configMutation.mutate(study.project) : undefined}
+                              studyId={study.id}
+                              studyTitle={study.title}
+                              triggerClassName="size-9 shrink-0 border-transparent bg-transparent text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                            />
+                          </div>
                         </SidebarMenuSubItem>
                       ))}
                       {studiesPreviewQuery.data &&

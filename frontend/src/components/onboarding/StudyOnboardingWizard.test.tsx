@@ -10,6 +10,7 @@ import {
   patchStudyOnboardingState,
   finalizeStudyOnboardingState,
 } from "../../api/studyOnboarding";
+import { updateStudy } from "../../api/studies";
 
 vi.mock("papaparse", () => ({
   default: {
@@ -196,10 +197,24 @@ vi.mock("../../api/studies", async () => {
       project: 7,
       project_title: "Mercury tox study",
       title: "Hepatocyte mercury dose response",
-      species: "human",
-      celltype: "hepatocyte",
-      treatment_var: "mercury",
-      batch_var: "batch-1",
+      description: "",
+      status: "draft",
+      species: null,
+      celltype: null,
+      treatment_var: null,
+      batch_var: null,
+    })),
+    updateStudy: vi.fn(async (_studyId: number, payload: Record<string, unknown>) => ({
+      id: 11,
+      project: 7,
+      project_title: "Mercury tox study",
+      title: String(payload.title ?? "Hepatocyte mercury dose response"),
+      description: String(payload.description ?? ""),
+      status: "draft",
+      species: payload.species ?? "human",
+      celltype: payload.celltype ?? "hepatocyte",
+      treatment_var: payload.treatment_var ?? "group",
+      batch_var: payload.batch_var ?? "plate",
     })),
   };
 });
@@ -274,6 +289,8 @@ describe("StudyOnboardingWizard", () => {
     renderWizard("/studies/11/onboarding");
 
     expect(screen.getByRole("heading", { name: "High-level details" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Study title")).toBeInTheDocument();
+    expect(screen.getByLabelText("Description")).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/studies/11/onboarding");
   });
 
@@ -308,6 +325,9 @@ describe("StudyOnboardingWizard", () => {
   it("auto-adds CASN in the template preview when chemical is selected", async () => {
     renderWizard("/studies/11/onboarding?step=template");
 
+    expect(await screen.findByLabelText("Cell type")).toBeInTheDocument();
+    expect(screen.getByLabelText("Treatment variable")).toBeInTheDocument();
+    expect(screen.getByLabelText("Batch variable")).toBeInTheDocument();
     const chemicalCheckbox = await screen.findByLabelText("Chemical");
     fireEvent.click(chemicalCheckbox);
 
@@ -369,5 +389,11 @@ describe("StudyOnboardingWizard", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /finalize mappings/i }));
     await waitFor(() => expect(finalizeStudyOnboardingState).toHaveBeenCalledWith(11));
+    expect(updateStudy).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({
+        title: "Hepatocyte mercury dose response",
+      }),
+    );
   });
 });

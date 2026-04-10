@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 
 import type { Study } from "../api/studies";
+import { cn } from "../lib/utils";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 
 type StudySortState = false | "asc" | "desc";
 
@@ -47,11 +49,11 @@ export function StudiesTable({
   const visibleColCount = hasActions ? 4 : 3;
 
   return (
-    <div className={`${className} overflow-hidden rounded-md border border-border`.trim()}>
-      <table className="w-full caption-bottom text-sm">
-        <thead className="[&_tr]:border-b">
-          <tr className="border-b border-border">
-            <th className="h-12 px-4 text-left align-middle font-medium text-foreground">
+    <div className={cn("overflow-hidden rounded-md border border-border", className)}>
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="text-foreground">
               {onToggleTitleSort ? (
                 <button
                   aria-label="Study"
@@ -65,31 +67,31 @@ export function StudiesTable({
               ) : (
                 "Study"
               )}
-            </th>
-            <th className="h-12 px-4 text-left align-middle font-medium text-foreground">Samples</th>
-            <th className="h-12 px-4 text-left align-middle font-medium text-foreground">Assays</th>
-            {hasActions ? <th className="h-12 px-4 text-left align-middle font-medium text-foreground">Actions</th> : null}
-          </tr>
-        </thead>
-        <tbody className="[&_tr:last-child]:border-0">
+            </TableHead>
+            <TableHead className="text-foreground">Samples</TableHead>
+            <TableHead className="text-foreground">Assays</TableHead>
+            {hasActions ? <TableHead className="text-foreground">Actions</TableHead> : null}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {isLoading ? (
-            <tr className="border-b border-border">
-              <td className="p-4 text-muted-foreground" colSpan={visibleColCount}>
+            <TableRow>
+              <TableCell className="text-muted-foreground" colSpan={visibleColCount}>
                 {loadingMessage}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ) : isError ? (
-            <tr className="border-b border-border">
-              <td className="p-4 text-destructive" colSpan={visibleColCount}>
+            <TableRow>
+              <TableCell className="text-destructive" colSpan={visibleColCount}>
                 {errorMessage}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ) : studies.length === 0 ? (
-            <tr className="border-b border-border">
-              <td className="p-4 text-muted-foreground" colSpan={visibleColCount}>
+            <TableRow>
+              <TableCell className="text-muted-foreground" colSpan={visibleColCount}>
                 {emptyMessage}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ) : (
             (() => {
               let lastProjectId: number | null = null;
@@ -99,8 +101,8 @@ export function StudiesTable({
                 lastProjectId = study.project;
 
                 const groupRow = showGroupHeading ? (
-                  <tr className="border-b border-border bg-muted/35 transition-colors hover:bg-muted/45" key={`group-${study.project}`}>
-                    <td className="p-4" colSpan={visibleColCount}>
+                  <TableRow className="bg-muted/35 hover:bg-muted/45" key={`group-${study.project}`}>
+                    <TableCell colSpan={visibleColCount}>
                       <div className="flex items-center gap-2 border-l-4 border-primary/40 pl-3">
                         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Collaboration</span>
                         {renderGroupTitle ? (
@@ -110,31 +112,27 @@ export function StudiesTable({
                         )}
                         {renderGroupAction ? renderGroupAction(study) : null}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : null;
 
                 const rowClassName = getRowClassName ? getRowClassName(study) : undefined;
-                const rowClasses = ["border-b border-border hover:bg-muted/40"];
-                if (rowClassName) {
-                  rowClasses.push(rowClassName);
-                }
 
                 const dataRow = (
-                  <tr className={rowClasses.join(" ")} key={study.id}>
-                    <td className={`p-4 align-middle ${showProjectGroups ? "pl-8" : ""}`}>{renderStudyTitle(study)}</td>
-                    <td className="p-4 align-middle text-sm text-foreground">{study.sample_count ?? 0}</td>
-                    <td className="p-4 align-middle text-sm text-foreground">{study.assay_count ?? 0}</td>
-                    {hasActions ? <td className="p-4 align-middle">{renderStudyActions?.(study)}</td> : null}
-                  </tr>
+                  <TableRow className={cn("hover:bg-muted/40", rowClassName)} key={study.id}>
+                    <TableCell className={showProjectGroups ? "pl-8" : undefined}>{renderStudyTitle(study)}</TableCell>
+                    <TableCell className="text-sm text-foreground">{study.sample_count ?? 0}</TableCell>
+                    <TableCell className="text-sm text-foreground">{study.assay_count ?? 0}</TableCell>
+                    {hasActions ? <TableCell>{renderStudyActions?.(study)}</TableCell> : null}
+                  </TableRow>
                 );
 
                 return groupRow ? [groupRow, dataRow] : [dataRow];
               });
             })()
           )}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

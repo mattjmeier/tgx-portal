@@ -214,19 +214,20 @@ describe("AppSidebar (study workspace)", () => {
     expect(logo).toHaveClass("object-cover");
   });
 
-  it("shows a study-specific submenu under the selected study without separate active context sections", async () => {
+  it("keeps the selected study visible in the sidebar without duplicating workspace tabs", async () => {
     renderSidebar("/studies/11");
 
     expect(await screen.findByText(/hepatocyte mercury dose response/i)).toBeInTheDocument();
     expect(screen.getByText(/hepatocyte mercury dose response/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^samples$/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^contrasts$/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /collaboration info/i })).toBeInTheDocument();
-    expect(screen.getByText(/add samples/i)).toBeInTheDocument();
-    expect(screen.getByText(/add contrasts/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /study actions for hepatocyte mercury dose response/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^samples$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^contrasts$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /collaboration info/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/add samples/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/add contrasts/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/metadata onboarding/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/download config bundle/i)).toBeInTheDocument();
-    expect(screen.getByText(/study information/i)).toBeInTheDocument();
+    expect(screen.queryByText(/download config bundle/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/study information/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/active study/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/active collaboration/i)).not.toBeInTheDocument();
   });
@@ -247,24 +248,25 @@ describe("AppSidebar (study workspace)", () => {
     expect(await screen.findByText(/hepatocyte mercury dose response/i)).toBeInTheDocument();
   });
 
-  it("lets the study row toggle its submenu while keeping sibling studies visible", async () => {
+  it("keeps sibling studies visible without expanding a second navigation layer", async () => {
     renderSidebar("/studies/11");
 
-    const activeStudyLink = (await screen.findByText(/hepatocyte mercury dose response/i)).closest("a");
-    expect(activeStudyLink).not.toBeNull();
+    expect((await screen.findByText(/hepatocyte mercury dose response/i)).closest("a")).not.toBeNull();
     expect(screen.getByText(/kidney cadmium follow-up/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^samples$/i })).toBeInTheDocument();
-
-    fireEvent.click(activeStudyLink as HTMLAnchorElement);
     expect(screen.queryByRole("link", { name: /^samples$/i })).not.toBeInTheDocument();
     expect(screen.getByText(/hepatocyte mercury dose response/i)).toBeInTheDocument();
     expect(screen.getByText(/kidney cadmium follow-up/i)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText(/kidney cadmium follow-up/i).closest("a") as HTMLAnchorElement);
-    expect(await screen.findByRole("link", { name: /^samples$/i })).toBeInTheDocument();
-    expect(screen.getByText(/hepatocyte mercury dose response/i)).toBeInTheDocument();
     expect(screen.getByText(/kidney cadmium follow-up/i)).toBeInTheDocument();
     expect(screen.getByText(/mouse cortex lead pilot/i)).toBeInTheDocument();
+  });
+
+  it("reveals compact study actions from a three-dots menu", async () => {
+    renderSidebar("/studies/11");
+
+    fireEvent.click(await screen.findByRole("button", { name: /study actions for hepatocyte mercury dose response/i }));
+
+    expect(await screen.findByRole("menuitem", { name: /open collaboration/i })).toHaveAttribute("href", "/collaborations/7");
+    expect(screen.getByRole("menuitem", { name: /download config bundle/i })).toBeInTheDocument();
   });
 
   it("shows studies from outside the active collaboration in the studies branch", async () => {

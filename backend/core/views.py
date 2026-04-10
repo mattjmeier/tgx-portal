@@ -103,6 +103,21 @@ def _get_or_create_onboarding_state(study: Study) -> StudyOnboardingState:
     return state
 
 
+def _study_finalize_errors(study: Study) -> dict[str, list[str]]:
+    errors: dict[str, list[str]] = {}
+    if not study.title:
+        errors["title"] = ["Provide a study title before finalizing onboarding."]
+    if not study.species:
+        errors["species"] = ["Select a species before finalizing onboarding."]
+    if not study.celltype:
+        errors["celltype"] = ["Provide a cell type before finalizing onboarding."]
+    if not study.treatment_var:
+        errors["treatment_var"] = ["Provide a treatment variable before finalizing onboarding."]
+    if not study.batch_var:
+        errors["batch_var"] = ["Provide a batch variable before finalizing onboarding."]
+    return errors
+
+
 class LookupViewSet(viewsets.ViewSet):
     def list(self, request):
         projects = _projects_accessible_to_user(request.user)
@@ -470,15 +485,21 @@ class StudyViewSet(viewsets.ModelViewSet):
         state = _get_or_create_onboarding_state(study)
         mappings = {**DEFAULT_MAPPINGS, **(state.mappings or {})}
 
-        errors = validate_final_ready(metadata_columns=state.metadata_columns or [], mappings=mappings)
+        errors = _study_finalize_errors(study)
         if errors:
             return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        onboarding_errors = validate_final_ready(metadata_columns=state.metadata_columns or [], mappings=mappings)
+        if onboarding_errors:
+            return Response({"errors": onboarding_errors}, status=status.HTTP_400_BAD_REQUEST)
 
         state.status = StudyOnboardingState.Status.FINAL
         now = timezone.now()
         state.finalized_at = now
         state.updated_at = now
         state.save(update_fields=["status", "finalized_at", "updated_at"])
+        study.status = Study.Status.ACTIVE
+        study.save(update_fields=["status"])
         return Response(
             {
                 "study_id": study.id,

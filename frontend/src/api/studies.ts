@@ -6,10 +6,12 @@ export type Study = {
   project: number;
   project_title: string;
   title: string;
-  species: "human" | "mouse" | "rat" | "hamster";
-  celltype: string;
-  treatment_var: string;
-  batch_var: string;
+  description: string;
+  status: "draft" | "active";
+  species: "human" | "mouse" | "rat" | "hamster" | null;
+  celltype: string | null;
+  treatment_var: string | null;
+  batch_var: string | null;
   sample_count?: number;
   assay_count?: number;
 };
@@ -17,11 +19,9 @@ export type Study = {
 export type CreateStudyPayload = {
   project: number;
   title: string;
-  species: Study["species"];
-  celltype: string;
-  treatment_var: string;
-  batch_var: string;
 };
+
+export type UpdateStudyPayload = Partial<Pick<Study, "title" | "description" | "species" | "celltype" | "treatment_var" | "batch_var">>;
 
 export type FetchStudiesIndexOptions = {
   page?: number;
@@ -88,6 +88,22 @@ export async function createStudy(payload: CreateStudyPayload): Promise<Study> {
 
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response, "Failed to create the study."));
+  }
+
+  return response.json();
+}
+
+export async function updateStudy(studyId: number, payload: UpdateStudyPayload): Promise<Study> {
+  const response = await apiFetch(`${apiBaseUrl}/api/studies/${studyId}/`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response, "Failed to update the study."));
   }
 
   return response.json();

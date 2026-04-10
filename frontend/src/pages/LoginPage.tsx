@@ -47,9 +47,9 @@ export function LoginPage() {
     <Card className="login-panel border-border/70 shadow-sm">
       <CardHeader className="gap-3">
         <p className="eyebrow">Sign in</p>
-        <CardTitle className="text-3xl">Access the portal workspace</CardTitle>
+        <CardTitle className="text-3xl">Access the genomics portal</CardTitle>
         <CardDescription className="text-base leading-7">
-          Local development boots with a default admin account so we can move quickly while we build out the full RBAC flow.
+          Please enter your credentials.
         </CardDescription>
       </CardHeader>
       <CardContent>

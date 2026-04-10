@@ -5,7 +5,7 @@ import { CheckCircle2, Circle } from "lucide-react";
 
 import { fetchLookups, type MetadataFieldDefinition } from "../../api/lookups";
 import { downloadProjectConfig } from "../../api/projects";
-import { fetchStudy } from "../../api/studies";
+import { fetchStudy, updateStudy, type Study } from "../../api/studies";
 import { downloadMetadataTemplate, previewMetadataTemplate } from "../../api/metadataTemplates";
 import {
   fetchStudyOnboardingState,
@@ -81,6 +81,34 @@ type OnboardingDraftV3 = {
     description: string;
   };
   template: {
+    optionalFieldKeys: string[];
+    customFieldKeys: string[];
+  };
+  upload: {
+    fileName: string;
+    metadataColumns: string[];
+    suggestedContrasts: ContrastPair[];
+  };
+  mappings: StudyOnboardingMappings & {
+    selected_contrasts: ContrastPair[];
+  };
+};
+
+type OnboardingDraftV4 = {
+  version: 4;
+  studyId: number;
+  updatedAt: string;
+  details: {
+    title: string;
+    piName: string;
+    researcherName: string;
+    description: string;
+  };
+  template: {
+    species: Study["species"];
+    celltype: string;
+    treatmentVar: string;
+    batchVar: string;
     optionalFieldKeys: string[];
     customFieldKeys: string[];
   };
@@ -207,6 +235,47 @@ function createDefaultDraftV3(studyId: number): OnboardingDraftV3 {
   };
 }
 
+function createDefaultDraftV4(studyId: number): OnboardingDraftV4 {
+  return {
+    version: 4,
+    studyId,
+    updatedAt: new Date().toISOString(),
+    details: {
+      title: "",
+      piName: "",
+      researcherName: "",
+      description: "",
+    },
+    template: {
+      species: null,
+      celltype: "",
+      treatmentVar: "",
+      batchVar: "",
+      optionalFieldKeys: [],
+      customFieldKeys: [],
+    },
+    upload: {
+      fileName: "",
+      metadataColumns: [],
+      suggestedContrasts: [],
+    },
+    mappings: {
+      treatment_level_1: "",
+      treatment_level_2: "",
+      treatment_level_3: "",
+      treatment_level_4: "",
+      treatment_level_5: "",
+      batch: "",
+      pca_color: "",
+      pca_shape: "",
+      pca_alpha: "",
+      clustering_group: "",
+      report_faceting_group: "",
+      selected_contrasts: [],
+    },
+  };
+}
+
 function migrateDraftV1ToV2(draft: OnboardingDraftV1): OnboardingDraftV2 {
   const optionalFieldKeys = new Set(draft.template.optionalColumns);
   if (draft.template.includeChemical) {
@@ -246,11 +315,32 @@ function migrateDraftV2ToV3(draft: OnboardingDraftV2): OnboardingDraftV3 {
   };
 }
 
-function loadDraft(studyId: number): OnboardingDraftV3 {
+function migrateDraftV3ToV4(draft: OnboardingDraftV3): OnboardingDraftV4 {
+  const base = createDefaultDraftV4(draft.studyId);
+  return {
+    ...base,
+    updatedAt: draft.updatedAt,
+    details: {
+      ...base.details,
+      piName: draft.details.piName,
+      researcherName: draft.details.researcherName,
+      description: draft.details.description,
+    },
+    template: {
+      ...base.template,
+      optionalFieldKeys: draft.template.optionalFieldKeys,
+      customFieldKeys: draft.template.customFieldKeys,
+    },
+    upload: draft.upload,
+    mappings: draft.mappings,
+  };
+}
+
+function loadDraft(studyId: number): OnboardingDraftV4 {
   const key = draftStorageKey(studyId);
   const raw = localStorage.getItem(key);
   if (!raw) {
-    return createDefaultDraftV3(studyId);
+    return createDefaultDraftV4(studyId);
   }
 
   try {
@@ -261,24 +351,27 @@ function loadDraft(studyId: number): OnboardingDraftV3 {
       (parsed as { studyId?: unknown }).studyId === studyId
     ) {
       const version = (parsed as { version?: unknown }).version;
+      if (version === 4) {
+        return parsed as OnboardingDraftV4;
+      }
       if (version === 3) {
-        return parsed as OnboardingDraftV3;
+        return migrateDraftV3ToV4(parsed as OnboardingDraftV3);
       }
       if (version === 2) {
-        return migrateDraftV2ToV3(parsed as OnboardingDraftV2);
+        return migrateDraftV3ToV4(migrateDraftV2ToV3(parsed as OnboardingDraftV2));
       }
       if (version === 1) {
-        return migrateDraftV2ToV3(migrateDraftV1ToV2(parsed as OnboardingDraftV1));
+        return migrateDraftV3ToV4(migrateDraftV2ToV3(migrateDraftV1ToV2(parsed as OnboardingDraftV1)));
       }
     }
   } catch {
     // fall through
   }
 
-  return createDefaultDraftV3(studyId);
+  return createDefaultDraftV4(studyId);
 }
 
-function saveDraft(draft: OnboardingDraftV3) {
+function saveDraft(draft: OnboardingDraftV4) {
   localStorage.setItem(draftStorageKey(draft.studyId), JSON.stringify(draft));
 }
 
@@ -293,7 +386,7 @@ export function StudyOnboardingWizard() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const [draft, setDraft] = useState<OnboardingDraftV3 | null>(() => {
+  const [draft, setDraft] = useState<OnboardingDraftV4 | null>(() => {
     if (studyId === null) {
       return null;
     }
@@ -355,6 +448,28 @@ export function StudyOnboardingWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardingStateQuery.data?.updated_at]);
 
+  useEffect(() => {
+    if (!studyQuery.data) {
+      return;
+    }
+    updateDraft((current) => ({
+      ...current,
+      details: {
+        ...current.details,
+        title: current.details.title || studyQuery.data.title || "",
+        description: current.details.description || studyQuery.data.description || "",
+      },
+      template: {
+        ...current.template,
+        species: current.template.species ?? studyQuery.data.species ?? null,
+        celltype: current.template.celltype || studyQuery.data.celltype || "",
+        treatmentVar: current.template.treatmentVar || studyQuery.data.treatment_var || "",
+        batchVar: current.template.batchVar || studyQuery.data.batch_var || "",
+      },
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studyQuery.data?.id]);
+
   const saveOnboardingDraftMutation = useMutation({
     mutationFn: async (payload: { mappings: StudyOnboardingMappings; selected_contrasts: ContrastPair[] }) =>
       patchStudyOnboardingState(studyId as number, payload),
@@ -368,10 +483,21 @@ export function StudyOnboardingWizard() {
   });
 
   const finalizeOnboardingMutation = useMutation({
-    mutationFn: async () => finalizeStudyOnboardingState(studyId as number),
+    mutationFn: async () => {
+      await updateStudy(studyId as number, {
+        title: draft.details.title.trim(),
+        description: draft.details.description.trim(),
+        species: draft.template.species,
+        celltype: draft.template.celltype.trim() || null,
+        treatment_var: draft.template.treatmentVar.trim() || null,
+        batch_var: draft.template.batchVar.trim() || null,
+      });
+      return finalizeStudyOnboardingState(studyId as number);
+    },
     onSuccess: async (result) => {
       setOnboardingFinalizeError(null);
       queryClient.setQueryData(["study-onboarding-state", studyId], result);
+      await queryClient.invalidateQueries({ queryKey: ["study", studyId] });
     },
     onError: (error) => {
       setOnboardingFinalizeError(error instanceof Error ? error.message : "Unable to finalize onboarding mappings.");
@@ -415,7 +541,7 @@ export function StudyOnboardingWizard() {
   }
 
   function updateDraft(
-    updater: (current: OnboardingDraftV3) => OnboardingDraftV3,
+    updater: (current: OnboardingDraftV4) => OnboardingDraftV4,
   ) {
     setDraft((current) => (current ? updater(current) : current));
   }
@@ -562,6 +688,19 @@ export function StudyOnboardingWizard() {
             <CardDescription>Capture ownership and context before configuring metadata templates.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-2 md:col-span-2">
+              <Label htmlFor="studyTitle">Study title</Label>
+              <Input
+                id="studyTitle"
+                value={draft.details.title}
+                onChange={(event) =>
+                  updateDraft((current) => ({
+                    ...current,
+                    details: { ...current.details, title: event.target.value },
+                  }))
+                }
+              />
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="piName">PI name</Label>
               <Input
@@ -627,7 +766,7 @@ export function StudyOnboardingWizard() {
         <Card>
           <CardHeader>
             <CardTitle>Template selection</CardTitle>
-            <CardDescription>Pick optional columns from admin-managed definitions. Required columns are locked.</CardDescription>
+            <CardDescription>Define the study metadata fields and pick optional columns for the template.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {lookupsQuery.isLoading ? (
@@ -637,6 +776,82 @@ export function StudyOnboardingWizard() {
             ) : (
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-4">
+                  <div className="space-y-4 rounded-md border border-border bg-muted/20 p-4">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-foreground">Study metadata</p>
+                      <p className="text-xs text-muted-foreground">
+                        These fields drive the metadata template and are required before finalizing onboarding.
+                      </p>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label htmlFor="studySpecies">Species</Label>
+                        <Select
+                          value={draft.template.species ?? "__none__"}
+                          onValueChange={(value) =>
+                            updateDraft((current) => ({
+                              ...current,
+                              template: {
+                                ...current.template,
+                                species: value === "__none__" ? null : (value as Study["species"]),
+                              },
+                            }))
+                          }
+                        >
+                          <SelectTrigger id="studySpecies" aria-label="Species">
+                            <SelectValue placeholder="Select a species" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Select a species</SelectItem>
+                            <SelectItem value="human">Human</SelectItem>
+                            <SelectItem value="mouse">Mouse</SelectItem>
+                            <SelectItem value="rat">Rat</SelectItem>
+                            <SelectItem value="hamster">Hamster</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="studyCelltype">Cell type</Label>
+                        <Input
+                          id="studyCelltype"
+                          value={draft.template.celltype}
+                          onChange={(event) =>
+                            updateDraft((current) => ({
+                              ...current,
+                              template: { ...current.template, celltype: event.target.value },
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="studyTreatmentVar">Treatment variable</Label>
+                        <Input
+                          id="studyTreatmentVar"
+                          value={draft.template.treatmentVar}
+                          onChange={(event) =>
+                            updateDraft((current) => ({
+                              ...current,
+                              template: { ...current.template, treatmentVar: event.target.value },
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="studyBatchVar">Batch variable</Label>
+                        <Input
+                          id="studyBatchVar"
+                          value={draft.template.batchVar}
+                          onChange={(event) =>
+                            updateDraft((current) => ({
+                              ...current,
+                              template: { ...current.template, batchVar: event.target.value },
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="space-y-2 rounded-md border border-border bg-muted/20 p-4">
                     <p className="text-sm font-medium text-foreground">Required</p>
                     <div className="mt-2 grid gap-2 text-sm">
@@ -1243,8 +1458,14 @@ export function StudyOnboardingWizard() {
             <div className="rounded-md border border-border bg-muted/20 p-4">
               <p className="font-medium text-foreground">Summary</p>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
+                <li>Title: {draft.details.title || "—"}</li>
                 <li>PI: {draft.details.piName || "—"}</li>
                 <li>Researcher: {draft.details.researcherName || "—"}</li>
+                <li>Description: {draft.details.description || "—"}</li>
+                <li>Species: {draft.template.species || "—"}</li>
+                <li>Cell type: {draft.template.celltype || "—"}</li>
+                <li>Treatment variable: {draft.template.treatmentVar || "—"}</li>
+                <li>Batch variable: {draft.template.batchVar || "—"}</li>
                 <li>Template columns: {stagedColumns.length ? stagedColumns.join(", ") : "—"}</li>
                 <li>Upload: {draft.upload.fileName || "—"}</li>
                 <li>Onboarding status: {onboardingStatus}</li>
@@ -1258,7 +1479,7 @@ export function StudyOnboardingWizard() {
                 type="button"
                 variant="outline"
                 onClick={() =>
-                  updateDraft(() => createDefaultDraftV3(studyId))
+                  updateDraft(() => createDefaultDraftV4(studyId))
                 }
               >
                 Reset draft

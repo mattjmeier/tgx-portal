@@ -212,8 +212,8 @@ describe("AppLayout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /toggle studies/i }));
 
-    expect(await screen.findByText(/hepatocyte mercury dose response/i)).toBeInTheDocument();
-    expect(screen.getByText(/mouse cortex lead pilot/i)).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /hepatocyte mercury dose response/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /mouse cortex lead pilot/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /study directory/i })).not.toBeInTheDocument();
   });
 
@@ -490,7 +490,7 @@ describe("AppLayout", () => {
     expect(screen.getByRole("heading", { name: /new study/i })).toBeInTheDocument();
   });
 
-  it("reveals study actions beneath the selected study in workspace routes", async () => {
+  it("keeps study workspace routes oriented without duplicating study-local navigation in the sidebar", async () => {
     renderLayout("/collaborations/7?study=11");
 
     expect((await screen.findAllByText(/mercury tox study/i)).length).toBeGreaterThan(0);
@@ -503,14 +503,15 @@ describe("AppLayout", () => {
     expect(screen.getByRole("link", { name: /^studies$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /toggle studies/i })).toBeInTheDocument();
     expect((await screen.findAllByText(/hepatocyte mercury dose response/i)).length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: /^samples$/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^contrasts$/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /collaboration info/i })).toBeInTheDocument();
-    expect(screen.getByText(/add samples/i)).toBeInTheDocument();
-    expect(screen.getByText(/add contrasts/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /study actions for hepatocyte mercury dose response/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^samples$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^contrasts$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /collaboration info/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/add samples/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/add contrasts/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/metadata onboarding/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/study information/i)).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /download config bundle/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/study information/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/download config bundle/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /add study/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /overview/i })).not.toBeInTheDocument();
   });
@@ -535,7 +536,7 @@ describe("AppLayout", () => {
   it("keeps the studies branch global even when a collaboration is active", async () => {
     renderLayout("/collaborations/7?study=11");
 
-    expect(await screen.findByText(/mouse cortex lead pilot/i)).toBeInTheDocument();
-    expect(screen.getByText(/kidney cadmium follow-up/i)).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /mouse cortex lead pilot/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /kidney cadmium follow-up/i })).toBeInTheDocument();
   });
 });

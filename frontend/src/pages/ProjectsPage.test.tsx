@@ -89,7 +89,10 @@ describe("ProjectsPage", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: /collaborations/i })).toBeInTheDocument();
+    const heading = await screen.findByRole("heading", { name: /collaborations/i });
+
+    expect(heading).toBeInTheDocument();
+    expect(heading.closest(".bg-card")).not.toBeNull();
     expect(screen.getByRole("link", { name: /new collaboration/i })).toBeInTheDocument();
     expect(fetchProjects).toHaveBeenCalled();
 

@@ -44,6 +44,35 @@ vi.mock("../api/projects", async () => {
   };
 });
 
+vi.mock("../api/studyOnboarding", async () => {
+  const actual = await vi.importActual<typeof import("../api/studyOnboarding")>("../api/studyOnboarding");
+  return {
+    ...actual,
+    fetchStudyOnboardingState: vi.fn(async () => ({
+      study_id: 11,
+      status: "draft" as const,
+      metadata_columns: [],
+      mappings: {
+        treatment_level_1: "",
+        treatment_level_2: "",
+        treatment_level_3: "",
+        treatment_level_4: "",
+        treatment_level_5: "",
+        batch: "",
+        pca_color: "",
+        pca_shape: "",
+        pca_alpha: "",
+        clustering_group: "",
+        report_faceting_group: "",
+      },
+      suggested_contrasts: [],
+      selected_contrasts: [],
+      updated_at: "2026-04-10T12:00:00Z",
+      finalized_at: null,
+    })),
+  };
+});
+
 vi.mock("../api/samples", async () => {
   const actual = await vi.importActual<typeof import("../api/samples")>("../api/samples");
   return {
@@ -117,6 +146,7 @@ describe("StudyWorkspacePage", () => {
     renderPage("/studies/11");
 
     expect(await screen.findByRole("heading", { name: /hepatocyte mercury dose response/i })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /continue onboarding/i })).toHaveAttribute("href", "/studies/11/onboarding");
     expect(screen.getByRole("tab", { name: /samples/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /contrasts/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /collaboration info/i })).toBeInTheDocument();
@@ -125,8 +155,27 @@ describe("StudyWorkspacePage", () => {
     expect(samplesTab).toHaveAttribute("aria-selected", "true");
 
     expect(await screen.findByText(/sample explorer/i)).toBeInTheDocument();
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /sample id/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /sample name/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /group/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /dose/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /controls/i })).toBeInTheDocument();
+    expect(screen.getByText(/showing 1-1 of 1/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /selected sample/i })).toBeInTheDocument();
+    expect(screen.getAllByText("S-001")).toHaveLength(2);
+    expect(screen.getByText(/group: control/i)).toBeInTheDocument();
+    expect(screen.getByText(/dose: 0/i)).toBeInTheDocument();
+    expect(screen.getByText(/chemical: none/i)).toBeInTheDocument();
+    expect(screen.getByText(/long chemical name/i)).toBeInTheDocument();
+    expect(screen.getByText(/no assays yet for this sample/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/platform/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/genome version/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/quantification method/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add assay/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add samples/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add contrasts/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /more study actions/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /onboarding wizard/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /metadata onboarding/i })).not.toBeInTheDocument();
   });
@@ -150,5 +199,17 @@ describe("StudyWorkspacePage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /add contrasts/i }));
     expect(await screen.findByText(/contrasts for this study/i)).toBeInTheDocument();
+  });
+
+  it("surfaces lower-frequency study actions in a local overflow menu", async () => {
+    renderPage("/studies/11");
+
+    fireEvent.click(await screen.findByRole("button", { name: /more study actions/i }));
+
+    expect(await screen.findByRole("menuitem", { name: /open collaboration/i })).toHaveAttribute(
+      "href",
+      "/collaborations/7",
+    );
+    expect(screen.getByRole("menuitem", { name: /download config bundle/i })).toBeInTheDocument();
   });
 });

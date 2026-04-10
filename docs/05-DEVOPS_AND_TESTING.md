@@ -38,7 +38,7 @@ docker compose exec api python manage.py reset_seed_data
 ```
 
 This command preserves users and lookup definitions, but replaces the current project hierarchy with:
-- 2 collaborations
+- 4 collaborations
 - 3 studies per collaboration
 - seeded samples, assays, and finalized onboarding states
 

@@ -4,7 +4,6 @@ import { MemoryRouter, Outlet, Route, Routes, useLocation } from "react-router-d
 import { vi } from "vitest";
 
 import { createStudy } from "../api/studies";
-import { FlashBanner } from "./FlashBanner";
 import { StudyForm } from "./StudyForm";
 
 vi.mock("../api/studies", async () => {
@@ -30,15 +29,14 @@ function renderForm() {
       <MemoryRouter initialEntries={["/studies/new?collaboration=7"]}>
         <Routes>
           <Route
-            element={
-              <>
-                <FlashBanner />
-                <LocationDisplay />
-                <Outlet />
-              </>
-            }
-          >
-            <Route path="/studies/new" element={<StudyForm projectId={7} projectTitle="Mercury tox study" />} />
+          element={
+            <>
+              <LocationDisplay />
+              <Outlet />
+            </>
+          }
+        >
+            <Route path="/studies/new" element={<StudyForm projectId={7} />} />
             <Route path="/studies/:studyId" element={<div>Study workspace</div>} />
             <Route path="/studies/:studyId/onboarding" element={<div>Study onboarding wizard</div>} />
           </Route>
@@ -55,23 +53,21 @@ describe("StudyForm", () => {
       project: 7,
       project_title: "Mercury tox study",
       title: "Hepatocyte mercury dose response",
-      species: "human",
-      celltype: "hepatocyte",
-      treatment_var: "mercury",
-      batch_var: "batch-1",
+      description: "",
+      status: "draft",
+      species: null,
+      celltype: null,
+      treatment_var: null,
+      batch_var: null,
     });
 
     renderForm();
 
     fireEvent.change(screen.getByRole("textbox", { name: /study title/i }), { target: { value: "Hepatocyte mercury dose response" } });
-    fireEvent.change(screen.getByRole("textbox", { name: /cell type/i }), { target: { value: "hepatocyte" } });
-    fireEvent.change(screen.getByRole("textbox", { name: /treatment variable/i }), { target: { value: "mercury" } });
-    fireEvent.change(screen.getByRole("textbox", { name: /batch variable/i }), { target: { value: "batch-1" } });
-    fireEvent.click(screen.getByRole("button", { name: /create study/i }));
+    fireEvent.click(screen.getByRole("button", { name: /start onboarding/i }));
 
     expect(await screen.findByText("Study onboarding wizard")).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/studies/11/onboarding");
-    expect(screen.getByText(/study created/i)).toBeInTheDocument();
-    expect(screen.getByText(/hepatocyte mercury dose response/i)).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });

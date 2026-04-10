@@ -80,7 +80,10 @@ describe("StudiesPage", () => {
   it("groups studies by collaboration and shows the study title first", async () => {
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: /studies/i })).toBeInTheDocument();
+    const heading = await screen.findByRole("heading", { name: /studies/i });
+
+    expect(heading).toBeInTheDocument();
+    expect(heading.closest(".bg-card")).not.toBeNull();
     expect(await screen.findByRole("link", { name: /mercury tox study/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^cadmium follow-up$/i })).toBeInTheDocument();
 

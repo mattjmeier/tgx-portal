@@ -39,7 +39,7 @@ describe("App", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: /access the portal workspace/i,
+        name: /access the genomics portal/i,
       }),
     ).toBeInTheDocument();
 

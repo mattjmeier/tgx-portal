@@ -3,26 +3,19 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { createStudy, type CreateStudyPayload, type Study } from "../api/studies";
-import { collaborationPath, studyOnboardingPath } from "../lib/routes";
+import { studyOnboardingPath } from "../lib/routes";
 import { Button } from "./ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 type StudyFormProps = {
   projectId: number;
-  projectTitle?: string;
 };
 
-const initialFormState: Omit<CreateStudyPayload, "project"> = {
-  title: "",
-  species: "human",
-  celltype: "",
-  treatment_var: "",
-  batch_var: "",
-};
+const initialFormState: Omit<CreateStudyPayload, "project"> = { title: "" };
 
-export function StudyForm({ projectId, projectTitle }: StudyFormProps) {
+export function StudyForm({ projectId }: StudyFormProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [formState, setFormState] = useState<Omit<CreateStudyPayload, "project">>(initialFormState);
@@ -34,22 +27,7 @@ export function StudyForm({ projectId, projectTitle }: StudyFormProps) {
       setFormState(initialFormState);
       setErrorMessage(null);
       void queryClient.invalidateQueries({ queryKey: ["studies", projectId] });
-      navigate(studyOnboardingPath(createdStudy.id), {
-        replace: true,
-        state: {
-          flash: {
-            variant: "success",
-            title: "Study created",
-            description: projectTitle
-              ? `"${createdStudy.title}" is ready under ${projectTitle}. Continue in the onboarding wizard.`
-              : `"${createdStudy.title}" is ready. Continue in the onboarding wizard.`,
-            action: {
-              label: "Back to collaboration",
-              to: collaborationPath(createdStudy.project),
-            },
-          },
-        },
-      });
+      navigate(studyOnboardingPath(createdStudy.id), { replace: true });
     },
     onError: (error) => {
       setErrorMessage(error.message);
@@ -66,69 +44,38 @@ export function StudyForm({ projectId, projectTitle }: StudyFormProps) {
   }
 
   return (
-    <form className="detail-form" onSubmit={handleSubmit}>
-      <h3>Create study and open wizard</h3>
-      <div className="grid gap-2">
-        <Label htmlFor="study-title">Study title</Label>
-        <Input
-          id="study-title"
-          required
-          value={formState.title}
-          onChange={(event) => setFormState((current) => ({ ...current, title: event.target.value }))}
-        />
-      </div>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div className="grid gap-2">
-          <Label htmlFor="study-species">Species</Label>
-          <Select
-            value={formState.species}
-            onValueChange={(value) => setFormState((current) => ({ ...current, species: value as CreateStudyPayload["species"] }))}
-          >
-            <SelectTrigger id="study-species" aria-label="Species">
-              <SelectValue placeholder="Select a species" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="human">Human</SelectItem>
-              <SelectItem value="mouse">Mouse</SelectItem>
-              <SelectItem value="rat">Rat</SelectItem>
-              <SelectItem value="hamster">Hamster</SelectItem>
-            </SelectContent>
-          </Select>
+    <Card>
+      <CardHeader className="gap-3">
+        <div className="grid gap-1">
+          <p className="eyebrow">Launch</p>
+          <CardTitle>Enter the onboarding wizard</CardTitle>
+          <CardDescription>
+            Create a draft study and continue into the wizard. Title is the only field needed here.
+          </CardDescription>
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor="study-celltype">Cell type</Label>
-          <Input
-            id="study-celltype"
-            required
-            value={formState.celltype}
-            onChange={(event) => setFormState((current) => ({ ...current, celltype: event.target.value }))}
-          />
-        </div>
-      </div>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div className="grid gap-2">
-          <Label htmlFor="study-treatment-var">Treatment variable</Label>
-          <Input
-            id="study-treatment-var"
-            required
-            value={formState.treatment_var}
-            onChange={(event) => setFormState((current) => ({ ...current, treatment_var: event.target.value }))}
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="study-batch-var">Batch variable</Label>
-          <Input
-            id="study-batch-var"
-            required
-            value={formState.batch_var}
-            onChange={(event) => setFormState((current) => ({ ...current, batch_var: event.target.value }))}
-          />
-        </div>
-      </div>
-      <Button disabled={mutation.isPending} type="submit">
-        {mutation.isPending ? "Creating..." : "Create study and open wizard"}
-      </Button>
-      {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
-    </form>
+      </CardHeader>
+      <CardContent>
+        <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+          <div className="grid gap-2">
+            <Label htmlFor="study-title">Study title</Label>
+            <Input
+              id="study-title"
+              required
+              value={formState.title}
+              onChange={(event) => setFormState((current) => ({ ...current, title: event.target.value }))}
+            />
+          </div>
+          <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              The wizard will collect the rest of the study details and metadata-driving fields.
+            </p>
+            <Button disabled={mutation.isPending} type="submit">
+              {mutation.isPending ? "Starting..." : "Start onboarding"}
+            </Button>
+          </div>
+          {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
+        </form>
+      </CardContent>
+    </Card>
   );
 }

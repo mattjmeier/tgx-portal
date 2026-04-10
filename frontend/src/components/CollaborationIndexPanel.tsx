@@ -13,10 +13,11 @@ import { Link } from "react-router-dom";
 
 import { fetchProjects, type Project } from "../api/projects";
 import { collaborationCreatePath, collaborationPath } from "../lib/routes";
+import { WorkspaceSectionCard } from "./WorkspaceSectionCard";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 const orderingFieldByColumnId: Record<string, string> = {
   title: "title",
@@ -135,25 +136,20 @@ export function CollaborationIndexPanel() {
   });
 
   return (
-    <section className="rounded-lg border border-border bg-background px-6 py-6 shadow-sm">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <p className="eyebrow">Registry</p>
-          <h2 className="text-xl font-semibold">Collaborations</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            This table shows your current collaborations.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild>
-            <Link to={collaborationCreatePath}>New collaboration</Link>
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <WorkspaceSectionCard
+      action={
+        <Button asChild>
+          <Link to={collaborationCreatePath}>New collaboration</Link>
+        </Button>
+      }
+      contentClassName="flex flex-col gap-4"
+      description="This table shows your current collaborations."
+      eyebrow="Registry"
+      title="Collaborations"
+    >
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="w-full md:max-w-md">
+          <Label htmlFor="collaboration-search">Search</Label>
           <Input
             id="collaboration-search"
             placeholder="Search by title, PI, researcher, or description"
@@ -181,18 +177,20 @@ export function CollaborationIndexPanel() {
                 <SelectValue placeholder="Rows per page" />
               </SelectTrigger>
               <SelectContent>
-                {[5, 10, 20, 50].map((pageSizeOption) => (
-                  <SelectItem key={pageSizeOption} value={String(pageSizeOption)}>
-                    {pageSizeOption}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {[5, 10, 20, 50].map((pageSizeOption) => (
+                    <SelectItem key={pageSizeOption} value={String(pageSizeOption)}>
+                      {pageSizeOption}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col gap-1 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-1 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
         <p>
           {totalCount} collaboration record{totalCount === 1 ? "" : "s"}
         </p>
@@ -201,7 +199,7 @@ export function CollaborationIndexPanel() {
         </p>
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-md border border-border">
+      <div className="overflow-hidden rounded-md border border-border">
         <table className="w-full caption-bottom text-sm">
           <thead className="[&_tr]:border-b">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -272,7 +270,7 @@ export function CollaborationIndexPanel() {
         </table>
       </div>
 
-      <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <p className="text-sm text-muted-foreground">
           Page {pagination.pageIndex + 1} of {pageCount}
         </p>
@@ -284,7 +282,7 @@ export function CollaborationIndexPanel() {
             variant="outline"
             onClick={() => table.previousPage()}
           >
-            <ChevronLeft />
+            <ChevronLeft data-icon="inline-start" />
             Previous
           </Button>
           <Button
@@ -295,10 +293,10 @@ export function CollaborationIndexPanel() {
             onClick={() => table.nextPage()}
           >
             Next
-            <ChevronRight />
+            <ChevronRight data-icon="inline-end" />
           </Button>
         </div>
       </div>
-    </section>
+    </WorkspaceSectionCard>
   );
 }

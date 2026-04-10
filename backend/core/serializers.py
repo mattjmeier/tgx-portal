@@ -34,6 +34,40 @@ class StudySerializer(serializers.ModelSerializer):
     project_title = serializers.CharField(source="project.title", read_only=True)
     sample_count = serializers.IntegerField(read_only=True)
     assay_count = serializers.IntegerField(read_only=True)
+    description = serializers.CharField(required=False, allow_blank=True)
+    species = serializers.ChoiceField(
+        choices=Study.Species.choices,
+        required=False,
+        allow_null=True,
+    )
+    celltype = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    treatment_var = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    batch_var = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        instance = getattr(self, "instance", None)
+        project = attrs.get("project", getattr(instance, "project", None))
+        species = attrs.get("species", getattr(instance, "species", None))
+        celltype = attrs.get("celltype", getattr(instance, "celltype", None))
+        treatment_var = attrs.get("treatment_var", getattr(instance, "treatment_var", None))
+        batch_var = attrs.get("batch_var", getattr(instance, "batch_var", None))
+
+        if all([project, species, celltype, treatment_var, batch_var]):
+            duplicate_queryset = Study.objects.filter(
+                project=project,
+                species=species,
+                celltype=celltype,
+                treatment_var=treatment_var,
+                batch_var=batch_var,
+            )
+            if instance is not None:
+                duplicate_queryset = duplicate_queryset.exclude(pk=instance.pk)
+            if duplicate_queryset.exists():
+                raise serializers.ValidationError(
+                    {"non_field_errors": ["An identical study already exists for this project."]}
+                )
+
+        return attrs
 
     class Meta:
         model = Study
@@ -42,6 +76,8 @@ class StudySerializer(serializers.ModelSerializer):
             "project",
             "project_title",
             "title",
+            "description",
+            "status",
             "species",
             "celltype",
             "treatment_var",
@@ -49,14 +85,9 @@ class StudySerializer(serializers.ModelSerializer):
             "sample_count",
             "assay_count",
         ]
-        read_only_fields = ["id"]
-        validators = [
-            serializers.UniqueTogetherValidator(
-                queryset=Study.objects.all(),
-                fields=["project", "species", "celltype", "treatment_var", "batch_var"],
-                message="An identical study already exists for this project.",
-            )
-        ]
+        read_only_fields = ["id", "status"]
+        validators = []
+
 
 class SampleSerializer(serializers.ModelSerializer):
     class Meta:

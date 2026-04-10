@@ -272,24 +272,33 @@ class StudyApiTests(TestCase):
         payload = {
             "project": self.project_alpha.id,
             "title": "Hepatocyte dose response",
-            "species": Study.Species.HUMAN,
-            "celltype": "Hepatocyte",
-            "treatment_var": "dose",
-            "batch_var": "plate",
         }
 
         response = self.client.post("/api/studies/", payload, format="json")
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Study.objects.count(), 1)
+        self.assertEqual(response.json()["status"], "draft")
+        self.assertEqual(response.json()["title"], "Hepatocyte dose response")
 
     def test_create_study_requires_title(self) -> None:
         payload = {
             "project": self.project_alpha.id,
-            "species": Study.Species.HUMAN,
-            "celltype": "Hepatocyte",
-            "treatment_var": "dose",
-            "batch_var": "plate",
+        }
+
+        response = self.client.post("/api/studies/", payload, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("title", response.json())
+
+    def test_create_study_requires_unique_title(self) -> None:
+        Study.objects.create(
+            project=self.project_alpha,
+            title="Alpha hepatocyte study",
+        )
+        payload = {
+            "project": self.project_beta.id,
+            "title": "Alpha hepatocyte study",
         }
 
         response = self.client.post("/api/studies/", payload, format="json")

@@ -9,10 +9,13 @@ import {
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import type { Sample } from "../api/samples";
+import { cn } from "../lib/utils";
+import { WorkspaceSectionCard } from "./WorkspaceSectionCard";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 
 type SampleExplorerTableProps = {
   samples: Sample[];
@@ -103,16 +106,13 @@ export function SampleExplorerTable({
   });
 
   return (
-    <section className="workspace-panel">
-      <div className="section-header">
-        <div>
-          <p className="eyebrow">Explorer</p>
-          <h2>Sample explorer</h2>
-        </div>
-      </div>
-
-      <div className="explorer-toolbar">
-        <div className="explorer-search">
+    <WorkspaceSectionCard
+      contentClassName="flex flex-col gap-5"
+      eyebrow="Explorer"
+      title="Sample explorer"
+    >
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
           <Label htmlFor="sample-search">Search</Label>
           <Input
             id="sample-search"
@@ -121,7 +121,7 @@ export function SampleExplorerTable({
             onChange={(event) => onSearchChange(event.target.value)}
           />
         </div>
-        <div className="explorer-page-size">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="sample-page-size">Rows per page</Label>
           <Select
             value={String(pagination.pageSize)}
@@ -132,7 +132,7 @@ export function SampleExplorerTable({
               })
             }
           >
-            <SelectTrigger id="sample-page-size" aria-label="Rows per page" className="w-[140px]">
+            <SelectTrigger id="sample-page-size" aria-label="Rows per page" className="w-full min-w-[140px] xl:w-[140px]">
               <SelectValue placeholder="Rows per page" />
             </SelectTrigger>
             <SelectContent>
@@ -146,76 +146,84 @@ export function SampleExplorerTable({
         </div>
       </div>
 
-      <div className="explorer-meta-row">
-        <p className="muted-copy">
+      <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <p>
           {totalCount} sample record{totalCount === 1 ? "" : "s"} in this study
         </p>
-        <p className="muted-copy">
+        <p>
           Showing {firstRow}-{lastRow} of {totalCount}
         </p>
       </div>
 
-      <div className="table-shell">
-        <table className="data-table">
-          <thead>
+      <div className="overflow-hidden rounded-md border border-border">
+        <Table>
+          <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
+              <TableRow className="hover:bg-transparent" key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   const canSort = header.column.getCanSort();
                   const sortState = header.column.getIsSorted();
                   return (
-                    <th key={header.id}>
+                    <TableHead className="text-foreground" key={header.id}>
                       {header.isPlaceholder ? null : canSort ? (
-                        <button className="table-sort-button" type="button" onClick={header.column.getToggleSortingHandler()}>
+                        <button
+                          className="inline-flex items-center gap-2 text-left hover:text-foreground"
+                          type="button"
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
                           {flexRender(header.column.columnDef.header, header.getContext())}
-                          <span>{sortState === "asc" ? "↑" : sortState === "desc" ? "↓" : "↕"}</span>
+                          <span className="text-xs text-muted-foreground">{sortState === "asc" ? "↑" : sortState === "desc" ? "↓" : "↕"}</span>
                         </button>
                       ) : (
                         flexRender(header.column.columnDef.header, header.getContext())
                       )}
-                    </th>
+                    </TableHead>
                   );
                 })}
-              </tr>
+              </TableRow>
             ))}
-          </thead>
-          <tbody>
+          </TableHeader>
+          <TableBody>
             {isLoading ? (
-              <tr>
-                <td colSpan={columns.length}>Loading samples...</td>
-              </tr>
+              <TableRow>
+                <TableCell className="text-muted-foreground" colSpan={columns.length}>Loading samples...</TableCell>
+              </TableRow>
             ) : table.getRowModel().rows.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length}>No samples match the current view.</td>
-              </tr>
+              <TableRow>
+                <TableCell className="text-muted-foreground" colSpan={columns.length}>No samples match the current view.</TableCell>
+              </TableRow>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr
-                  className={row.original.id === selectedSampleId ? "data-row-selected" : ""}
+                <TableRow
+                  className={cn(
+                    "cursor-pointer",
+                    row.original.id === selectedSampleId ? "bg-muted hover:bg-muted" : "hover:bg-muted/40",
+                  )}
+                  data-state={row.original.id === selectedSampleId ? "selected" : undefined}
                   key={row.id}
                   onClick={() => onSelectSample(row.original)}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                   ))}
-                </tr>
+                </TableRow>
               ))
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
-      <div className="explorer-pagination">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Button
           disabled={pagination.pageIndex === 0}
           type="button"
           variant="outline"
           onClick={() => table.previousPage()}
         >
-          <ChevronLeft />
+          <ChevronLeft data-icon="inline-start" />
           Previous
         </Button>
-        <span className="muted-copy">
+        <span className="text-sm text-muted-foreground">
           Page {pagination.pageIndex + 1} of {pageCount}
         </span>
         <Button
@@ -225,9 +233,9 @@ export function SampleExplorerTable({
           onClick={() => table.nextPage()}
         >
           Next
-          <ChevronRight />
+          <ChevronRight data-icon="inline-end" />
         </Button>
       </div>
-    </section>
+    </WorkspaceSectionCard>
   );
 }

@@ -1,3 +1,5 @@
+import { Badge } from "../components/ui/badge";
+
 const species = ["human", "mouse", "rat", "hamster"];
 const platforms = ["RNA-Seq", "TempO-Seq"];
 const hierarchy = [
@@ -54,11 +56,11 @@ export function ReferenceLibraryPage() {
                 <p className="muted-copy">Current study-level options.</p>
               </div>
             </div>
-            <div className="detail-pill-row">
+            <div className="flex flex-wrap gap-2">
               {species.map((item) => (
-                <span className="detail-pill" key={item}>
+                <Badge className="rounded-full px-3 py-1 text-sm" key={item} variant="secondary">
                   {item}
-                </span>
+                </Badge>
               ))}
             </div>
           </article>
@@ -70,11 +72,11 @@ export function ReferenceLibraryPage() {
                 <p className="muted-copy">Assay platforms currently represented in the portal.</p>
               </div>
             </div>
-            <div className="detail-pill-row">
+            <div className="flex flex-wrap gap-2">
               {platforms.map((item) => (
-                <span className="detail-pill" key={item}>
+                <Badge className="rounded-full px-3 py-1 text-sm" key={item} variant="secondary">
                   {item}
-                </span>
+                </Badge>
               ))}
             </div>
           </article>

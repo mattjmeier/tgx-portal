@@ -74,10 +74,6 @@ def test_onboarding_state_supports_draft_save_and_finalize_gating() -> None:
     study = Study.objects.create(
         project=project,
         title="Study",
-        species=Study.Species.HUMAN,
-        celltype="Hepatocyte",
-        treatment_var="dose",
-        batch_var="plate",
     )
 
     patch_response = client.patch(
@@ -96,6 +92,19 @@ def test_onboarding_state_supports_draft_save_and_finalize_gating() -> None:
     finalize_response = client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
     assert finalize_response.status_code == 400
     assert "errors" in finalize_response.json()
+
+    update_response = client.patch(
+        f"/api/studies/{study.id}/",
+        {
+            "description": "Draft description",
+            "species": Study.Species.HUMAN,
+            "celltype": "Hepatocyte",
+            "treatment_var": "group",
+            "batch_var": "plate",
+        },
+        format="json",
+    )
+    assert update_response.status_code == 200
 
     client.post(
         "/api/metadata-validation/",
