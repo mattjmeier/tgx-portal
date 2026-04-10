@@ -15,6 +15,26 @@ The project uses `docker-compose.yml` (for local development) and `docker-compos
    * *Prod*: Multi-stage build. Builds static files, served via an `nginx` container on port 80/443.
    * Frontend container images must include the dependencies needed for `shadcn/ui`-based components and any generated files under `frontend/src/components/ui`.
 
+## 1.1 Local Startup Behavior
+The development `api` container already runs the following on startup before launching Django:
+
+```bash
+python manage.py migrate
+python manage.py bootstrap_dev_user
+python manage.py runserver 0.0.0.0:8000
+```
+
+That means a normal `docker compose up` should:
+- apply any pending migrations,
+- ensure the default development users exist,
+- start the API in a login-ready state.
+
+Default local credentials:
+- `admin / admin123`
+- `client / client123`
+
+This automation reduces startup drift, but it does not replace safe migration design. If a migration introduces a new constraint, the migration must still handle legacy rows that might violate it.
+
 ## 2. Testing Frameworks
 * **Backend (Django/Python)**: Use `pytest` and `pytest-django`. Use `factory_boy` for generating mock database records (Projects, Samples, Assays).
 * **Frontend (React)**: Use `Vitest` and `React Testing Library` for component unit tests.
@@ -31,10 +51,16 @@ The `.github/workflows/ci.yml` must execute the following jobs on every Pull Req
 ## 4. Seeded QA Reset Flow
 Use the deterministic mock seed when you need a clean collaboration/study workspace for manual QA or demos.
 
-From the repository root:
+If the stack is already running:
 
 ```bash
 docker compose exec api python manage.py reset_seed_data
+```
+
+If the API container is not running yet, use:
+
+```bash
+docker compose run --rm api python manage.py reset_seed_data
 ```
 
 This command preserves users and lookup definitions, but replaces the current project hierarchy with:
@@ -43,3 +69,31 @@ This command preserves users and lookup definitions, but replaces the current pr
 - seeded samples, assays, and finalized onboarding states
 
 The seeded records are mock QA fixtures inspired by the examples in `mocks/metadata.csv`, `mocks/contrasts.txt`, and `mocks/config.yaml`, adapted to the fields currently stored by the Django app.
+
+## 5. Development Schema Workflow
+When changing Django models, treat the database lifecycle as part of the feature work.
+
+Recommended loop:
+
+```bash
+docker compose run --rm api python manage.py makemigrations
+docker compose run --rm api python manage.py migrate
+docker compose run --rm api python manage.py reset_seed_data
+```
+
+Use `reset_seed_data` after schema changes whenever you want a deterministic local workspace for manual QA. Do not assume ad hoc local rows will survive refactors cleanly.
+
+Before pushing schema work, verify:
+- migrations apply cleanly to an existing local database,
+- reset seed still succeeds,
+- tests covering the changed model and API flow still pass.
+
+## 6. Recovery Checklist For Local Drift
+If the app suddenly behaves inconsistently after pulling code or switching branches, use this order:
+
+1. `docker compose up` or `docker compose up -d`
+2. `docker compose run --rm api python manage.py migrate`
+3. `docker compose run --rm api python manage.py bootstrap_dev_user`
+4. `docker compose run --rm api python manage.py reset_seed_data`
+
+Use `docker compose down` followed by `docker compose up` when containers are stale or a service command has changed, but treat that as runtime cleanup, not as the primary database fix.

@@ -36,3 +36,13 @@ To locate specific parts of the code, begin with `.codesight/CODESIGHT.md`, a wi
 5. **Test-Driven Development (TDD)**: You must write tests *before* writing the implementation logic. Follow the Red-Green-Refactor loop. 
 6. **Container-First**: All development, testing, and production execution must occur within Docker containers. Do not assume local system dependencies exist other than Docker.
 7. **DevOps & Testing**: Read `docs/05-DEVOPS_AND_TESTING.md` for exact Docker service definitions and CI/CD pipeline steps.
+
+## Development Notes
+* The local `api` container already runs `migrate` and `bootstrap_dev_user` on startup before `runserver`.
+* Default development credentials are `admin / admin123` and `client / client123`.
+* After any model or migration change, update the schema in Docker before doing manual QA. Preferred flow:
+  * `docker compose run --rm api python manage.py makemigrations`
+  * `docker compose run --rm api python manage.py migrate`
+  * `docker compose run --rm api python manage.py reset_seed_data`
+* When a deterministic workspace is needed, prefer `reset_seed_data` over preserving ad hoc local records.
+* If `docker compose exec api ...` fails because the service is not running, use `docker compose run --rm api ...` instead.
