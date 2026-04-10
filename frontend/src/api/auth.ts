@@ -1,6 +1,4 @@
-import { parseErrorMessage } from "./http";
-
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
+import { apiFetch, parseErrorMessage } from "./http";
 
 export type AuthenticatedUser = {
   id: number;
@@ -12,7 +10,7 @@ export type AuthenticatedUser = {
 };
 
 export async function loginUser(username: string, password: string): Promise<{ token: string; user: AuthenticatedUser }> {
-  const response = await fetch(`${apiBaseUrl}/api/auth/login/`, {
+  const response = await apiFetch("/api/auth/login/", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -28,7 +26,7 @@ export async function loginUser(username: string, password: string): Promise<{ t
 }
 
 export async function fetchCurrentUser(token: string): Promise<AuthenticatedUser> {
-  const response = await fetch(`${apiBaseUrl}/api/auth/me/`, {
+  const response = await apiFetch("/api/auth/me/", {
     headers: {
       Authorization: `Token ${token}`,
     },
@@ -42,7 +40,7 @@ export async function fetchCurrentUser(token: string): Promise<AuthenticatedUser
 }
 
 export async function logoutUser(token: string): Promise<void> {
-  await fetch(`${apiBaseUrl}/api/auth/logout/`, {
+  await apiFetch("/api/auth/logout/", {
     method: "POST",
     headers: {
       Authorization: `Token ${token}`,

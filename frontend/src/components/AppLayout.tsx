@@ -38,7 +38,7 @@ function getShellCopy(pathname: string, projectId?: number | null, projectTitle?
 
   if (pathname === "/studies") {
     return {
-      breadcrumbs: [{ label: "Studies", to: studiesIndexPath }],
+      breadcrumbs: [],
       eyebrow: "Studies",
       titleHelp: null,
       title: null,
@@ -200,11 +200,6 @@ export function AppLayout() {
               {isWorkspaceRoute ? (
                 <Button asChild className="shrink-0" size="sm" variant="outline">
                   <Link to={collaborationRegistryPath}>Back to collaborations</Link>
-                </Button>
-              ) : null}
-              {isStudyWorkspaceRoute ? (
-                <Button asChild className="shrink-0" size="sm" variant="outline">
-                  <Link to={studiesIndexPath}>Back to studies</Link>
                 </Button>
               ) : null}
             </div>

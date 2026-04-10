@@ -186,9 +186,19 @@ describe("AppLayout", () => {
     expect(screen.getByRole("button", { name: /toggle collaborations/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^studies$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /toggle studies/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /reference library/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /admin/i })).toBeInTheDocument();
     expect(screen.queryByText(/active collaboration/i)).not.toBeInTheDocument();
+  });
+
+  it("shows reference and admin actions in a bottom utilities section above signed-in details", () => {
+    renderLayout("/collaborations");
+
+    const utilitiesLabel = screen.getByText("Utilities");
+    const footer = utilitiesLabel.closest("footer");
+
+    expect(footer).not.toBeNull();
+    expect(within(footer as HTMLElement).getByRole("link", { name: /reference library/i })).toBeInTheDocument();
+    expect(within(footer as HTMLElement).getByRole("link", { name: /^admin$/i })).toBeInTheDocument();
+    expect(within(footer as HTMLElement).getByText(/signed in/i)).toBeInTheDocument();
   });
 
   it("lets users expand collaborations separately from studies in browse mode", async () => {
@@ -463,12 +473,11 @@ describe("AppLayout", () => {
     expect(screen.queryByText(/add a study/i)).not.toBeInTheDocument();
   });
 
-  it("keeps the studies index breadcrumb linked back to the studies page", () => {
+  it("omits breadcrumbs on the studies index route", () => {
     renderLayout("/studies/");
 
     expect(screen.getByText("Studies page")).toBeInTheDocument();
-    const breadcrumb = screen.getByRole("navigation", { name: /breadcrumb/i });
-    expect(within(breadcrumb).getByRole("link", { name: /^studies$/i })).toHaveAttribute("href", "/studies");
+    expect(screen.queryByRole("navigation", { name: /breadcrumb/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/active collaboration/i)).not.toBeInTheDocument();
   });
 
@@ -513,13 +522,13 @@ describe("AppLayout", () => {
     expect(newStudyLink).toHaveAttribute("href", "/studies/new?collaboration=7");
   });
 
-  it("shows the studies back action in header space for study workspace routes", async () => {
+  it("relies on the studies breadcrumb for return navigation on study workspace routes", async () => {
     renderLayout("/studies/11");
 
     expect(await screen.findByText("Study workspace page")).toBeInTheDocument();
     const breadcrumb = screen.getByRole("navigation", { name: /breadcrumb/i });
     expect(within(breadcrumb).getByRole("link", { name: /^studies$/i })).toHaveAttribute("href", "/studies");
-    expect(screen.getByRole("link", { name: /back to studies/i })).toHaveAttribute("href", "/studies");
+    expect(screen.queryByRole("link", { name: /back to studies/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /back to collaborations/i })).not.toBeInTheDocument();
   });
 

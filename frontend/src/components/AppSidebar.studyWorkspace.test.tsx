@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 
+import { fetchProjects } from "../api/projects";
 import { AppSidebar } from "./AppSidebar";
 import { SidebarProvider } from "./ui/sidebar";
 
@@ -104,6 +105,35 @@ vi.mock("../api/projects", async () => {
   const actual = await vi.importActual<typeof import("../api/projects")>("../api/projects");
   return {
     ...actual,
+    fetchProjects: vi.fn(async () => ({
+      count: 2,
+      next: null,
+      previous: null,
+      results: [
+        {
+          id: 7,
+          title: "Mercury tox study",
+          pi_name: "Dr. Example",
+          researcher_name: "Researcher Example",
+          bioinformatician_assigned: "Bioinformatics Example",
+          description: "",
+          created_at: "2026-01-01T00:00:00Z",
+          owner: null,
+          owner_id: null,
+        },
+        {
+          id: 8,
+          title: "Cadmium follow-up",
+          pi_name: "Dr. Example",
+          researcher_name: "Researcher Example",
+          bioinformatician_assigned: "Bioinformatics Example",
+          description: "",
+          created_at: "2026-01-02T00:00:00Z",
+          owner: null,
+          owner_id: null,
+        },
+      ],
+    })),
     fetchProject: vi.fn(async () => ({
       id: 7,
       title: "Mercury tox study",
@@ -143,6 +173,47 @@ function renderSidebar(initialEntry: string) {
 }
 
 describe("AppSidebar (study workspace)", () => {
+  afterEach(() => {
+    vi.mocked(fetchProjects).mockReset();
+    vi.mocked(fetchProjects).mockResolvedValue({
+      count: 2,
+      next: null,
+      previous: null,
+      results: [
+        {
+          id: 7,
+          title: "Mercury tox study",
+          pi_name: "Dr. Example",
+          researcher_name: "Researcher Example",
+          bioinformatician_assigned: "Bioinformatics Example",
+          description: "",
+          created_at: "2026-01-01T00:00:00Z",
+          owner: null,
+          owner_id: null,
+        },
+        {
+          id: 8,
+          title: "Cadmium follow-up",
+          pi_name: "Dr. Example",
+          researcher_name: "Researcher Example",
+          bioinformatician_assigned: "Bioinformatics Example",
+          description: "",
+          created_at: "2026-01-02T00:00:00Z",
+          owner: null,
+          owner_id: null,
+        },
+      ],
+    });
+  });
+
+  it("renders the portal logo image in the sidebar header", () => {
+    renderSidebar("/studies/11");
+
+    const logo = screen.getByRole("img", { name: /tgx portal logo/i });
+    expect(logo).toHaveAttribute("src", "/sidebar-logo.png");
+    expect(logo).toHaveClass("object-cover");
+  });
+
   it("shows a study-specific submenu under the selected study without separate active context sections", async () => {
     renderSidebar("/studies/11");
 
@@ -201,5 +272,14 @@ describe("AppSidebar (study workspace)", () => {
 
     expect(await screen.findByText(/mouse cortex lead pilot/i)).toBeInTheDocument();
     expect(screen.getByText(/kidney cadmium follow-up/i)).toBeInTheDocument();
+  });
+
+  it("shows a collaboration error state instead of loading forever when previews fail", async () => {
+    vi.mocked(fetchProjects).mockRejectedValueOnce(new Error("Timed out"));
+
+    renderSidebar("/studies/11");
+
+    expect(await screen.findByText(/collaborations unavailable/i)).toBeInTheDocument();
+    expect(screen.queryByText(/loading collaborations/i)).not.toBeInTheDocument();
   });
 });

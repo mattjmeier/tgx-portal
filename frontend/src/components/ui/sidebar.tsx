@@ -100,8 +100,8 @@ export function SidebarContent({ className, ...props }: React.HTMLAttributes<HTM
   return <div className={cn("sidebar-scroll flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 py-4", className)} {...props} />;
 }
 
-export function SidebarFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("mt-auto border-t border-sidebar-border px-3 py-4", className)} {...props} />;
+export function SidebarFooter({ className, ...props }: React.HTMLAttributes<HTMLElement>) {
+  return <footer className={cn("mt-auto border-t border-sidebar-border px-3 py-4", className)} {...props} />;
 }
 
 export function SidebarGroup({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

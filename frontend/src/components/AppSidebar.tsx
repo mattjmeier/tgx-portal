@@ -144,6 +144,7 @@ export function AppSidebar() {
     queryFn: () => fetchStudy(studyIdFromRoute as number),
     enabled: studyIdFromRoute !== null,
     placeholderData: (previousData) => previousData,
+    retry: false,
   });
 
   const activeProjectId = Number.isFinite(projectId) ? projectId : studyQuery.data?.project ?? null;
@@ -153,6 +154,7 @@ export function AppSidebar() {
     queryFn: () => fetchProject(activeProjectId as number),
     enabled: activeProjectId !== null,
     placeholderData: (previousData) => previousData,
+    retry: false,
   });
 
   const [collaborationsOpen, setCollaborationsOpen] = useState(false);
@@ -177,6 +179,7 @@ export function AppSidebar() {
     queryKey: ["projects", "preview", previewLimit],
     queryFn: () => fetchProjects({ pageSize: previewLimit }),
     enabled: collaborationsOpen,
+    retry: false,
   });
 
   const studiesPreviewQuery = useQuery({
@@ -184,6 +187,7 @@ export function AppSidebar() {
     queryFn: () => fetchStudiesIndex({ pageSize: studiesExpanded ? expandedStudiesLimit : previewLimit }),
     enabled: studiesOpen,
     placeholderData: (previousData) => previousData,
+    retry: false,
   });
 
   const visibleStudies = useMemo(() => studiesPreviewQuery.data?.results ?? [], [studiesPreviewQuery.data?.results]);
@@ -231,8 +235,14 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="space-y-3">
         <div className="flex items-center gap-3 px-2">
-          <div className="flex size-10 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-            <Layers3 className="size-5 shrink-0 stroke-[1.9]" />
+          <div className="size-10 overflow-hidden rounded-lg border border-sidebar-border/70 bg-sidebar-accent/40 shadow-sm">
+            <img
+              alt="TGx Portal logo"
+              className="h-full w-full object-cover"
+              height={40}
+              src="/sidebar-logo.png"
+              width={40}
+            />
           </div>
           <div className="min-w-0">
             <p className="text-[0.68rem] uppercase tracking-[0.24em] text-sidebar-foreground/55">Genomics Lab</p>
@@ -476,38 +486,46 @@ export function AppSidebar() {
                     </SidebarMenuSub>
                   </SidebarBrowseBranch>
                 </SidebarMenuItem>
-
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location.pathname === "/library"}>
-                    <NavLink to="/library">
-                      <LibraryBig className={sidebarIconClassName} />
-                      <span>Reference library</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                {isAdmin ? (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={location.pathname.startsWith("/admin")}>
-                      <NavLink to="/admin/users">
-                        <ShieldCheck className={sidebarIconClassName} />
-                        <span>Admin</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ) : null}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         </nav>
       </SidebarContent>
 
-      <SidebarFooter>
-        <div className="px-2 pb-2">
+      <SidebarFooter className="flex flex-col gap-4">
+        <SidebarGroup>
+          <SidebarGroupLabel>Utilities</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.pathname === "/library"}>
+                  <NavLink to="/library">
+                    <LibraryBig className={sidebarIconClassName} />
+                    <span>Reference library</span>
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {isAdmin ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location.pathname.startsWith("/admin")}>
+                    <NavLink to="/admin/users">
+                      <ShieldCheck className={sidebarIconClassName} />
+                      <span>Admin</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <div className="px-2">
           <p className="text-xs uppercase tracking-[0.22em] text-sidebar-foreground/50">Signed in</p>
           <p className="mt-1 truncate text-sm text-sidebar-foreground/75">
             {auth.user?.username} · {auth.user?.profile.role}
           </p>
         </div>
+
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton type="button" onClick={() => void auth.logout()}>
