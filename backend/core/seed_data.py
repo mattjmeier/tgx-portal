@@ -5,7 +5,19 @@ from dataclasses import dataclass, field
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-from .models import Assay, Project, Sample, Study, StudyOnboardingState, UserProfile
+from .models import (
+    Assay,
+    MetadataFieldDefinition,
+    Project,
+    Sample,
+    Study,
+    StudyConfig,
+    StudyMetadataFieldSelection,
+    StudyMetadataMapping,
+    StudyOnboardingState,
+    UserProfile,
+    default_study_config,
+)
 
 User = get_user_model()
 
@@ -15,13 +27,14 @@ class SeedSample:
     sample_id: str
     sample_name: str
     group: str
-    dose: float
+    dose: float | None
     chemical: str
     chemical_longname: str
     description: str
     solvent_control: bool = False
     technical_control: bool = False
     reference_rna: bool = False
+    metadata: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -295,11 +308,11 @@ SEED_PROJECTS: list[SeedProject] = [
                 title="ZR-75 stress comparator",
                 species=Study.Species.HUMAN,
                 celltype="ZR-75-1",
-                treatment_var="group",
+                treatment_var="timepoint",
                 batch_var="run_day",
-                metadata_columns=["sample_ID", "sample_name", "group", "dose", "run_day", "solvent_control"],
-                mappings={"treatment_level_1": "group", "batch": "run_day"},
-                selected_contrasts=[["estradiol", "vehicle"], ["genistein", "vehicle"]],
+                metadata_columns=["sample_ID", "sample_name", "group", "timepoint", "run_day", "solvent_control"],
+                mappings={"treatment_level_1": "timepoint", "treatment_level_2": "group", "batch": "run_day"},
+                selected_contrasts=[["24h", "0h"], ["48h", "0h"]],
                 platform=Assay.Platform.RNA_SEQ,
                 genome_version="hg38",
                 quantification_method="raw_counts",
@@ -308,29 +321,32 @@ SEED_PROJECTS: list[SeedProject] = [
                         sample_id="zr75_vehicle_a",
                         sample_name="ZR75 vehicle A",
                         group="vehicle",
-                        dose=0,
+                        dose=None,
                         chemical="DMSO",
                         chemical_longname="Dimethyl sulfoxide",
                         description="Vehicle control for ZR-75 stress comparator.",
                         solvent_control=True,
+                        metadata={"timepoint": "0h"},
                     ),
                     SeedSample(
                         sample_id="zr75_e2_a",
                         sample_name="ZR75 estradiol A",
                         group="estradiol",
-                        dose=0.01,
+                        dose=None,
                         chemical="E2",
                         chemical_longname="17beta-estradiol",
                         description="Estradiol-treated ZR-75 sample.",
+                        metadata={"timepoint": "24h"},
                     ),
                     SeedSample(
                         sample_id="zr75_gen_a",
                         sample_name="ZR75 genistein A",
                         group="genistein",
-                        dose=2,
+                        dose=None,
                         chemical="GEN",
                         chemical_longname="Genistein",
                         description="Phytoestrogen-treated ZR-75 sample.",
+                        metadata={"timepoint": "48h"},
                     ),
                 ],
             ),
@@ -630,6 +646,66 @@ SEED_PROJECTS: list[SeedProject] = [
 ]
 
 
+def _infer_field_type(key: str):
+    if key in {"technical_control", "reference_rna", "solvent_control"}:
+        return MetadataFieldDefinition.DataType.BOOLEAN
+    if key in {"dose", "timepoint"}:
+        return MetadataFieldDefinition.DataType.FLOAT if key == "dose" else MetadataFieldDefinition.DataType.STRING
+    return MetadataFieldDefinition.DataType.STRING
+
+
+def _ensure_metadata_field_definition(key: str) -> MetadataFieldDefinition:
+    defaults = {
+        "label": key.replace("_", " ").title(),
+        "group": "Core" if key in {"sample_ID", "sample_name", "technical_control", "reference_rna", "solvent_control"} else "Study design",
+        "description": f"Seeded metadata field for {key}.",
+        "scope": MetadataFieldDefinition.Scope.SAMPLE,
+        "system_key": key,
+        "data_type": _infer_field_type(key),
+        "kind": MetadataFieldDefinition.Kind.STANDARD,
+        "required": key in {"sample_ID", "technical_control", "reference_rna", "solvent_control"},
+        "is_core": key in {"sample_ID", "technical_control", "reference_rna", "solvent_control"},
+        "allow_null": key not in {"sample_ID", "technical_control", "reference_rna", "solvent_control"},
+    }
+    if key == "sample_ID":
+        defaults["regex"] = r"^[a-zA-Z0-9-_]*$"
+    definition, _ = MetadataFieldDefinition.objects.update_or_create(key=key, defaults=defaults)
+    return definition
+
+
+def _seed_study_config(study: Study, seed_study: SeedStudy) -> None:
+    config_payload = default_study_config()
+    config_payload["common"].update(
+        {
+            "platform": "RNA-Seq" if seed_study.platform == Assay.Platform.RNA_SEQ else "TempO-Seq",
+            "celltype": seed_study.celltype,
+            "dose": "dose" if "dose" in seed_study.metadata_columns else None,
+            "batch_var": seed_study.batch_var or None,
+        }
+    )
+    config_payload["pipeline"].update(
+        {
+            "genome_filename": f"{seed_study.genome_version}.fa",
+            "annotation_filename": f"{seed_study.genome_version}.gtf",
+            "genome_name": seed_study.genome_version,
+        }
+    )
+    config_payload["qc"].update(
+        {
+            "treatment_var": seed_study.mappings.get("treatment_level_1", ""),
+            "dendro_color_by": seed_study.mappings.get("treatment_level_1", ""),
+        }
+    )
+    config_payload["deseq2"].update(
+        {
+            "species": seed_study.species,
+            "design": seed_study.mappings.get("treatment_level_1", ""),
+            "sortcol": "dose" if "dose" in seed_study.metadata_columns else None,
+        }
+    )
+    StudyConfig.objects.create(study=study, **config_payload)
+
+
 def ensure_seed_users() -> dict[str, User]:
     seeded_users: dict[str, tuple[str, bool, str]] = {
         "admin": ("admin123", True, UserProfile.Role.ADMIN),
@@ -684,28 +760,77 @@ def reset_seed_data() -> dict[str, int]:
             )
             study_count += 1
 
+            selections: list[StudyMetadataFieldSelection] = []
+            for order, key in enumerate(seed_study.metadata_columns):
+                definition = _ensure_metadata_field_definition(key)
+                selections.append(
+                    StudyMetadataFieldSelection(
+                        study=study,
+                        field_definition=definition,
+                        required=definition.is_core or definition.required,
+                        sort_order=order,
+                        is_active=True,
+                    )
+                )
+            StudyMetadataFieldSelection.objects.bulk_create(selections)
+
+            StudyMetadataMapping.objects.create(
+                study=study,
+                treatment_level_1=seed_study.mappings.get("treatment_level_1", ""),
+                treatment_level_2=seed_study.mappings.get("treatment_level_2", ""),
+                treatment_level_3=seed_study.mappings.get("treatment_level_3", ""),
+                treatment_level_4=seed_study.mappings.get("treatment_level_4", ""),
+                treatment_level_5=seed_study.mappings.get("treatment_level_5", ""),
+                batch=seed_study.mappings.get("batch", ""),
+                pca_color=seed_study.mappings.get("pca_color", ""),
+                pca_shape=seed_study.mappings.get("pca_shape", ""),
+                pca_alpha=seed_study.mappings.get("pca_alpha", ""),
+                clustering_group=seed_study.mappings.get("clustering_group", ""),
+                report_faceting_group=seed_study.mappings.get("report_faceting_group", ""),
+                selected_contrasts=[
+                    {"comparison_group": pair[0], "reference_group": pair[1]}
+                    for pair in seed_study.selected_contrasts
+                ],
+            )
+            _seed_study_config(study, seed_study)
+
             StudyOnboardingState.objects.create(
                 study=study,
                 status=StudyOnboardingState.Status.FINAL,
                 metadata_columns=seed_study.metadata_columns,
                 mappings=seed_study.mappings,
-                suggested_contrasts=seed_study.selected_contrasts,
-                selected_contrasts=seed_study.selected_contrasts,
+                suggested_contrasts=[
+                    {"comparison_group": pair[0], "reference_group": pair[1]}
+                    for pair in seed_study.selected_contrasts
+                ],
+                selected_contrasts=[
+                    {"comparison_group": pair[0], "reference_group": pair[1]}
+                    for pair in seed_study.selected_contrasts
+                ],
             )
 
             for seed_sample in seed_study.samples:
+                sample_metadata = {
+                    "group": seed_sample.group,
+                    "chemical": seed_sample.chemical,
+                    "chemical_longname": seed_sample.chemical_longname,
+                    **({"dose": seed_sample.dose} if seed_sample.dose is not None else {}),
+                    **seed_sample.metadata,
+                }
+                sample_metadata = {
+                    key: value
+                    for key, value in sample_metadata.items()
+                    if key in seed_study.metadata_columns
+                }
                 sample = Sample.objects.create(
                     study=study,
                     sample_ID=seed_sample.sample_id,
                     sample_name=seed_sample.sample_name,
                     description=seed_sample.description,
-                    group=seed_sample.group,
-                    chemical=seed_sample.chemical,
-                    chemical_longname=seed_sample.chemical_longname,
-                    dose=seed_sample.dose,
                     technical_control=seed_sample.technical_control,
                     reference_rna=seed_sample.reference_rna,
                     solvent_control=seed_sample.solvent_control,
+                    metadata=sample_metadata,
                 )
                 sample_count += 1
 
