@@ -4,8 +4,9 @@ import { Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { Project } from "../api/projects";
-import { deleteStudy, fetchStudies, type Study } from "../api/studies";
+import { deleteStudy, fetchStudies } from "../api/studies";
 import { collaborationStudyCreatePath, studyWorkspacePath } from "../lib/routes";
+import { StudyDeleteDialog } from "./StudyDeleteDialog";
 import { StudiesTable } from "./StudiesTable";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
@@ -57,14 +58,6 @@ export function ProjectWorkspace({
     setSelectedProjectId(projectId);
   }
 
-  function handleDeleteStudy(study: Study) {
-    const confirmed = window.confirm(`Delete the study "${study.title}"?`);
-    if (!confirmed) {
-      return;
-    }
-
-    deleteStudyMutation.mutate(study.id);
-  }
   const collaborationSampleCount = studies.reduce((total, study) => total + (study.sample_count ?? 0), 0);
   const collaborationAssayCount = studies.reduce((total, study) => total + (study.assay_count ?? 0), 0);
 
@@ -185,15 +178,16 @@ export function ProjectWorkspace({
                         <Pencil />
                       </Link>
                     </Button>
-                    <Button
-                      aria-label={`Delete study ${study.title}`}
-                      size="icon"
-                      type="button"
-                      variant="destructive"
-                      onClick={() => handleDeleteStudy(study)}
+                    <StudyDeleteDialog
+                      isDeleting={deleteStudyMutation.isPending && deleteStudyMutation.variables === study.id}
+                      studyId={study.id}
+                      studyTitle={study.title}
+                      onConfirmDelete={deleteStudyMutation.mutate}
                     >
-                      <Trash2 />
-                    </Button>
+                      <Button aria-label={`Delete study ${study.title}`} size="icon" type="button" variant="destructive">
+                        <Trash2 />
+                      </Button>
+                    </StudyDeleteDialog>
                   </div>
                 )}
               />

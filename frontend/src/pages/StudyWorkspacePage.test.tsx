@@ -1,9 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi } from "vitest";
 
 import { StudyWorkspacePage } from "./StudyWorkspacePage";
+import { deleteStudy } from "../api/studies";
 
 class ResizeObserverMock {
   observe() {}
@@ -27,6 +28,7 @@ vi.mock("../api/studies", async () => {
       treatment_var: "mercury",
       batch_var: "batch-1",
     })),
+    deleteStudy: vi.fn(async () => undefined),
   };
 });
 
@@ -211,5 +213,28 @@ describe("StudyWorkspacePage", () => {
       "/collaborations/7",
     );
     expect(screen.getByRole("menuitem", { name: /download config bundle/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /delete study/i })).toBeInTheDocument();
+  });
+
+  it("requires typed confirmation before deleting from the study workspace menu", async () => {
+    renderPage("/studies/11");
+
+    fireEvent.click(await screen.findByRole("button", { name: /more study actions/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /delete study/i }));
+
+    expect(await screen.findByRole("dialog", { name: /delete study/i })).toBeInTheDocument();
+
+    const confirmButton = screen.getByRole("button", { name: /^delete study$/i });
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/type the study title/i), {
+      target: { value: "Hepatocyte mercury dose response" },
+    });
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(deleteStudy).toHaveBeenCalled();
+      expect(vi.mocked(deleteStudy).mock.calls.at(-1)?.[0]).toBe(11);
+    });
   });
 });

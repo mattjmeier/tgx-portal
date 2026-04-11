@@ -1,9 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi } from "vitest";
 
 import { StudiesPage } from "./StudiesPage";
+import { deleteStudy } from "../api/studies";
 
 vi.mock("../api/studies", async () => {
   const actual = await vi.importActual<typeof import("../api/studies")>("../api/studies");
@@ -100,5 +101,25 @@ describe("StudiesPage", () => {
     expect(screen.getAllByRole("link", { name: /^cadmium follow-up$/i })).toHaveLength(1);
     expect(screen.getAllByRole("link", { name: /edit study/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /delete study/i }).length).toBeGreaterThan(0);
+  });
+
+  it("requires typed confirmation before deleting from studies directory", async () => {
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /delete study hepatocyte mercury dose response/i }));
+    expect(await screen.findByRole("dialog", { name: /delete study/i })).toBeInTheDocument();
+
+    const confirmButton = screen.getByRole("button", { name: /^delete study$/i });
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/type the study title/i), {
+      target: { value: "Hepatocyte mercury dose response" },
+    });
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(deleteStudy).toHaveBeenCalled();
+      expect(vi.mocked(deleteStudy).mock.calls.at(-1)?.[0]).toBe(11);
+    });
   });
 });

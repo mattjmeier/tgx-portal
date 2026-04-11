@@ -11,7 +11,9 @@ from core.services import build_project_config_bundle
 
 
 class ResetSeedDataCommandTests(TestCase):
-    def test_command_replaces_existing_records_with_deterministic_seed_data(self) -> None:
+    def test_command_replaces_existing_records_with_deterministic_seed_data(
+        self,
+    ) -> None:
         project = Project.objects.create(
             pi_name="Existing PI",
             researcher_name="Existing Researcher",
@@ -50,13 +52,17 @@ class ResetSeedDataCommandTests(TestCase):
         self.assertEqual(Sample.objects.count(), 36)
         self.assertEqual(Assay.objects.count(), 36)
         self.assertEqual(StudyOnboardingState.objects.count(), 12)
-        self.assertFalse(Project.objects.filter(title="Existing collaboration").exists())
+        self.assertFalse(
+            Project.objects.filter(title="Existing collaboration").exists()
+        )
 
-        project_titles = list(Project.objects.order_by("title").values_list("title", flat=True))
+        project_titles = list(
+            Project.objects.order_by("title").values_list("title", flat=True)
+        )
         self.assertEqual(
             project_titles,
             [
-                "Aflatoxin Response Atlas",
+                "Aflatoxin Response Study",
                 "Endocrine Resilience Screen",
                 "Neuroinflammation Reference Panel",
                 "Pulmonary Stress Sentinel",
@@ -66,7 +72,7 @@ class ResetSeedDataCommandTests(TestCase):
     def test_seeded_project_can_generate_a_config_bundle(self) -> None:
         call_command("reset_seed_data")
 
-        project = Project.objects.get(title="Aflatoxin Response Atlas")
+        project = Project.objects.get(title="Aflatoxin Response Study")
 
         bundle = build_project_config_bundle(project)
 
@@ -80,7 +86,7 @@ class ResetSeedDataCommandTests(TestCase):
             metadata_tsv = archive.read("metadata.tsv").decode("utf-8")
             contrasts_tsv = archive.read("contrasts.tsv").decode("utf-8")
 
-        self.assertIn("project_title: Aflatoxin Response Atlas", config_yaml)
+        self.assertIn("project_title: Aflatoxin Response Study", config_yaml)
         self.assertIn("platform: rna_seq", config_yaml)
         self.assertIn("sample_ID\tsample_name\tgroup\tdose", metadata_tsv)
         self.assertIn("C_2D\t1uM_2D", contrasts_tsv)

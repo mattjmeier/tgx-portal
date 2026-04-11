@@ -4,8 +4,9 @@ import type { PaginationState } from "@tanstack/react-table";
 import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { deleteStudy, fetchStudiesIndex, type Study } from "../api/studies";
+import { deleteStudy, fetchStudiesIndex } from "../api/studies";
 import { collaborationPath, globalStudyCreateRoute, studyWorkspacePath } from "../lib/routes";
+import { StudyDeleteDialog } from "./StudyDeleteDialog";
 import { StudiesTable } from "./StudiesTable";
 import { WorkspaceSectionCard } from "./WorkspaceSectionCard";
 import { Button } from "./ui/button";
@@ -48,15 +49,6 @@ export function StudyIndexPanel() {
       await queryClient.invalidateQueries({ queryKey: ["studies"] });
     },
   });
-
-  function handleDeleteStudy(study: Study) {
-    const confirmed = window.confirm(`Delete the study "${study.title}"?`);
-    if (!confirmed) {
-      return;
-    }
-
-    deleteStudyMutation.mutate(study.id);
-  }
 
   return (
     <WorkspaceSectionCard
@@ -155,15 +147,16 @@ export function StudyIndexPanel() {
                 <Pencil />
               </Link>
             </Button>
-            <Button
-              aria-label={`Delete study ${study.title}`}
-              size="icon"
-              type="button"
-              variant="destructive"
-              onClick={() => handleDeleteStudy(study)}
+            <StudyDeleteDialog
+              isDeleting={deleteStudyMutation.isPending && deleteStudyMutation.variables === study.id}
+              studyId={study.id}
+              studyTitle={study.title}
+              onConfirmDelete={deleteStudyMutation.mutate}
             >
-              <Trash2 />
-            </Button>
+              <Button aria-label={`Delete study ${study.title}`} size="icon" type="button" variant="destructive">
+                <Trash2 />
+              </Button>
+            </StudyDeleteDialog>
           </div>
         )}
       />

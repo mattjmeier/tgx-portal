@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PaginationState, SortingState } from "@tanstack/react-table";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { fetchAssays, type Assay } from "../api/assays";
 import { downloadProjectConfig, fetchProject } from "../api/projects";
 import { fetchSamples, type Sample } from "../api/samples";
-import { fetchStudy } from "../api/studies";
+import { deleteStudy, fetchStudy } from "../api/studies";
 import { fetchStudyOnboardingState } from "../api/studyOnboarding";
 import { useAuth } from "../auth/AuthProvider";
-import { collaborationPath, studyOnboardingPath } from "../lib/routes";
+import { collaborationPath, studiesIndexPath, studyOnboardingPath } from "../lib/routes";
 import { AssayForm } from "./AssayForm";
 import { SampleForm } from "./SampleForm";
 import { StudyActionsMenu } from "./StudyActionsMenu";
@@ -43,7 +43,9 @@ function parseTab(value: string | null): StudyWorkspaceTab {
 }
 
 export function StudyWorkspace() {
+  const queryClient = useQueryClient();
   const auth = useAuth();
+  const navigate = useNavigate();
   const params = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const studyId = parseStudyId(params.studyId);
@@ -107,6 +109,17 @@ export function StudyWorkspace() {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+    },
+  });
+
+  const deleteStudyMutation = useMutation<void, Error, number>({
+    mutationFn: deleteStudy,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["studies"] }),
+        queryClient.invalidateQueries({ queryKey: ["study"] }),
+      ]);
+      navigate(studiesIndexPath);
     },
   });
 
@@ -231,6 +244,8 @@ export function StudyWorkspace() {
               </Button>
               <StudyActionsMenu
                 collaborationId={study.project}
+                isDeletingStudy={deleteStudyMutation.isPending}
+                onDeleteStudy={deleteStudyMutation.mutate}
                 onDownloadConfig={auth.user?.profile.role === "admin" ? () => configMutation.mutate(study.project) : undefined}
                 showOpenStudy={false}
                 studyId={study.id}
@@ -244,6 +259,7 @@ export function StudyWorkspace() {
 
           <TabsContent value="samples">
             <div className="mt-4 flex flex-col gap-6">
+              {deleteStudyMutation.isError ? <p className="error-text">{deleteStudyMutation.error.message}</p> : null}
               {intakeOpen ? (
                 <WorkspaceSectionCard
                   action={

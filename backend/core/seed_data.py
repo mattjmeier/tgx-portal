@@ -57,7 +57,7 @@ SEED_PROJECTS: list[SeedProject] = [
         pi_name="Dr. Elise Navarro",
         researcher_name="Marc Beal",
         bioinformatician_assigned="Lauren Bradford",
-        title="Aflatoxin Response Atlas",
+        title="Aflatoxin Response Study",
         description=(
             "Mock collaboration for UX and config testing based on the AFB1 example set, "
             "covering 2D and 3D hepatocyte exposure scenarios."

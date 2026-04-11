@@ -1,9 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 
 import { fetchProjects } from "../api/projects";
+import { deleteStudy } from "../api/studies";
 import { AppSidebar } from "./AppSidebar";
 import { SidebarProvider } from "./ui/sidebar";
 
@@ -98,6 +99,7 @@ vi.mock("../api/studies", async () => {
         },
       ],
     })),
+    deleteStudy: vi.fn(async () => undefined),
   };
 });
 
@@ -267,6 +269,34 @@ describe("AppSidebar (study workspace)", () => {
 
     expect(await screen.findByRole("menuitem", { name: /open collaboration/i })).toHaveAttribute("href", "/collaborations/7");
     expect(screen.getByRole("menuitem", { name: /download config bundle/i })).toBeInTheDocument();
+  });
+
+  it("requires typing the full study title before deleting from the sidebar menu", async () => {
+    renderSidebar("/studies/11");
+
+    fireEvent.click(await screen.findByRole("button", { name: /study actions for hepatocyte mercury dose response/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /delete study/i }));
+
+    expect(await screen.findByRole("dialog", { name: /delete study/i })).toBeInTheDocument();
+
+    const confirmButton = screen.getByRole("button", { name: /^delete study$/i });
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/type the study title/i), {
+      target: { value: "wrong title" },
+    });
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/type the study title/i), {
+      target: { value: "Hepatocyte mercury dose response" },
+    });
+    expect(confirmButton).toBeEnabled();
+
+    fireEvent.click(confirmButton);
+    await waitFor(() => {
+      expect(deleteStudy).toHaveBeenCalled();
+      expect(vi.mocked(deleteStudy).mock.calls.at(-1)?.[0]).toBe(11);
+    });
   });
 
   it("shows studies from outside the active collaboration in the studies branch", async () => {

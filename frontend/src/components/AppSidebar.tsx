@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, ClipboardList, FlaskConical, Layers3, LibraryBig, LogOut, PlusCircle, ShieldCheck } from "lucide-react";
-import { NavLink, useLocation, useMatch } from "react-router-dom";
+import { NavLink, useLocation, useMatch, useNavigate } from "react-router-dom";
 
 import { downloadProjectConfig, fetchProject, fetchProjects } from "../api/projects";
-import { fetchStudiesIndex, fetchStudy, type Study } from "../api/studies";
+import { deleteStudy, fetchStudiesIndex, fetchStudy, type Study } from "../api/studies";
 import { useAuth } from "../auth/AuthProvider";
 import { StudyActionsMenu } from "./StudyActionsMenu";
 import {
@@ -96,7 +96,9 @@ function SidebarBrowseBranch({
 }
 
 export function AppSidebar() {
+  const queryClient = useQueryClient();
   const auth = useAuth();
+  const navigate = useNavigate();
   const location = useLocation();
   const workspaceChildMatch = useMatch("/collaborations/:projectId/*");
   const workspaceRootMatch = useMatch("/collaborations/:projectId");
@@ -192,6 +194,20 @@ export function AppSidebar() {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+    },
+  });
+
+  const deleteStudyMutation = useMutation<void, Error, number>({
+    mutationFn: deleteStudy,
+    onSuccess: async (_, deletedStudyId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["studies"] }),
+        queryClient.invalidateQueries({ queryKey: ["study"] }),
+      ]);
+
+      if (studyIdFromRoute === deletedStudyId) {
+        navigate(studiesIndexPath);
+      }
     },
   });
 
@@ -343,6 +359,8 @@ export function AppSidebar() {
                             </SidebarMenuSubButton>
                             <StudyActionsMenu
                               collaborationId={study.project}
+                              isDeletingStudy={deleteStudyMutation.isPending && deleteStudyMutation.variables === study.id}
+                              onDeleteStudy={deleteStudyMutation.mutate}
                               onDownloadConfig={isAdmin ? () => configMutation.mutate(study.project) : undefined}
                               studyId={study.id}
                               studyTitle={study.title}

@@ -1,8 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 
+import { deleteStudy } from "../api/studies";
 import { ProjectWorkspace } from "./ProjectWorkspace";
 
 vi.mock("../api/studies", async () => {
@@ -133,5 +134,25 @@ describe("ProjectWorkspace", () => {
 
     expect(screen.queryByRole("button", { name: /what is this collaboration workspace\?/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /when should i add a study\?/i })).not.toBeInTheDocument();
+  });
+
+  it("requires typing the study title before deleting from project workspace", async () => {
+    renderWorkspace();
+
+    fireEvent.click(await screen.findByRole("button", { name: /delete study mcf7 estrogen pulse/i }));
+    expect(await screen.findByRole("dialog", { name: /delete study/i })).toBeInTheDocument();
+
+    const confirmButton = screen.getByRole("button", { name: /^delete study$/i });
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/type the study title/i), {
+      target: { value: "MCF7 estrogen pulse" },
+    });
+
+    fireEvent.click(confirmButton);
+    await waitFor(() => {
+      expect(deleteStudy).toHaveBeenCalled();
+      expect(vi.mocked(deleteStudy).mock.calls.at(-1)?.[0]).toBe(11);
+    });
   });
 });
