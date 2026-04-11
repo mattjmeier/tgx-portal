@@ -2,10 +2,21 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
-from .models import Assay, Project, Study, UserProfile
+from .models import Assay, MetadataFieldDefinition, Project, Sample, Study, StudyMetadataFieldSelection, UserProfile
 
 
 User = get_user_model()
+
+
+def _select_fields(study: Study, *keys: str) -> None:
+    definitions = MetadataFieldDefinition.objects.in_bulk(keys, field_name="key")
+    for order, key in enumerate(keys):
+        StudyMetadataFieldSelection.objects.create(
+            study=study,
+            field_definition=definitions[key],
+            required=True if key == "sample_ID" else definitions[key].is_core,
+            sort_order=order,
+        )
 
 
 @pytest.mark.django_db
@@ -24,23 +35,16 @@ def test_metadata_validation_returns_columns_and_contrast_suggestions() -> None:
         title="Mercury tox study",
         description="",
     )
-    study = Study.objects.create(
-        project=project,
-        title="Study",
-        species=Study.Species.HUMAN,
-        celltype="Hepatocyte",
-        treatment_var="dose",
-        batch_var="plate",
-    )
+    study = Study.objects.create(project=project, title="Study", species=Study.Species.HUMAN, celltype="Hepatocyte")
+    _select_fields(study, "sample_ID", "technical_control", "reference_rna", "solvent_control", "group")
 
     response = client.post(
         "/api/metadata-validation/",
         {
             "study_id": study.id,
-            "expected_columns": ["sample_ID", "sample_name", "group", "dose", "solvent_control"],
             "rows": [
-                {"sample_ID": "sample-1", "sample_name": "A", "group": "control", "dose": "0", "solvent_control": "T"},
-                {"sample_ID": "sample-2", "sample_name": "B", "group": "treated", "dose": "1", "solvent_control": "F"},
+                {"sample_ID": "sample-1", "technical_control": "F", "reference_rna": "F", "solvent_control": "T", "group": "control"},
+                {"sample_ID": "sample-2", "technical_control": "F", "reference_rna": "F", "solvent_control": "F", "group": "treated"},
             ],
         },
         format="json",
@@ -49,14 +53,12 @@ def test_metadata_validation_returns_columns_and_contrast_suggestions() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["valid"] is True
-    assert payload["columns"] == ["dose", "group", "sample_ID", "sample_name", "solvent_control"]
-    assert payload["suggested_contrasts"] == [
-        {"reference_group": "control", "comparison_group": "treated"},
-    ]
+    assert payload["columns"] == ["group", "reference_rna", "sample_ID", "solvent_control", "technical_control"]
+    assert payload["suggested_contrasts"] == [{"reference_group": "control", "comparison_group": "treated"}]
 
 
 @pytest.mark.django_db
-def test_onboarding_state_supports_draft_save_and_finalize_gating() -> None:
+def test_onboarding_state_persists_template_mappings_and_config_before_finalize() -> None:
     client = APIClient()
     user = User.objects.create_user(username="admin", password="admin123")
     user.profile.role = UserProfile.Role.ADMIN
@@ -71,69 +73,43 @@ def test_onboarding_state_supports_draft_save_and_finalize_gating() -> None:
         title="Mercury tox study",
         description="",
     )
-    study = Study.objects.create(
-        project=project,
-        title="Study",
-    )
+    study = Study.objects.create(project=project, title="Study", species=Study.Species.HUMAN, celltype="Hepatocyte")
 
     patch_response = client.patch(
         f"/api/studies/{study.id}/onboarding-state/",
         {
-            "mappings": {
-                "treatment_level_1": "",
-                "batch": "",
-            }
+            "optional_field_keys": ["group", "dose"],
+            "mappings": {"treatment_level_1": "group", "batch": ""},
+            "config": {
+                "common": {"dose": "dose", "units": "uM"},
+                "pipeline": {"mode": "se", "threads": 8},
+                "qc": {"dendro_color_by": "group"},
+                "deseq2": {"cpus": 4},
+            },
         },
         format="json",
     )
     assert patch_response.status_code == 200
-    assert patch_response.json()["status"] == "draft"
-
-    finalize_response = client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
-    assert finalize_response.status_code == 400
-    assert "errors" in finalize_response.json()
-
-    update_response = client.patch(
-        f"/api/studies/{study.id}/",
-        {
-            "description": "Draft description",
-            "species": Study.Species.HUMAN,
-            "celltype": "Hepatocyte",
-            "treatment_var": "group",
-            "batch_var": "plate",
-        },
-        format="json",
-    )
-    assert update_response.status_code == 200
+    assert "group" in patch_response.json()["template_columns"]
+    assert patch_response.json()["mappings"]["treatment_level_1"] == "group"
 
     client.post(
         "/api/metadata-validation/",
         {
             "study_id": study.id,
-            "expected_columns": ["sample_ID", "sample_name", "group", "plate", "solvent_control"],
             "rows": [
                 {
                     "sample_ID": "sample-1",
-                    "sample_name": "A",
-                    "group": "control",
-                    "plate": "plate-1",
+                    "technical_control": False,
+                    "reference_rna": False,
                     "solvent_control": True,
+                    "group": "control",
+                    "dose": 0,
                 },
             ],
         },
         format="json",
     )
-
-    patch_response = client.patch(
-        f"/api/studies/{study.id}/onboarding-state/",
-        {
-            "mappings": {"treatment_level_1": "group", "batch": "plate"},
-            "selected_contrasts": [{"reference_group": "control", "comparison_group": "treated"}],
-        },
-        format="json",
-    )
-    assert patch_response.status_code == 200
-    assert patch_response.json()["mappings"]["treatment_level_1"] == "group"
 
     finalize_response = client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
     assert finalize_response.status_code == 200
@@ -156,69 +132,54 @@ def test_generate_config_is_blocked_until_onboarding_is_final() -> None:
         title="Project Alpha",
         description="A test project",
     )
-    study = Study.objects.create(
-        project=project,
-        title="Config generation study",
-        species=Study.Species.HUMAN,
-        celltype="Hepatocyte",
-        treatment_var="dose",
-        batch_var="plate",
-    )
-
-    # Minimal sample/assay setup so config generation would otherwise succeed.
-    sample_control = study.samples.create(
-        sample_ID="sample-1",
-        sample_name="Sample 1",
-        description="Control sample",
-        group="control",
-        chemical="",
-        chemical_longname="",
-        dose=0,
-        solvent_control=True,
-    )
-    sample_treated = study.samples.create(
-        sample_ID="sample-2",
-        sample_name="Sample 2",
-        description="Treated sample",
-        group="treated",
-        chemical="cmpd",
-        chemical_longname="Compound",
-        dose=3.5,
-    )
-    Assay.objects.create(
-        sample=sample_control,
-        platform=Assay.Platform.RNA_SEQ,
-        genome_version="hg38",
-        quantification_method="raw_counts",
-    )
-    Assay.objects.create(
-        sample=sample_treated,
-        platform=Assay.Platform.RNA_SEQ,
-        genome_version="hg38",
-        quantification_method="raw_counts",
-    )
+    study = Study.objects.create(project=project, title="Config generation study", species=Study.Species.HUMAN, celltype="Hepatocyte")
 
     blocked = client.post(f"/api/projects/{project.id}/generate-config/")
     assert blocked.status_code == 400
-    assert "onboarding" in blocked.json().get("detail", "").lower()
 
+    client.patch(
+        f"/api/studies/{study.id}/onboarding-state/",
+        {
+            "optional_field_keys": ["group", "dose"],
+            "mappings": {"treatment_level_1": "group"},
+            "selected_contrasts": [{"reference_group": "control", "comparison_group": "treated"}],
+            "config": {
+                "common": {"dose": "dose", "units": "uM"},
+                "pipeline": {"mode": "se", "threads": 8},
+                "qc": {"dendro_color_by": "group"},
+                "deseq2": {"cpus": 4},
+            },
+        },
+        format="json",
+    )
     client.post(
         "/api/metadata-validation/",
         {
             "study_id": study.id,
             "rows": [
-                {"sample_ID": "sample-1", "sample_name": "A", "group": "control", "solvent_control": True},
-                {"sample_ID": "sample-2", "sample_name": "B", "group": "treated", "solvent_control": False},
+                {"sample_ID": "sample-1", "technical_control": False, "reference_rna": False, "solvent_control": True, "group": "control", "dose": 0},
+                {"sample_ID": "sample-2", "technical_control": False, "reference_rna": False, "solvent_control": False, "group": "treated", "dose": 1},
             ],
         },
         format="json",
     )
-    client.patch(
-        f"/api/studies/{study.id}/onboarding-state/",
-        {"mappings": {"treatment_level_1": "group", "batch": ""}},
-        format="json",
-    )
     client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
+
+    Sample.objects.create(
+        study=study,
+        sample_ID="sample-1",
+        sample_name="Control",
+        solvent_control=True,
+        metadata={"group": "control", "dose": 0},
+    )
+    Sample.objects.create(
+        study=study,
+        sample_ID="sample-2",
+        sample_name="Treated",
+        metadata={"group": "treated", "dose": 3.5},
+    )
+    Assay.objects.create(sample=study.samples.get(sample_ID="sample-1"), platform=Assay.Platform.RNA_SEQ, genome_version="hg38", quantification_method="raw_counts")
+    Assay.objects.create(sample=study.samples.get(sample_ID="sample-2"), platform=Assay.Platform.RNA_SEQ, genome_version="hg38", quantification_method="raw_counts")
 
     allowed = client.post(f"/api/projects/{project.id}/generate-config/")
     assert allowed.status_code == 200

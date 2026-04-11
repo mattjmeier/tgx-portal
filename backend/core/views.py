@@ -21,8 +21,12 @@ from .models import (
     Project,
     Sample,
     Study,
+    StudyConfig,
+    StudyMetadataFieldSelection,
+    StudyMetadataMapping,
     StudyOnboardingState,
     UserProfile,
+    default_study_config,
 )
 from .serializers import (
     AssaySerializer,
@@ -42,6 +46,7 @@ from .services import (
     create_samples_from_validated_rows,
     validate_metadata_upload,
     validate_sample_import_rows,
+    get_study_template_columns,
 )
 from .tasks import create_plane_ticket
 from .onboarding import (
@@ -103,6 +108,19 @@ def _get_or_create_onboarding_state(study: Study) -> StudyOnboardingState:
     return state
 
 
+def _get_or_create_metadata_mapping(study: Study) -> StudyMetadataMapping:
+    mapping, _ = StudyMetadataMapping.objects.get_or_create(study=study)
+    return mapping
+
+
+def _get_or_create_study_config(study: Study) -> StudyConfig:
+    config, _ = StudyConfig.objects.get_or_create(
+        study=study,
+        defaults=default_study_config(),
+    )
+    return config
+
+
 def _study_finalize_errors(study: Study) -> dict[str, list[str]]:
     errors: dict[str, list[str]] = {}
     if not study.title:
@@ -111,10 +129,8 @@ def _study_finalize_errors(study: Study) -> dict[str, list[str]]:
         errors["species"] = ["Select a species before finalizing onboarding."]
     if not study.celltype:
         errors["celltype"] = ["Provide a cell type before finalizing onboarding."]
-    if not study.treatment_var:
-        errors["treatment_var"] = ["Provide a treatment variable before finalizing onboarding."]
-    if not study.batch_var:
-        errors["batch_var"] = ["Provide a batch variable before finalizing onboarding."]
+    if not hasattr(study, "config"):
+        errors["config"] = ["Persist study configuration before finalizing onboarding."]
     return errors
 
 
@@ -140,9 +156,17 @@ class LookupViewSet(viewsets.ViewSet):
                 "label": field.label,
                 "group": field.group,
                 "description": field.description,
+                "scope": field.scope,
+                "system_key": field.system_key,
                 "data_type": field.data_type,
                 "kind": field.kind,
                 "required": field.required,
+                "is_core": field.is_core,
+                "allow_null": field.allow_null,
+                "choices": field.choices,
+                "regex": field.regex,
+                "min_value": field.min_value,
+                "max_value": field.max_value,
                 "auto_include_keys": field.auto_include_keys,
             }
             for field in field_definitions
@@ -179,47 +203,98 @@ def _compute_project_code(project: Project) -> str:
     return f"{base}-{project.id}"
 
 
-def _compute_template_columns(optional_field_keys: list[str], custom_field_keys: list[str]):
-    required_defs = list(MetadataFieldDefinition.objects.filter(required=True).order_by("id"))
+def _normalize_field_key(value: str) -> str:
+    return value.strip().replace(" ", "_")
 
-    required_keys = [item.key for item in required_defs]
-    selected_keys = list(dict.fromkeys([*optional_field_keys, *custom_field_keys]))
 
-    known_defs = {item.key: item for item in MetadataFieldDefinition.objects.all()}
-    unknown = [key for key in selected_keys if key not in known_defs]
-    if unknown:
-        raise ValueError(f"Unknown metadata field definitions: {', '.join(sorted(unknown))}")
+def _upsert_study_template(study: Study, optional_field_keys: list[str], custom_field_keys: list[str]):
+    core_order = {
+        "sample_ID": 0,
+        "technical_control": 1,
+        "reference_rna": 2,
+        "solvent_control": 3,
+    }
+    core_defs = list(
+        MetadataFieldDefinition.objects.filter(
+            is_active=True,
+            scope=MetadataFieldDefinition.Scope.SAMPLE,
+            is_core=True,
+        ).order_by("id")
+    )
+    core_defs.sort(key=lambda definition: core_order.get(definition.key, 100 + definition.id))
+    known_defs = {
+        item.key: item
+        for item in MetadataFieldDefinition.objects.filter(scope=MetadataFieldDefinition.Scope.SAMPLE)
+    }
 
-    columns: list[str] = []
+    ordered_keys = [definition.key for definition in core_defs]
     auto_included: list[dict[str, str]] = []
 
-    def add_column(key: str) -> None:
-        if key in columns:
+    def add_key(key: str, reason: str | None = None) -> None:
+        if key in ordered_keys:
             return
-        columns.append(key)
+        ordered_keys.append(key)
+        if reason is not None:
+            auto_included.append({"key": key, "reason": reason})
 
-    for key in required_keys:
-        add_column(key)
-
-    for key in optional_field_keys:
-        add_column(key)
+    for raw_key in optional_field_keys:
+        key = _normalize_field_key(raw_key)
+        if key not in known_defs:
+            raise ValueError(f"Unknown metadata field definitions: {key}")
+        add_key(key)
         for included_key in known_defs[key].auto_include_keys or []:
-            if included_key not in columns:
-                add_column(included_key)
-                auto_included.append({"key": included_key, "reason": f"{key} selected"})
+            add_key(included_key, reason=f"{key} selected")
 
-    for key in custom_field_keys:
-        add_column(key)
-        for included_key in known_defs[key].auto_include_keys or []:
-            if included_key not in columns:
-                add_column(included_key)
-                auto_included.append({"key": included_key, "reason": f"{key} selected"})
+    for raw_key in custom_field_keys:
+        key = _normalize_field_key(raw_key)
+        definition = known_defs.get(key)
+        if definition is None:
+            definition = MetadataFieldDefinition.objects.create(
+                key=key,
+                label=raw_key.strip() or key,
+                group="Custom",
+                description="Study-specific custom metadata field.",
+                scope=MetadataFieldDefinition.Scope.SAMPLE,
+                system_key=key,
+                data_type=MetadataFieldDefinition.DataType.STRING,
+                kind=MetadataFieldDefinition.Kind.CUSTOM,
+                required=False,
+                is_core=False,
+                allow_null=True,
+            )
+            known_defs[key] = definition
+        add_key(key)
 
-    deprecated = [
-        key for key in columns
-        if key in known_defs and not known_defs[key].is_active
-    ]
+    active_defs = {item.key: item for item in MetadataFieldDefinition.objects.filter(key__in=ordered_keys)}
+    existing = {
+        selection.field_definition.key: selection
+        for selection in study.metadata_field_selections.select_related("field_definition")
+    }
 
+    for order, key in enumerate(ordered_keys):
+        definition = active_defs[key]
+        selection = existing.get(key)
+        if selection is None:
+            StudyMetadataFieldSelection.objects.create(
+                study=study,
+                field_definition=definition,
+                required=definition.is_core or definition.required,
+                sort_order=order,
+                is_active=True,
+            )
+        else:
+            selection.required = definition.is_core or definition.required
+            selection.sort_order = order
+            selection.is_active = True
+            selection.save(update_fields=["required", "sort_order", "is_active"])
+
+    for key, selection in existing.items():
+        if key not in ordered_keys and selection.is_active:
+            selection.is_active = False
+            selection.save(update_fields=["is_active"])
+
+    columns = get_study_template_columns(study)
+    deprecated = [key for key in columns if key in active_defs and not active_defs[key].is_active]
     return columns, auto_included, deprecated
 
 
@@ -241,7 +316,7 @@ class MetadataTemplateViewSet(viewsets.ViewSet):
         _require_study_access(request.user, study)
 
         try:
-            columns, auto_included, deprecated = _compute_template_columns(optional_field_keys, custom_field_keys)
+            columns, auto_included, deprecated = _upsert_study_template(study, optional_field_keys, custom_field_keys)
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -380,10 +455,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
             if state.status != StudyOnboardingState.Status.FINAL:
                 blocking.append({"study_id": str(study.id), "reason": f"Onboarding is not final (status={state.status})."})
                 continue
-            mappings = DEFAULT_MAPPINGS
-            if isinstance(state.mappings, dict):
-                mappings = {**DEFAULT_MAPPINGS, **{k: v for k, v in state.mappings.items() if isinstance(k, str)}}
-            errors = validate_final_ready(metadata_columns=state.metadata_columns or [], mappings=mappings)
+            mapping_model = getattr(study, "metadata_mapping", None)
+            if mapping_model is None:
+                blocking.append({"study_id": str(study.id), "reason": "Persisted metadata mappings are missing."})
+                continue
+            errors = validate_final_ready(
+                metadata_columns=get_study_template_columns(study),
+                mappings={**DEFAULT_MAPPINGS, **mapping_model.as_dict()},
+            )
             if errors:
                 blocking.append({"study_id": str(study.id), "reason": "Onboarding mappings are invalid."})
 
@@ -443,7 +522,9 @@ class StudyViewSet(viewsets.ModelViewSet):
         project = serializer.validated_data["project"]
         if role == UserProfile.Role.CLIENT and project.owner_id != self.request.user.id:
             raise PermissionDenied("Clients may only create studies within their own projects.")
-        serializer.save()
+        study = serializer.save()
+        _get_or_create_study_config(study)
+        _get_or_create_metadata_mapping(study)
 
     @action(detail=True, methods=["get", "patch"], url_path="onboarding-state")
     def onboarding_state(self, request, pk=None):
@@ -454,25 +535,54 @@ class StudyViewSet(viewsets.ModelViewSet):
         if request.method.lower() == "patch":
             mappings_payload = request.data.get("mappings", None)
             selected_contrasts_payload = request.data.get("selected_contrasts", None)
+            optional_field_keys = request.data.get("optional_field_keys", None)
+            custom_field_keys = request.data.get("custom_field_keys", None)
+            config_payload = request.data.get("config", None)
+
+            mapping_model = _get_or_create_metadata_mapping(study)
 
             if mappings_payload is not None:
-                state.mappings = normalize_mappings(mappings_payload)
+                normalized_mappings = normalize_mappings(mappings_payload)
+                for key, value in normalized_mappings.items():
+                    if hasattr(mapping_model, key):
+                        setattr(mapping_model, key, value)
+                state.mappings = normalized_mappings
             if selected_contrasts_payload is not None:
-                state.selected_contrasts = normalize_contrast_pairs(selected_contrasts_payload)
+                normalized_contrasts = normalize_contrast_pairs(selected_contrasts_payload)
+                mapping_model.selected_contrasts = normalized_contrasts
+                state.selected_contrasts = normalized_contrasts
+            if optional_field_keys is not None or custom_field_keys is not None:
+                _upsert_study_template(study, optional_field_keys or [], custom_field_keys or [])
+            if config_payload is not None:
+                config = _get_or_create_study_config(study)
+                for section in ("common", "pipeline", "qc", "deseq2"):
+                    if section in config_payload:
+                        setattr(config, section, config_payload[section])
+                config.save()
 
+            mapping_model.save()
             state.status = StudyOnboardingState.Status.DRAFT
             state.finalized_at = None
             state.updated_at = timezone.now()
             state.save(update_fields=["mappings", "selected_contrasts", "status", "finalized_at", "updated_at"])
 
+        mapping_model = _get_or_create_metadata_mapping(study)
+        config = _get_or_create_study_config(study)
         return Response(
             {
                 "study_id": study.id,
                 "status": state.status,
                 "metadata_columns": state.metadata_columns,
-                "mappings": {**DEFAULT_MAPPINGS, **(state.mappings or {})},
+                "mappings": {**DEFAULT_MAPPINGS, **mapping_model.as_dict()},
                 "suggested_contrasts": state.suggested_contrasts,
-                "selected_contrasts": state.selected_contrasts,
+                "selected_contrasts": mapping_model.selected_contrasts,
+                "template_columns": get_study_template_columns(study),
+                "config": {
+                    "common": config.common,
+                    "pipeline": config.pipeline,
+                    "qc": config.qc,
+                    "deseq2": config.deseq2,
+                },
                 "updated_at": state.updated_at.isoformat() if state.updated_at else None,
                 "finalized_at": state.finalized_at.isoformat() if state.finalized_at else None,
             }
@@ -483,13 +593,14 @@ class StudyViewSet(viewsets.ModelViewSet):
         study = self.get_object()
         _require_study_access(request.user, study)
         state = _get_or_create_onboarding_state(study)
-        mappings = {**DEFAULT_MAPPINGS, **(state.mappings or {})}
+        mapping_model = _get_or_create_metadata_mapping(study)
+        mappings = {**DEFAULT_MAPPINGS, **mapping_model.as_dict()}
 
         errors = _study_finalize_errors(study)
         if errors:
             return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
 
-        onboarding_errors = validate_final_ready(metadata_columns=state.metadata_columns or [], mappings=mappings)
+        onboarding_errors = validate_final_ready(metadata_columns=get_study_template_columns(study), mappings=mappings)
         if onboarding_errors:
             return Response({"errors": onboarding_errors}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -507,7 +618,7 @@ class StudyViewSet(viewsets.ModelViewSet):
                 "metadata_columns": state.metadata_columns,
                 "mappings": mappings,
                 "suggested_contrasts": state.suggested_contrasts,
-                "selected_contrasts": state.selected_contrasts,
+                "selected_contrasts": mapping_model.selected_contrasts,
                 "updated_at": state.updated_at.isoformat(),
                 "finalized_at": state.finalized_at.isoformat(),
             }
@@ -518,8 +629,8 @@ class SampleViewSet(viewsets.ModelViewSet):
     queryset = Sample.objects.select_related("study", "study__project").all()
     serializer_class = SampleSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["sample_ID", "sample_name", "group", "chemical", "chemical_longname"]
-    ordering_fields = ["id", "sample_ID", "sample_name", "group", "dose"]
+    search_fields = ["sample_ID", "sample_name", "description"]
+    ordering_fields = ["id", "sample_ID", "sample_name"]
     ordering = ["id"]
 
     def get_queryset(self):

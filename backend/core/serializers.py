@@ -1,10 +1,11 @@
 from django.contrib.auth import get_user_model
 from typing import Any
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from pydantic import ValidationError as PydanticValidationError
 from rest_framework import serializers
 
-from .models import Assay, Project, Sample, Study, UserProfile
+from .models import Assay, Project, Sample, Study, StudyConfig, UserProfile
 from .services import validate_sample_payload
 
 User = get_user_model()
@@ -43,6 +44,9 @@ class StudySerializer(serializers.ModelSerializer):
     celltype = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     treatment_var = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     batch_var = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    config = serializers.SerializerMethodField()
+    metadata_mapping = serializers.SerializerMethodField()
+    metadata_template = serializers.SerializerMethodField()
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         instance = getattr(self, "instance", None)
@@ -82,11 +86,43 @@ class StudySerializer(serializers.ModelSerializer):
             "celltype",
             "treatment_var",
             "batch_var",
+            "config",
+            "metadata_mapping",
+            "metadata_template",
             "sample_count",
             "assay_count",
         ]
         read_only_fields = ["id", "status"]
         validators = []
+
+    def get_config(self, obj: Study) -> dict[str, Any] | None:
+        config = getattr(obj, "config", None)
+        if config is None:
+            return None
+        return {
+            "common": config.common,
+            "pipeline": config.pipeline,
+            "qc": config.qc,
+            "deseq2": config.deseq2,
+        }
+
+    def get_metadata_mapping(self, obj: Study) -> dict[str, Any] | None:
+        mapping = getattr(obj, "metadata_mapping", None)
+        if mapping is None:
+            return None
+        return {**mapping.as_dict(), "selected_contrasts": mapping.selected_contrasts}
+
+    def get_metadata_template(self, obj: Study) -> list[dict[str, Any]]:
+        return [
+            {
+                "key": selection.field_definition.key,
+                "label": selection.column_label_override or selection.field_definition.label,
+                "required": selection.required,
+                "sort_order": selection.sort_order,
+                "data_type": selection.field_definition.data_type,
+            }
+            for selection in obj.metadata_field_selections.select_related("field_definition").filter(is_active=True).order_by("sort_order", "id")
+        ]
 
 
 class SampleSerializer(serializers.ModelSerializer):
@@ -98,13 +134,10 @@ class SampleSerializer(serializers.ModelSerializer):
             "sample_ID",
             "sample_name",
             "description",
-            "group",
-            "chemical",
-            "chemical_longname",
-            "dose",
             "technical_control",
             "reference_rna",
             "solvent_control",
+            "metadata",
         ]
         read_only_fields = ["id"]
         validators = [
@@ -123,11 +156,20 @@ class SampleSerializer(serializers.ModelSerializer):
         }
 
         try:
-            validate_sample_payload(payload)
+            normalized = validate_sample_payload(payload)
         except PydanticValidationError as exc:
             raise serializers.ValidationError(exc.errors()) from exc
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(getattr(exc, "message_dict", {"non_field_errors": exc.messages})) from exc
 
+        attrs["metadata"] = normalized["metadata"]
         return attrs
+
+
+class StudyConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudyConfig
+        fields = ["common", "pipeline", "qc", "deseq2"]
 
 
 class AssaySerializer(serializers.ModelSerializer):

@@ -9,6 +9,9 @@ from .models import (
     SamplePlating,
     SequencingRun,
     Study,
+    StudyConfig,
+    StudyMetadataFieldSelection,
+    StudyMetadataMapping,
     StudyOnboardingState,
 )
 
@@ -20,4 +23,7 @@ admin.site.register(SamplePlating)
 admin.site.register(SequencingRun)
 admin.site.register(ControlledLookupValue)
 admin.site.register(MetadataFieldDefinition)
+admin.site.register(StudyMetadataFieldSelection)
+admin.site.register(StudyMetadataMapping)
+admin.site.register(StudyConfig)
 admin.site.register(StudyOnboardingState)

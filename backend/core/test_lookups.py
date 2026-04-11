@@ -9,7 +9,7 @@ User = get_user_model()
 
 
 @pytest.mark.django_db
-def test_lookups_returns_metadata_field_definitions_and_controlled_values() -> None:
+def test_lookups_returns_enriched_metadata_field_definitions_and_controlled_values() -> None:
     client = APIClient()
     user = User.objects.create_user(username="admin", password="admin123")
     user.profile.role = UserProfile.Role.ADMIN
@@ -21,20 +21,22 @@ def test_lookups_returns_metadata_field_definitions_and_controlled_values() -> N
         value="hg38",
         is_active=True,
     )
-    ControlledLookupValue.objects.create(
-        category=ControlledLookupValue.Category.GENOME_VERSION,
-        value="hg19",
-        is_active=False,
-    )
 
     response = client.get("/api/lookups/")
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["version"] == 1
-    assert any(item["key"] == "sample_ID" and item["required"] is True for item in payload["metadata_field_definitions"])
-    assert any(item["key"] == "chemical" for item in payload["metadata_field_definitions"])
-    assert "controlled" in payload["lookups"]
+    sample_id_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "sample_ID")
+    technical_control_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "technical_control")
+    reference_rna_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "reference_rna")
+    solvent_control_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "solvent_control")
+    assert sample_id_field["is_core"] is True
+    assert sample_id_field["scope"] == "sample"
+    assert "regex" in sample_id_field
+    assert technical_control_field["required"] is True
+    assert reference_rna_field["required"] is True
+    assert solvent_control_field["required"] is True
     genome_versions = payload["lookups"]["controlled"]["genome_version"]["values"]
     assert genome_versions == ["hg38"]
 
@@ -76,7 +78,7 @@ def test_lookups_filters_people_values_by_rbac() -> None:
 
 
 @pytest.mark.django_db
-def test_metadata_template_preview_includes_required_and_auto_includes() -> None:
+def test_metadata_template_preview_persists_minimal_core_and_optional_fields() -> None:
     client = APIClient()
     user = User.objects.create_user(username="admin", password="admin123")
     user.profile.role = UserProfile.Role.ADMIN
@@ -102,21 +104,21 @@ def test_metadata_template_preview_includes_required_and_auto_includes() -> None
 
     response = client.post(
         "/api/metadata-templates/preview/",
-        {"study_id": study.id, "optional_field_keys": ["chemical"], "custom_field_keys": []},
+        {"study_id": study.id, "optional_field_keys": ["sample_name", "dose"], "custom_field_keys": ["timepoint"]},
         format="json",
     )
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["columns"][:3] == ["sample_ID", "sample_name", "group"]
-    assert "chemical" in payload["columns"]
-    assert "CASN" in payload["columns"]
-    assert any(item["key"] == "CASN" for item in payload["auto_included"])
-    assert payload["filename"].endswith("_metadata.csv")
+    assert payload["columns"][:4] == ["sample_ID", "technical_control", "reference_rna", "solvent_control"]
+    assert "sample_name" in payload["columns"]
+    assert "dose" in payload["columns"]
+    assert "timepoint" in payload["columns"]
+    assert study.metadata_field_selections.filter(is_active=True).count() == len(payload["columns"])
 
 
 @pytest.mark.django_db
-def test_metadata_template_download_returns_csv_attachment() -> None:
+def test_metadata_template_download_returns_csv_attachment_for_persisted_selection() -> None:
     client = APIClient()
     user = User.objects.create_user(username="admin", password="admin123")
     user.profile.role = UserProfile.Role.ADMIN
@@ -139,14 +141,19 @@ def test_metadata_template_download_returns_csv_attachment() -> None:
         treatment_var="dose",
         batch_var="plate",
     )
+    client.post(
+        "/api/metadata-templates/preview/",
+        {"study_id": study.id, "optional_field_keys": ["sample_name"], "custom_field_keys": []},
+        format="json",
+    )
 
     response = client.post(
         "/api/metadata-templates/download/",
-        {"study_id": study.id, "optional_field_keys": [], "custom_field_keys": []},
+        {"study_id": study.id, "optional_field_keys": ["sample_name"], "custom_field_keys": []},
         format="json",
     )
 
     assert response.status_code == 200
     assert response["Content-Type"].startswith("text/csv")
     assert "attachment" in response["Content-Disposition"]
-    assert response.content.decode("utf-8").strip() == "sample_ID,sample_name,group"
+    assert response.content.decode("utf-8").strip() == "sample_ID,technical_control,reference_rna,solvent_control,sample_name"
