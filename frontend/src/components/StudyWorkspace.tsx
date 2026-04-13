@@ -210,24 +210,6 @@ export function StudyWorkspace() {
 
       {study ? (
         <Tabs className="mt-4" value={activeTab} onValueChange={(value) => setTab(parseTab(value))}>
-          {onboardingStateQuery.data?.status === "draft" ? (
-            <section className="mb-4 rounded-xl border border-amber-200/80 bg-amber-50/70 p-4 shadow-sm">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground">Finish study onboarding</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    This study has a saved onboarding draft. Continue in the wizard to finish metadata setup and mappings.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button asChild size="sm">
-                    <Link to={studyOnboardingPath(study.id)}>Continue onboarding</Link>
-                  </Button>
-                </div>
-              </div>
-            </section>
-          ) : null}
-
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <TabsList>
               <TabsTrigger value="samples">Samples</TabsTrigger>

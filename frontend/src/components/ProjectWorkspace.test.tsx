@@ -20,6 +20,7 @@ vi.mock("../api/studies", async () => {
           project: 7,
           project_title: "Endocrine Resilience Screen",
           title: "MCF7 estrogen pulse",
+          status: "draft",
           species: "human",
           celltype: "breast epithelial",
           treatment_var: "estrogen",
@@ -32,6 +33,7 @@ vi.mock("../api/studies", async () => {
           project: 7,
           project_title: "Endocrine Resilience Screen",
           title: "MCF7 recovery window",
+          status: "active",
           species: "human",
           celltype: "breast epithelial",
           treatment_var: "recovery",
@@ -123,7 +125,14 @@ describe("ProjectWorkspace", () => {
     expect(screen.queryByRole("link", { name: /^open$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /open collaboration/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/^collaboration$/i)).not.toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: /edit study/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: /continue onboarding for study mcf7 estrogen pulse/i })).toHaveAttribute(
+      "href",
+      "/studies/11/onboarding",
+    );
+    expect(screen.getByRole("link", { name: /edit study mcf7 recovery window/i })).toHaveAttribute(
+      "href",
+      "/studies/12?tab=collaboration",
+    );
     expect(screen.getAllByRole("button", { name: /delete study/i }).length).toBeGreaterThan(0);
   });
 

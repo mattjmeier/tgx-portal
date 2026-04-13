@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { vi } from "vitest";
+import { beforeEach, vi } from "vitest";
 
 import { fetchProjects } from "../api/projects";
 import { fetchStudiesIndex } from "../api/studies";
@@ -63,86 +63,114 @@ vi.mock("../api/projects", () => ({
   downloadProjectConfig: vi.fn(async () => new Blob(["config"])),
 }));
 
-vi.mock("../api/studies", () => ({
-  fetchStudiesIndex: vi.fn(async () => ({
-    count: 3,
-    next: null,
-    previous: null,
-    results: [
-      {
-        id: 11,
-        project: 7,
-        project_title: "Mercury tox study",
-        title: "Hepatocyte mercury dose response",
-        species: "human",
-        celltype: "hepatocyte",
-        treatment_var: "mercury",
-        batch_var: "batch-1",
-      },
-      {
-        id: 12,
-        project: 7,
-        project_title: "Mercury tox study",
-        title: "Kidney cadmium follow-up",
-        species: "rat",
-        celltype: "kidney",
-        treatment_var: "cadmium",
-        batch_var: "batch-2",
-      },
-      {
-        id: 21,
-        project: 8,
-        project_title: "Cadmium follow-up",
-        title: "Mouse cortex lead pilot",
-        species: "mouse",
-        celltype: "cortex",
-        treatment_var: "lead",
-        batch_var: "batch-3",
-      },
-    ],
-  })),
-  fetchStudies: vi.fn(async (projectId: number) => ({
-    count: projectId === 7 ? 2 : 1,
-    next: null,
-    previous: null,
-    results:
-      projectId === 7
-        ? [
-            {
-              id: 11,
-              project: 7,
-              project_title: "Mercury tox study",
-              title: "Hepatocyte mercury dose response",
-              species: "human",
-              celltype: "hepatocyte",
-              treatment_var: "mercury",
-              batch_var: "batch-1",
-            },
-            {
-              id: 12,
-              project: 7,
-              project_title: "Mercury tox study",
-              title: "Kidney cadmium follow-up",
-              species: "rat",
-              celltype: "kidney",
-              treatment_var: "cadmium",
-              batch_var: "batch-2",
-            },
-          ]
-        : [
-            {
-              id: 21,
-              project: 8,
-              project_title: "Cadmium follow-up",
-              title: "Mouse cortex lead pilot",
-              species: "mouse",
-              celltype: "cortex",
-              treatment_var: "lead",
-              batch_var: "batch-3",
-            },
-          ],
-  })),
-}));
+vi.mock("../api/studies", async () => {
+  const actual = await vi.importActual<typeof import("../api/studies")>("../api/studies");
+
+  return {
+    ...actual,
+    fetchStudy: vi.fn(async (studyId: number) => ({
+      id: studyId,
+      project: studyId === 21 ? 8 : 7,
+      project_title: studyId === 21 ? "Cadmium follow-up" : "Mercury tox study",
+      title:
+        studyId === 12
+          ? "Kidney cadmium follow-up"
+          : studyId === 21
+            ? "Mouse cortex lead pilot"
+            : "Hepatocyte mercury dose response",
+      species: studyId === 21 ? "mouse" : studyId === 12 ? "rat" : "human",
+      celltype: studyId === 21 ? "cortex" : studyId === 12 ? "kidney" : "hepatocyte",
+      treatment_var: studyId === 21 ? "lead" : studyId === 12 ? "cadmium" : "mercury",
+      batch_var: studyId === 21 ? "batch-3" : studyId === 12 ? "batch-2" : "batch-1",
+      status: studyId === 11 ? "draft" : "active",
+    })),
+    fetchStudiesIndex: vi.fn(async () => ({
+      count: 3,
+      next: null,
+      previous: null,
+      results: [
+        {
+          id: 11,
+          project: 7,
+          project_title: "Mercury tox study",
+          title: "Hepatocyte mercury dose response",
+          species: "human",
+          celltype: "hepatocyte",
+          treatment_var: "mercury",
+          batch_var: "batch-1",
+          status: "draft",
+        },
+        {
+          id: 12,
+          project: 7,
+          project_title: "Mercury tox study",
+          title: "Kidney cadmium follow-up",
+          species: "rat",
+          celltype: "kidney",
+          treatment_var: "cadmium",
+          batch_var: "batch-2",
+          status: "active",
+        },
+        {
+          id: 21,
+          project: 8,
+          project_title: "Cadmium follow-up",
+          title: "Mouse cortex lead pilot",
+          species: "mouse",
+          celltype: "cortex",
+          treatment_var: "lead",
+          batch_var: "batch-3",
+          status: "active",
+        },
+      ],
+    })),
+    fetchStudies: vi.fn(async (projectId: number) => ({
+      count: projectId === 7 ? 2 : 1,
+      next: null,
+      previous: null,
+      results:
+        projectId === 7
+          ? [
+              {
+                id: 11,
+                project: 7,
+                project_title: "Mercury tox study",
+                title: "Hepatocyte mercury dose response",
+                species: "human",
+                celltype: "hepatocyte",
+                treatment_var: "mercury",
+                batch_var: "batch-1",
+                status: "draft",
+              },
+              {
+                id: 12,
+                project: 7,
+                project_title: "Mercury tox study",
+                title: "Kidney cadmium follow-up",
+                species: "rat",
+                celltype: "kidney",
+                treatment_var: "cadmium",
+                batch_var: "batch-2",
+                status: "active",
+              },
+            ]
+          : [
+              {
+                id: 21,
+                project: 8,
+                project_title: "Cadmium follow-up",
+                title: "Mouse cortex lead pilot",
+                species: "mouse",
+                celltype: "cortex",
+                treatment_var: "lead",
+                batch_var: "batch-3",
+                status: "active",
+              },
+            ],
+    })),
+    deleteStudy: vi.fn(async () => undefined),
+  };
+});
 
 function renderLayout(initialEntry: string) {
   const queryClient = new QueryClient({
@@ -166,6 +194,7 @@ function renderLayout(initialEntry: string) {
             <Route path="/collaborations/:projectId/studies/new" element={<div>Study create page</div>} />
             <Route path="/studies/new" element={<div>Global study page</div>} />
             <Route path="/studies/:studyId" element={<div>Study workspace page</div>} />
+            <Route path="/studies/:studyId/onboarding" element={<div>Study onboarding page</div>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -174,6 +203,51 @@ function renderLayout(initialEntry: string) {
 }
 
 describe("AppLayout", () => {
+  beforeEach(() => {
+    localStorage.clear();
+
+    vi.mocked(fetchStudiesIndex).mockResolvedValue({
+      count: 3,
+      next: null,
+      previous: null,
+      results: [
+        {
+          id: 11,
+          project: 7,
+          project_title: "Mercury tox study",
+          title: "Hepatocyte mercury dose response",
+          species: "human",
+          celltype: "hepatocyte",
+          treatment_var: "mercury",
+          batch_var: "batch-1",
+          status: "draft",
+        },
+        {
+          id: 12,
+          project: 7,
+          project_title: "Mercury tox study",
+          title: "Kidney cadmium follow-up",
+          species: "rat",
+          celltype: "kidney",
+          treatment_var: "cadmium",
+          batch_var: "batch-2",
+          status: "active",
+        },
+        {
+          id: 21,
+          project: 8,
+          project_title: "Cadmium follow-up",
+          title: "Mouse cortex lead pilot",
+          species: "mouse",
+          celltype: "cortex",
+          treatment_var: "lead",
+          batch_var: "batch-3",
+          status: "active",
+        },
+      ],
+    });
+  });
+
   it("shows create and browse sections with collaboration-first labels", () => {
     renderLayout("/collaborations");
 
@@ -201,6 +275,31 @@ describe("AppLayout", () => {
     expect(within(footer as HTMLElement).getByText(/signed in/i)).toBeInTheDocument();
   });
 
+  it("shows a global onboarding reminder outside the wizard and supports icon controls", async () => {
+    renderLayout("/collaborations");
+
+    expect(await screen.findByText(/finish study onboarding/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^continue$/i })).toHaveAttribute("href", "/studies/11/onboarding");
+    expect(screen.getByRole("button", { name: /minimize onboarding reminder/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /dismiss onboarding reminder/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /minimize onboarding reminder/i }));
+
+    expect(await screen.findByRole("button", { name: /expand onboarding reminder/i })).toBeInTheDocument();
+    expect(screen.getByText(/resume the saved draft when you are ready/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /dismiss onboarding reminder/i }));
+
+    expect(screen.queryByText(/finish study onboarding/i)).not.toBeInTheDocument();
+  });
+
+  it("hides the global onboarding reminder while viewing the onboarding wizard itself", async () => {
+    renderLayout("/studies/11/onboarding");
+
+    expect(await screen.findByText("Study onboarding page")).toBeInTheDocument();
+    expect(screen.queryByText(/finish study onboarding/i)).not.toBeInTheDocument();
+  });
+
   it("lets users expand collaborations separately from studies in browse mode", async () => {
     renderLayout("/collaborations");
 
@@ -220,17 +319,17 @@ describe("AppLayout", () => {
   it("keeps browse navigation on the links while expand buttons only reveal previews", async () => {
     renderLayout("/collaborations/7?study=11");
 
-    expect((await screen.findAllByText(/hepatocyte mercury dose response/i)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByRole("link", { name: /hepatocyte mercury dose response/i })).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("link", { name: /^studies$/i }));
 
     expect(await screen.findByText("Studies page")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /toggle studies/i }));
-    expect(screen.queryByText(/hepatocyte mercury dose response/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /hepatocyte mercury dose response/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /toggle studies/i }));
-    expect((await screen.findAllByText(/hepatocyte mercury dose response/i)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByRole("link", { name: /hepatocyte mercury dose response/i })).length).toBeGreaterThan(0);
   });
 
   it("supports a collapsed browse branch when clicked twice", async () => {

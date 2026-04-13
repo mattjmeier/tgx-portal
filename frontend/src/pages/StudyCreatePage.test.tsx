@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { vi } from "vitest";
+import { beforeEach, vi } from "vitest";
 
 import { StudyCreatePage } from "./StudyCreatePage";
 
@@ -75,6 +75,10 @@ function renderPage(initialEntry: string) {
 }
 
 describe("StudyCreatePage", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it("requires a collaboration selection for the global study flow", async () => {
     renderPage("/studies/new");
 
@@ -92,7 +96,7 @@ describe("StudyCreatePage", () => {
     expect(await screen.findByText(/enter the onboarding wizard/i)).toBeInTheDocument();
     expect(screen.getByText(/title is the only field needed here/i)).toBeInTheDocument();
     expect(screen.getByText(/you are starting a study under/i)).toBeInTheDocument();
-    expect(screen.getByText(/mercury tox study/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/mercury tox study/i).length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: /back to collaboration/i })).not.toBeInTheDocument();
     const definitionsHeading = screen.getByRole("heading", { name: /definitions/i });
     const definitionsCard = definitionsHeading.closest(".rounded-xl");

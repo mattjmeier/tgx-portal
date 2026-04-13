@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
 import { createStudy, type CreateStudyPayload, type Study } from "../api/studies";
+import { cn } from "../lib/utils";
 import { studyOnboardingPath } from "../lib/routes";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
@@ -10,12 +11,13 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
 type StudyFormProps = {
+  className?: string;
   projectId: number;
 };
 
 const initialFormState: Omit<CreateStudyPayload, "project"> = { title: "" };
 
-export function StudyForm({ projectId }: StudyFormProps) {
+export function StudyForm({ className, projectId }: StudyFormProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [formState, setFormState] = useState<Omit<CreateStudyPayload, "project">>(initialFormState);
@@ -44,7 +46,7 @@ export function StudyForm({ projectId }: StudyFormProps) {
   }
 
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader className="gap-3">
         <div className="grid gap-1">
           <p className="eyebrow">Launch</p>

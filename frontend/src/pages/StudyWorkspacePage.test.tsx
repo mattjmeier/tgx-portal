@@ -148,7 +148,6 @@ describe("StudyWorkspacePage", () => {
     renderPage("/studies/11");
 
     expect(await screen.findByRole("heading", { name: /hepatocyte mercury dose response/i })).toBeInTheDocument();
-    expect(await screen.findByRole("link", { name: /continue onboarding/i })).toHaveAttribute("href", "/studies/11/onboarding");
     expect(screen.getByRole("tab", { name: /samples/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /contrasts/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /collaboration info/i })).toBeInTheDocument();

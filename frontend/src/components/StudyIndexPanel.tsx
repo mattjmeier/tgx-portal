@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PaginationState } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { deleteStudy, fetchStudiesIndex } from "../api/studies";
-import { collaborationPath, globalStudyCreateRoute, studyWorkspacePath } from "../lib/routes";
+import { collaborationPath, globalStudyCreateRoute, studyOnboardingPath, studyWorkspacePath } from "../lib/routes";
 import { StudyDeleteDialog } from "./StudyDeleteDialog";
 import { StudiesTable } from "./StudiesTable";
 import { WorkspaceSectionCard } from "./WorkspaceSectionCard";
@@ -143,9 +143,15 @@ export function StudyIndexPanel() {
         renderStudyActions={(study) => (
           <div className="flex items-center gap-2">
             <Button asChild size="icon" variant="outline">
-              <Link aria-label={`Edit study ${study.title}`} to={`${studyWorkspacePath(study.id)}?tab=collaboration`}>
-                <Pencil />
-              </Link>
+              {study.status === "draft" ? (
+                <Link aria-label={`Continue onboarding for study ${study.title}`} to={studyOnboardingPath(study.id)}>
+                  <ArrowRight />
+                </Link>
+              ) : (
+                <Link aria-label={`Edit study ${study.title}`} to={`${studyWorkspacePath(study.id)}?tab=collaboration`}>
+                  <Pencil />
+                </Link>
+              )}
             </Button>
             <StudyDeleteDialog
               isDeleting={deleteStudyMutation.isPending && deleteStudyMutation.variables === study.id}

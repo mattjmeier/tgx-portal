@@ -1,3 +1,4 @@
+import { cn } from "../lib/utils";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
@@ -8,6 +9,7 @@ type CollaborationOption = {
 
 type CollaborationPickerProps = {
   isDisabled?: boolean;
+  className?: string;
   projects: CollaborationOption[];
   selectedProjectId: number | null;
   onProjectChange: (projectId: number) => void;
@@ -15,12 +17,13 @@ type CollaborationPickerProps = {
 
 export function CollaborationPicker({
   isDisabled = false,
+  className,
   projects,
   selectedProjectId,
   onProjectChange,
 }: CollaborationPickerProps) {
   return (
-    <section className="rounded-xl border border-border/70 bg-card p-5 shadow-sm">
+    <section className={cn("rounded-xl border border-border/70 bg-card p-5 shadow-sm", className)}>
       <div className="grid gap-2">
         <p className="eyebrow">Collaboration selection</p>
         <h3 className="text-lg font-semibold text-foreground">Choose a collaboration first</h3>

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router-dom";
 
 import { fetchProject, fetchProjects } from "../api/projects";
+import { cn } from "../lib/utils";
 import { CollaborationPicker } from "../components/CollaborationPicker";
 import { StudyForm } from "../components/StudyForm";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -53,7 +54,7 @@ export function StudyCreatePage() {
         </div>
       </div>
 
-      {!hasPinnedCollaboration ? (
+      {!hasPinnedCollaboration && !query.data ? (
         <CollaborationPicker
           isDisabled={projectsQuery.isLoading}
           projects={projects}
@@ -67,9 +68,20 @@ export function StudyCreatePage() {
       {query.isError && selectedProjectId !== null ? <p className="error-text">Unable to load this collaboration.</p> : null}
 
       {query.data ? (
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.8fr)] lg:items-start">
-          <StudyForm projectId={query.data.id} />
-          <Card className="lg:sticky lg:top-6">
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-stretch">
+          <div className={cn("grid gap-6", !hasPinnedCollaboration && "lg:grid-rows-2")}>
+            {!hasPinnedCollaboration ? (
+              <CollaborationPicker
+                className="h-full"
+                isDisabled={projectsQuery.isLoading}
+                projects={projects}
+                selectedProjectId={selectedProjectId}
+                onProjectChange={handleProjectChange}
+              />
+            ) : null}
+            <StudyForm className="h-full" projectId={query.data.id} />
+          </div>
+          <Card className="h-full">
             <CardHeader>
               <p className="eyebrow">Reference</p>
               <CardTitle>Definitions</CardTitle>

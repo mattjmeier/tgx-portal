@@ -20,6 +20,7 @@ vi.mock("../api/studies", async () => {
           project: 7,
           project_title: "Mercury tox study",
           title: "Hepatocyte mercury dose response",
+          status: "draft",
           species: "human",
           celltype: "hepatocyte",
           treatment_var: "mercury",
@@ -32,6 +33,7 @@ vi.mock("../api/studies", async () => {
           project: 7,
           project_title: "Mercury tox study",
           title: "Kidney cadmium follow-up",
+          status: "active",
           species: "rat",
           celltype: "kidney",
           treatment_var: "cadmium",
@@ -44,6 +46,7 @@ vi.mock("../api/studies", async () => {
           project: 8,
           project_title: "Cadmium follow-up",
           title: "Mouse cortex lead pilot",
+          status: "active",
           species: "mouse",
           celltype: "cortex",
           treatment_var: "lead",
@@ -99,7 +102,11 @@ describe("StudiesPage", () => {
     expect(screen.queryByRole("link", { name: /open collaboration/i })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /^mercury tox study$/i })).toHaveLength(1);
     expect(screen.getAllByRole("link", { name: /^cadmium follow-up$/i })).toHaveLength(1);
-    expect(screen.getAllByRole("link", { name: /edit study/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: /continue onboarding for study hepatocyte mercury dose response/i })).toHaveAttribute(
+      "href",
+      "/studies/11/onboarding",
+    );
+    expect(screen.getAllByRole("link", { name: /edit study/i })).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: /delete study/i }).length).toBeGreaterThan(0);
   });
 

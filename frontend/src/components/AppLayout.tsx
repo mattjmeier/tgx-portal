@@ -2,17 +2,19 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, Outlet, useLocation, useMatch } from "react-router-dom";
 
 import { fetchProject } from "../api/projects";
-import { fetchStudy, fetchStudies, type Study } from "../api/studies";
+import { fetchStudy, fetchStudies, fetchStudiesIndex, type Study } from "../api/studies";
 import {
   collaborationCreatePath,
   collaborationRegistryPath,
   collaborationPath,
   globalStudyCreateRoute,
   studiesIndexPath,
+  studyOnboardingPath,
 } from "../lib/routes";
 import { ActiveContextHeader } from "./ActiveContextHeader";
 import { AppSidebar } from "./AppSidebar";
 import { FlashBanner } from "./FlashBanner";
+import { OnboardingResumeBanner } from "./OnboardingResumeBanner";
 import { Button } from "./ui/button";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "./ui/sidebar";
 
@@ -168,10 +170,21 @@ export function AppLayout() {
     enabled: Number.isFinite(projectId),
   });
 
+  const studiesIndexQuery = useQuery({
+    queryKey: ["studies-index", "resume-banner"],
+    queryFn: () => fetchStudiesIndex({ pageSize: 100 }),
+  });
+
   const selectedStudy =
     Number.isFinite(selectedStudyId) && studiesQuery.data
       ? studiesQuery.data.results.find((study) => study.id === selectedStudyId) ?? null
       : null;
+  const incompleteStudy =
+    studiesIndexQuery.data?.results
+      .filter((study) => study.status === "draft")
+      .sort((left, right) => right.id - left.id)[0] ?? null;
+  const isViewingIncompleteStudyOnboarding =
+    incompleteStudy !== null && pathname === studyOnboardingPath(incompleteStudy.id);
   const shellCopy = getShellCopy(
     pathname,
     Number.isFinite(projectId) ? projectId : null,
@@ -206,6 +219,14 @@ export function AppLayout() {
           </header>
 
           <main className="flex-1 px-4 py-5 md:px-6 md:py-6">
+            {incompleteStudy && !isViewingIncompleteStudyOnboarding ? (
+              <OnboardingResumeBanner
+                description={`You left ${incompleteStudy.title} unfinished. Jump back into the wizard to complete metadata setup and mappings.`}
+                studyId={incompleteStudy.id}
+                title="Finish study onboarding"
+                to={studyOnboardingPath(incompleteStudy.id)}
+              />
+            ) : null}
             <FlashBanner />
             <Outlet />
           </main>
