@@ -51,10 +51,15 @@ from .services import (
 from .tasks import create_plane_ticket
 from .onboarding import (
     DEFAULT_MAPPINGS,
+    DEFAULT_TEMPLATE_CONTEXT,
+    build_compatibility_summary,
+    get_design_selected_field_keys,
     normalize_contrast_pairs,
     normalize_mappings,
+    normalize_template_context,
     suggest_contrasts_from_rows,
     validate_final_ready,
+    validate_template_context_for_finalize,
 )
 
 logger = logging.getLogger(__name__)
@@ -91,7 +96,7 @@ def _require_study_access(user, study: Study) -> None:
 def _get_or_create_onboarding_state(study: Study) -> StudyOnboardingState:
     state, created = StudyOnboardingState.objects.get_or_create(
         study=study,
-        defaults={"mappings": DEFAULT_MAPPINGS},
+        defaults={"mappings": DEFAULT_MAPPINGS, "template_context": DEFAULT_TEMPLATE_CONTEXT},
     )
     if created:
         return state
@@ -101,10 +106,17 @@ def _get_or_create_onboarding_state(study: Study) -> StudyOnboardingState:
         state.save(update_fields=["mappings"])
         return state
 
+    if not isinstance(state.template_context, dict):
+        state.template_context = DEFAULT_TEMPLATE_CONTEXT
+        state.save(update_fields=["template_context"])
+        return state
+
     merged = {**DEFAULT_MAPPINGS, **{k: v for k, v in state.mappings.items() if isinstance(k, str)}}
-    if merged != state.mappings:
+    merged_template = normalize_template_context({**DEFAULT_TEMPLATE_CONTEXT, **state.template_context})
+    if merged != state.mappings or merged_template != state.template_context:
         state.mappings = merged
-        state.save(update_fields=["mappings"])
+        state.template_context = merged_template
+        state.save(update_fields=["mappings", "template_context"])
     return state
 
 
@@ -207,7 +219,7 @@ def _normalize_field_key(value: str) -> str:
     return value.strip().replace(" ", "_")
 
 
-def _upsert_study_template(study: Study, optional_field_keys: list[str], custom_field_keys: list[str]):
+def _upsert_study_template(study: Study, template_context: dict[str, list[str]]):
     core_order = {
         "sample_ID": 0,
         "technical_control": 1,
@@ -229,6 +241,11 @@ def _upsert_study_template(study: Study, optional_field_keys: list[str], custom_
 
     ordered_keys = [definition.key for definition in core_defs]
     auto_included: list[dict[str, str]] = []
+    derived_optional_keys, derived_reasons = get_design_selected_field_keys(
+        template_context,
+        available_field_keys=set(known_defs.keys()),
+    )
+    auto_included.extend(derived_reasons)
 
     def add_key(key: str, reason: str | None = None) -> None:
         if key in ordered_keys:
@@ -237,7 +254,10 @@ def _upsert_study_template(study: Study, optional_field_keys: list[str], custom_
         if reason is not None:
             auto_included.append({"key": key, "reason": reason})
 
-    for raw_key in optional_field_keys:
+    for key in derived_optional_keys:
+        add_key(key)
+
+    for raw_key in template_context.get("optional_field_keys", []):
         key = _normalize_field_key(raw_key)
         if key not in known_defs:
             raise ValueError(f"Unknown metadata field definitions: {key}")
@@ -245,7 +265,7 @@ def _upsert_study_template(study: Study, optional_field_keys: list[str], custom_
         for included_key in known_defs[key].auto_include_keys or []:
             add_key(included_key, reason=f"{key} selected")
 
-    for raw_key in custom_field_keys:
+    for raw_key in template_context.get("custom_field_keys", []):
         key = _normalize_field_key(raw_key)
         definition = known_defs.get(key)
         if definition is None:
@@ -304,6 +324,7 @@ class MetadataTemplateViewSet(viewsets.ViewSet):
         study_id = request.data.get("study_id")
         optional_field_keys = request.data.get("optional_field_keys", [])
         custom_field_keys = request.data.get("custom_field_keys", [])
+        template_context_payload = request.data.get("template_context")
 
         if not study_id:
             return Response({"study_id": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
@@ -316,7 +337,14 @@ class MetadataTemplateViewSet(viewsets.ViewSet):
         _require_study_access(request.user, study)
 
         try:
-            columns, auto_included, deprecated = _upsert_study_template(study, optional_field_keys, custom_field_keys)
+            template_context = normalize_template_context(
+                template_context_payload
+                or {
+                    "optional_field_keys": optional_field_keys,
+                    "custom_field_keys": custom_field_keys,
+                }
+            )
+            columns, auto_included, deprecated = _upsert_study_template(study, template_context)
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -537,9 +565,11 @@ class StudyViewSet(viewsets.ModelViewSet):
             selected_contrasts_payload = request.data.get("selected_contrasts", None)
             optional_field_keys = request.data.get("optional_field_keys", None)
             custom_field_keys = request.data.get("custom_field_keys", None)
+            template_context_payload = request.data.get("template_context", None)
             config_payload = request.data.get("config", None)
 
             mapping_model = _get_or_create_metadata_mapping(study)
+            normalized_template_context = normalize_template_context(state.template_context)
 
             if mappings_payload is not None:
                 normalized_mappings = normalize_mappings(mappings_payload)
@@ -551,8 +581,23 @@ class StudyViewSet(viewsets.ModelViewSet):
                 normalized_contrasts = normalize_contrast_pairs(selected_contrasts_payload)
                 mapping_model.selected_contrasts = normalized_contrasts
                 state.selected_contrasts = normalized_contrasts
-            if optional_field_keys is not None or custom_field_keys is not None:
-                _upsert_study_template(study, optional_field_keys or [], custom_field_keys or [])
+            if template_context_payload is not None:
+                normalized_template_context = normalize_template_context(template_context_payload)
+            elif optional_field_keys is not None or custom_field_keys is not None:
+                normalized_template_context = normalize_template_context(
+                    {
+                        **normalized_template_context,
+                        "optional_field_keys": optional_field_keys
+                        if optional_field_keys is not None
+                        else normalized_template_context.get("optional_field_keys", []),
+                        "custom_field_keys": custom_field_keys
+                        if custom_field_keys is not None
+                        else normalized_template_context.get("custom_field_keys", []),
+                    }
+                )
+            if template_context_payload is not None or optional_field_keys is not None or custom_field_keys is not None:
+                state.template_context = normalized_template_context
+                _upsert_study_template(study, normalized_template_context)
             if config_payload is not None:
                 config = _get_or_create_study_config(study)
                 for section in ("common", "pipeline", "qc", "deseq2"):
@@ -564,7 +609,16 @@ class StudyViewSet(viewsets.ModelViewSet):
             state.status = StudyOnboardingState.Status.DRAFT
             state.finalized_at = None
             state.updated_at = timezone.now()
-            state.save(update_fields=["mappings", "selected_contrasts", "status", "finalized_at", "updated_at"])
+            state.save(
+                update_fields=[
+                    "mappings",
+                    "template_context",
+                    "selected_contrasts",
+                    "status",
+                    "finalized_at",
+                    "updated_at",
+                ]
+            )
 
         mapping_model = _get_or_create_metadata_mapping(study)
         config = _get_or_create_study_config(study)
@@ -574,6 +628,7 @@ class StudyViewSet(viewsets.ModelViewSet):
                 "status": state.status,
                 "metadata_columns": state.metadata_columns,
                 "mappings": {**DEFAULT_MAPPINGS, **mapping_model.as_dict()},
+                "template_context": normalize_template_context(state.template_context),
                 "suggested_contrasts": state.suggested_contrasts,
                 "selected_contrasts": mapping_model.selected_contrasts,
                 "template_columns": get_study_template_columns(study),
@@ -595,10 +650,15 @@ class StudyViewSet(viewsets.ModelViewSet):
         state = _get_or_create_onboarding_state(study)
         mapping_model = _get_or_create_metadata_mapping(study)
         mappings = {**DEFAULT_MAPPINGS, **mapping_model.as_dict()}
+        template_context = normalize_template_context(state.template_context)
 
         errors = _study_finalize_errors(study)
         if errors:
             return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        template_context_errors = validate_template_context_for_finalize(template_context)
+        if template_context_errors:
+            return Response({"errors": template_context_errors}, status=status.HTTP_400_BAD_REQUEST)
 
         onboarding_errors = validate_final_ready(metadata_columns=get_study_template_columns(study), mappings=mappings)
         if onboarding_errors:
@@ -610,13 +670,16 @@ class StudyViewSet(viewsets.ModelViewSet):
         state.updated_at = now
         state.save(update_fields=["status", "finalized_at", "updated_at"])
         study.status = Study.Status.ACTIVE
-        study.save(update_fields=["status"])
+        study.treatment_var = build_compatibility_summary(template_context.get("treatment_vars", []))
+        study.batch_var = build_compatibility_summary(template_context.get("batch_vars", []))
+        study.save(update_fields=["status", "treatment_var", "batch_var"])
         return Response(
             {
                 "study_id": study.id,
                 "status": state.status,
                 "metadata_columns": state.metadata_columns,
                 "mappings": mappings,
+                "template_context": template_context,
                 "suggested_contrasts": state.suggested_contrasts,
                 "selected_contrasts": mapping_model.selected_contrasts,
                 "updated_at": state.updated_at.isoformat(),

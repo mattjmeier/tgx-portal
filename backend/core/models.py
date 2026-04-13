@@ -170,6 +170,7 @@ class StudyOnboardingState(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
     metadata_columns = models.JSONField(default=list, blank=True)
     mappings = models.JSONField(default=dict, blank=True)
+    template_context = models.JSONField(default=dict, blank=True)
     suggested_contrasts = models.JSONField(default=list, blank=True)
     selected_contrasts = models.JSONField(default=list, blank=True)
     updated_at = models.DateTimeField(auto_now=True)

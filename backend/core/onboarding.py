@@ -36,10 +36,86 @@ class StudyOnboardingMappingsSchema(BaseModel):
 
 DEFAULT_MAPPINGS: dict[str, str] = StudyOnboardingMappingsSchema().model_dump()
 
+STUDY_DESIGN_FIELD_MAP: dict[str, list[str]] = {
+    "chemical": ["chemical"],
+    "dose": ["dose"],
+    "timepoint": ["timepoint"],
+    "treatment": [],
+    "batch": [],
+}
+
+
+def _normalize_list(values: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        candidate = value.strip().replace(" ", "_")
+        if not candidate or candidate in seen:
+            continue
+        normalized.append(candidate)
+        seen.add(candidate)
+    return normalized
+
+
+class StudyTemplateContextSchema(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    study_design_elements: list[str] = Field(default_factory=list)
+    treatment_vars: list[str] = Field(default_factory=list)
+    batch_vars: list[str] = Field(default_factory=list)
+    optional_field_keys: list[str] = Field(default_factory=list)
+    custom_field_keys: list[str] = Field(default_factory=list)
+
+    def normalized(self) -> dict[str, list[str]]:
+        return {
+            "study_design_elements": _normalize_list(self.study_design_elements),
+            "treatment_vars": _normalize_list(self.treatment_vars),
+            "batch_vars": _normalize_list(self.batch_vars),
+            "optional_field_keys": _normalize_list(self.optional_field_keys),
+            "custom_field_keys": _normalize_list(self.custom_field_keys),
+        }
+
+
+DEFAULT_TEMPLATE_CONTEXT: dict[str, list[str]] = StudyTemplateContextSchema().model_dump()
+
 
 def normalize_mappings(payload: Any) -> dict[str, str]:
     schema = StudyOnboardingMappingsSchema.model_validate(payload or {})
     return schema.normalized()
+
+
+def normalize_template_context(payload: Any) -> dict[str, list[str]]:
+    schema = StudyTemplateContextSchema.model_validate(payload or {})
+    return schema.normalized()
+
+
+def build_compatibility_summary(values: list[str]) -> str | None:
+    normalized = _normalize_list(values)
+    if not normalized:
+        return None
+    return ", ".join(normalized)
+
+
+def get_design_selected_field_keys(
+    template_context: dict[str, list[str]],
+    *,
+    available_field_keys: set[str] | None = None,
+) -> tuple[list[str], list[dict[str, str]]]:
+    selected: list[str] = []
+    reasons: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    for element in template_context.get("study_design_elements", []):
+        for key in STUDY_DESIGN_FIELD_MAP.get(element, []):
+            if available_field_keys is not None and key not in available_field_keys:
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            selected.append(key)
+            reasons.append({"key": key, "reason": f"{element} study design selected"})
+
+    return selected, reasons
 
 
 def normalize_contrast_pairs(payload: Any) -> list[dict[str, str]]:
@@ -98,6 +174,37 @@ def validate_final_ready(*, metadata_columns: list[str], mappings: dict[str, str
     return errors
 
 
+def validate_template_context_for_finalize(template_context: dict[str, list[str]]) -> list[dict[str, str]]:
+    errors: list[dict[str, str]] = []
+    study_design_elements = template_context.get("study_design_elements", [])
+    treatment_vars = template_context.get("treatment_vars", [])
+    batch_vars = template_context.get("batch_vars", [])
+
+    if not study_design_elements:
+        errors.append(
+            {
+                "field": "template_context.study_design_elements",
+                "message": "Select at least one study design element before finalizing onboarding.",
+            }
+        )
+    if "treatment" in study_design_elements and not treatment_vars:
+        errors.append(
+            {
+                "field": "template_context.treatment_vars",
+                "message": "Add at least one treatment variable before finalizing onboarding.",
+            }
+        )
+    if "batch" in study_design_elements and not batch_vars:
+        errors.append(
+            {
+                "field": "template_context.batch_vars",
+                "message": "Add at least one batch variable before finalizing onboarding.",
+            }
+        )
+
+    return errors
+
+
 def suggest_contrasts_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, str]]:
     control_groups: set[str] = set()
     experimental_groups: set[str] = set()
@@ -124,4 +231,3 @@ def suggest_contrasts_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, st
                 continue
             suggestions.append({"reference_group": control, "comparison_group": experimental})
     return suggestions
-

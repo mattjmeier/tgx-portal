@@ -649,15 +649,22 @@ SEED_PROJECTS: list[SeedProject] = [
 def _infer_field_type(key: str):
     if key in {"technical_control", "reference_rna", "solvent_control"}:
         return MetadataFieldDefinition.DataType.BOOLEAN
-    if key in {"dose", "timepoint"}:
-        return MetadataFieldDefinition.DataType.FLOAT if key == "dose" else MetadataFieldDefinition.DataType.STRING
+    if key in {"dose", "concentration", "timepoint"}:
+        return MetadataFieldDefinition.DataType.FLOAT if key in {"dose", "concentration"} else MetadataFieldDefinition.DataType.STRING
     return MetadataFieldDefinition.DataType.STRING
 
 
 def _ensure_metadata_field_definition(key: str) -> MetadataFieldDefinition:
+    sequencing_keys = {"i5_index", "i7_index", "well_id", "sequencing_mode"}
     defaults = {
         "label": key.replace("_", " ").title(),
-        "group": "Core" if key in {"sample_ID", "sample_name", "technical_control", "reference_rna", "solvent_control"} else "Study design",
+        "group": (
+            "Core"
+            if key in {"sample_ID", "sample_name", "technical_control", "reference_rna", "solvent_control"}
+            else "Sequencing"
+            if key in sequencing_keys
+            else "Study design"
+        ),
         "description": f"Seeded metadata field for {key}.",
         "scope": MetadataFieldDefinition.Scope.SAMPLE,
         "system_key": key,
@@ -667,6 +674,10 @@ def _ensure_metadata_field_definition(key: str) -> MetadataFieldDefinition:
         "is_core": key in {"sample_ID", "technical_control", "reference_rna", "solvent_control"},
         "allow_null": key not in {"sample_ID", "technical_control", "reference_rna", "solvent_control"},
     }
+    if key == "concentration":
+        defaults["description"] = "Select for in vitro experiments."
+    if key == "dose":
+        defaults["description"] = "Select for in vivo experiments."
     if key == "sample_ID":
         defaults["regex"] = r"^[a-zA-Z0-9-_]*$"
     definition, _ = MetadataFieldDefinition.objects.update_or_create(key=key, defaults=defaults)

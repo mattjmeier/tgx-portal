@@ -1,16 +1,30 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { vi } from "vitest";
 
 import { StudyOnboardingWizard } from "./StudyOnboardingWizard";
 import { validateMetadataUpload } from "../../api/metadataValidation";
+import { downloadMetadataTemplate } from "../../api/metadataTemplates";
 import {
   fetchStudyOnboardingState,
   patchStudyOnboardingState,
   finalizeStudyOnboardingState,
 } from "../../api/studyOnboarding";
 import { updateStudy } from "../../api/studies";
+
+let mockStudy = {
+  id: 11,
+  project: 7,
+  project_title: "Mercury tox study",
+  title: "Hepatocyte mercury dose response",
+  description: "",
+  status: "draft",
+  species: null as "human" | "mouse" | "rat" | "hamster" | null,
+  celltype: null as string | null,
+  treatment_var: null as string | null,
+  batch_var: null as string | null,
+};
 
 vi.mock("papaparse", () => ({
   default: {
@@ -46,6 +60,7 @@ vi.mock("../../api/studyOnboarding", async () => {
   return {
     ...actual,
     fetchStudyOnboardingState: vi.fn(async () => ({
+      study_id: 11,
       status: "draft",
       metadata_columns: ["group", "plate", "sample_ID", "sample_name", "solvent_control"],
       mappings: {
@@ -61,19 +76,27 @@ vi.mock("../../api/studyOnboarding", async () => {
         clustering_group: "",
         report_faceting_group: "",
       },
+      template_context: {
+        study_design_elements: [],
+        treatment_vars: [],
+        batch_vars: [],
+        optional_field_keys: [],
+        custom_field_keys: [],
+      },
       suggested_contrasts: [{ reference_group: "control", comparison_group: "treated" }],
       selected_contrasts: [],
       updated_at: "2026-04-08T00:00:00.000Z",
       finalized_at: null,
     })),
-    patchStudyOnboardingState: vi.fn(async (studyId: number, payload: unknown) => {
-      const base = (await (fetchStudyOnboardingState as unknown as (studyId: number) => Promise<any>)(studyId));
+    patchStudyOnboardingState: vi.fn(async (studyId: number, payload: Record<string, unknown>) => {
+      const base = await (fetchStudyOnboardingState as unknown as (studyId: number) => Promise<Record<string, unknown>>)(studyId);
       return {
         ...base,
-        ...(payload as any),
+        ...payload,
       };
     }),
     finalizeStudyOnboardingState: vi.fn(async () => ({
+      study_id: 11,
       status: "final",
       metadata_columns: ["group", "plate", "sample_ID", "sample_name", "solvent_control"],
       mappings: {
@@ -88,6 +111,13 @@ vi.mock("../../api/studyOnboarding", async () => {
         pca_alpha: "",
         clustering_group: "",
         report_faceting_group: "",
+      },
+      template_context: {
+        study_design_elements: ["chemical", "treatment", "batch"],
+        treatment_vars: ["group"],
+        batch_vars: ["plate"],
+        optional_field_keys: [],
+        custom_field_keys: [],
       },
       suggested_contrasts: [{ reference_group: "control", comparison_group: "treated" }],
       selected_contrasts: [{ reference_group: "control", comparison_group: "treated" }],
@@ -165,6 +195,56 @@ vi.mock("../../api/lookups", async () => {
           auto_include_keys: [],
         },
         {
+          key: "concentration",
+          label: "Concentration",
+          group: "Toxicology",
+          description: "",
+          data_type: "float",
+          kind: "standard",
+          required: false,
+          auto_include_keys: [],
+        },
+        {
+          key: "i5_index",
+          label: "i5 index",
+          group: "Sequencing",
+          description: "i5 sample index.",
+          data_type: "string",
+          kind: "standard",
+          required: false,
+          auto_include_keys: [],
+        },
+        {
+          key: "i7_index",
+          label: "i7 index",
+          group: "Sequencing",
+          description: "i7 sample index.",
+          data_type: "string",
+          kind: "standard",
+          required: false,
+          auto_include_keys: [],
+        },
+        {
+          key: "well_id",
+          label: "Well ID",
+          group: "Sequencing",
+          description: "Plate well identifier.",
+          data_type: "string",
+          kind: "standard",
+          required: false,
+          auto_include_keys: [],
+        },
+        {
+          key: "sequencing_mode",
+          label: "Sequencing mode",
+          group: "Sequencing",
+          description: "Single-end or paired-end sequencing mode.",
+          data_type: "string",
+          kind: "standard",
+          required: false,
+          auto_include_keys: [],
+        },
+        {
           key: "timepoint",
           label: "Timepoint",
           group: "Study design",
@@ -192,30 +272,17 @@ vi.mock("../../api/studies", async () => {
   const actual = await vi.importActual<typeof import("../../api/studies")>("../../api/studies");
   return {
     ...actual,
-    fetchStudy: vi.fn(async () => ({
-      id: 11,
-      project: 7,
-      project_title: "Mercury tox study",
-      title: "Hepatocyte mercury dose response",
-      description: "",
-      status: "draft",
-      species: null,
-      celltype: null,
-      treatment_var: null,
-      batch_var: null,
-    })),
-    updateStudy: vi.fn(async (_studyId: number, payload: Record<string, unknown>) => ({
-      id: 11,
-      project: 7,
-      project_title: "Mercury tox study",
-      title: String(payload.title ?? "Hepatocyte mercury dose response"),
-      description: String(payload.description ?? ""),
-      status: "draft",
-      species: payload.species ?? "human",
-      celltype: payload.celltype ?? "hepatocyte",
-      treatment_var: payload.treatment_var ?? "group",
-      batch_var: payload.batch_var ?? "plate",
-    })),
+    fetchStudy: vi.fn(async () => mockStudy),
+    updateStudy: vi.fn(async (_studyId: number, payload: Record<string, unknown>) => {
+      mockStudy = {
+        ...mockStudy,
+        title: String(payload.title ?? mockStudy.title),
+        description: String(payload.description ?? mockStudy.description),
+        species: (payload.species as typeof mockStudy.species | undefined) ?? mockStudy.species,
+        celltype: (payload.celltype as string | null | undefined) ?? mockStudy.celltype,
+      };
+      return mockStudy;
+    }),
   };
 });
 
@@ -223,22 +290,45 @@ vi.mock("../../api/metadataTemplates", async () => {
   const actual = await vi.importActual<typeof import("../../api/metadataTemplates")>("../../api/metadataTemplates");
   return {
     ...actual,
-    previewMetadataTemplate: vi.fn(async (payload: { optional_field_keys: string[]; custom_field_keys: string[] }) => {
+    previewMetadataTemplate: vi.fn(async (payload: {
+      optional_field_keys: string[];
+      custom_field_keys: string[];
+      template_context?: { study_design_elements?: string[] };
+    }) => {
       const required = ["sample_ID", "sample_name", "group"];
-      const optional = payload.optional_field_keys ?? [];
-      const custom = payload.custom_field_keys ?? [];
       const columns = [...required];
-      for (const key of [...optional, ...custom]) {
+      const autoIncluded: Array<{ key: string; reason: string }> = [];
+      const studyDesignElements = payload.template_context?.study_design_elements ?? [];
+
+      if (studyDesignElements.includes("chemical") && !columns.includes("chemical")) {
+        columns.push("chemical");
+        autoIncluded.push({ key: "chemical", reason: "chemical study design selected" });
+      }
+
+      if (studyDesignElements.includes("timepoint") && !columns.includes("timepoint")) {
+        columns.push("timepoint");
+        autoIncluded.push({ key: "timepoint", reason: "timepoint study design selected" });
+      }
+
+      for (const key of payload.optional_field_keys ?? []) {
         if (!columns.includes(key)) {
           columns.push(key);
         }
         if (key === "chemical" && !columns.includes("CASN")) {
           columns.push("CASN");
+          autoIncluded.push({ key: "CASN", reason: "chemical selected" });
         }
       }
+
+      for (const key of payload.custom_field_keys ?? []) {
+        if (!columns.includes(key)) {
+          columns.push(key);
+        }
+      }
+
       return {
         columns,
-        auto_included: optional.includes("chemical") ? [{ key: "CASN", reason: "chemical selected" }] : [],
+        auto_included: autoIncluded,
         deprecated_fields: [],
         project_code: "example-7",
         filename: "example-7_metadata.csv",
@@ -267,12 +357,12 @@ function renderWizard(initialEntry: string) {
         <Routes>
           <Route
             path="/studies/:studyId/onboarding"
-            element={
+            element={(
               <div>
                 <LocationDisplay />
                 <StudyOnboardingWizard />
               </div>
-            }
+            )}
           />
         </Routes>
       </MemoryRouter>
@@ -283,65 +373,152 @@ function renderWizard(initialEntry: string) {
 describe("StudyOnboardingWizard", () => {
   beforeEach(() => {
     localStorage.clear();
+    mockStudy = {
+      id: 11,
+      project: 7,
+      project_title: "Mercury tox study",
+      title: "Hepatocyte mercury dose response",
+      description: "",
+      status: "draft",
+      species: null,
+      celltype: null,
+      treatment_var: null,
+      batch_var: null,
+    };
   });
 
-  it("defaults to the details step when the step query param is missing", () => {
+  it("defaults to the details step when the step query param is missing", async () => {
     renderWizard("/studies/11/onboarding");
 
-    expect(screen.getByRole("heading", { name: "High-level details" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Study details" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Back to study" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Studies" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Study title")).toBeInTheDocument();
-    expect(screen.getByLabelText("Description")).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/studies/11/onboarding");
+    expect(screen.queryByText("Saved, needs more info")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Not started")).toHaveLength(4);
+    expect(screen.getByRole("button", { name: /Study details/i })).toHaveTextContent("1");
+    expect(screen.getByRole("button", { name: /Template design/i })).toHaveTextContent("2");
+    expect(screen.getByRole("button", { name: /Upload metadata/i })).toHaveTextContent("3");
+    expect(screen.getByRole("button", { name: /Mappings/i })).toHaveTextContent("4");
+    expect(screen.getByRole("button", { name: /Review/i })).toHaveTextContent("5");
   });
 
-  it("honors the step query param when present", () => {
+  it("honors the step query param when present", async () => {
     renderWizard("/studies/11/onboarding?step=upload");
 
-    expect(screen.getByRole("heading", { name: "Upload + validation" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Upload metadata" })).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/studies/11/onboarding?step=upload");
   });
 
-  it("persists draft state in localStorage scoped to the study", () => {
+  it("persists draft state in localStorage scoped to the study", async () => {
     const { unmount } = renderWizard("/studies/11/onboarding");
 
-    fireEvent.change(screen.getByLabelText("PI name"), { target: { value: "Dr. Example" } });
+    fireEvent.change(await screen.findByLabelText("PI name"), { target: { value: "Dr. Example" } });
     expect(screen.getByDisplayValue("Dr. Example")).toBeInTheDocument();
 
     unmount();
 
     renderWizard("/studies/11/onboarding");
-    expect(screen.getByDisplayValue("Dr. Example")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Dr. Example")).toBeInTheDocument();
   });
 
-  it("navigates to the next step and updates the URL", () => {
-    renderWizard("/studies/11/onboarding");
-
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    expect(screen.getByRole("heading", { name: "Template selection" })).toBeInTheDocument();
-    expect(screen.getByTestId("location")).toHaveTextContent("/studies/11/onboarding?step=template");
-  });
-
-  it("auto-adds CASN in the template preview when chemical is selected", async () => {
+  it("requires at least one study design element before continuing from template design", async () => {
     renderWizard("/studies/11/onboarding?step=template");
 
-    expect(await screen.findByLabelText("Cell type")).toBeInTheDocument();
-    expect(screen.getByLabelText("Treatment variable")).toBeInTheDocument();
-    expect(screen.getByLabelText("Batch variable")).toBeInTheDocument();
-    const chemicalCheckbox = await screen.findByLabelText("Chemical");
-    fireEvent.click(chemicalCheckbox);
+    const continueButton = await screen.findByRole("button", { name: "Continue" });
+    expect(continueButton).toBeDisabled();
 
-    expect(await screen.findByText("Auto-added CASN: chemical selected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /chemical/i }));
+    expect(continueButton).not.toBeDisabled();
   });
 
-  it("parses an uploaded sheet, shows a preview, and renders aggregate validation issues", async () => {
+  it("auto-adds study-design driven columns in the template preview", async () => {
+    renderWizard("/studies/11/onboarding?step=template");
+
+    fireEvent.click(await screen.findByRole("button", { name: /chemical/i }));
+
+    expect(await screen.findByText("Auto-added chemical: chemical study design selected")).toBeInTheDocument();
+  });
+
+  it("renders the template preview before the template configurator content", async () => {
+    renderWizard("/studies/11/onboarding?step=template");
+
+    const previewHeading = await screen.findByText("Template preview");
+    const designHeading = screen.getByText("Study design elements");
+    const columnsHeading = screen.getByText("Template columns");
+
+    expect(
+      Boolean(previewHeading.compareDocumentPosition(designHeading) & Node.DOCUMENT_POSITION_FOLLOWING),
+    ).toBe(true);
+    expect(
+      Boolean(designHeading.compareDocumentPosition(columnsHeading) & Node.DOCUMENT_POSITION_FOLLOWING),
+    ).toBe(true);
+  });
+
+  it("renders required and sequencing groups inside the template columns card", async () => {
+    renderWizard("/studies/11/onboarding?step=template");
+
+    expect(await screen.findByText("Template columns")).toBeInTheDocument();
+    expect(screen.getAllByText("Required").length).toBeGreaterThan(0);
+
+    expect((await screen.findAllByText("Sample ID")).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /remove sample id/i })).not.toBeInTheDocument();
+
+    expect(screen.getByText("i5 index")).toBeInTheDocument();
+    expect(screen.getByText("i7 index")).toBeInTheDocument();
+    expect(screen.getByText("Well ID")).toBeInTheDocument();
+    expect(screen.getByText("Sequencing mode")).toBeInTheDocument();
+    expect(screen.getByText("Concentration")).toBeInTheDocument();
+    expect(screen.getByText("Select for in vitro experiments.")).toBeInTheDocument();
+    expect(screen.getByText("Select for in vivo experiments.")).toBeInTheDocument();
+  });
+
+  it("shows study-design-derived fields as selected and locked", async () => {
+    renderWizard("/studies/11/onboarding?step=template");
+
+    fireEvent.click(await screen.findByRole("button", { name: /chemical/i }));
+
+    const chemicalCheckbox = await screen.findByLabelText("Chemical");
+    expect(chemicalCheckbox).toBeChecked();
+    expect(chemicalCheckbox).toBeDisabled();
+    expect(screen.getByText("Auto-included from study design.")).toBeInTheDocument();
+  });
+
+  it("creates removable custom chips through the progressive add control", async () => {
+    renderWizard("/studies/11/onboarding?step=template");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add custom field" }));
+
+    fireEvent.change(screen.getByLabelText("Custom field name"), { target: { value: "plate_layout" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add field" }));
+
+    expect(await screen.findByText("plate_layout")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /remove plate_layout/i })).toBeInTheDocument();
+  });
+
+  it("keeps the download template button disabled until the template configuration is valid", async () => {
+    renderWizard("/studies/11/onboarding?step=template");
+
+    const downloadButton = await screen.findByRole("button", { name: "Download template" });
+    expect(downloadButton).toBeDisabled();
+
+    fireEvent.click(downloadButton);
+    expect(downloadMetadataTemplate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /chemical/i }));
+    await waitFor(() => expect(downloadButton).toBeEnabled());
+  });
+
+  it("parses an uploaded sheet, shows a preview, and keeps only one file chooser path", async () => {
     renderWizard("/studies/11/onboarding?step=upload");
 
-    const input = screen.getByLabelText("Or choose a file") as HTMLInputElement;
+    const input = await screen.findByTestId("metadata-file-input");
     const file = new File(["sample_ID,sample_name,group\n,sample-a,control\n"], "metadata.csv", { type: "text/csv" });
     fireEvent.change(input, { target: { files: [file] } });
 
     expect(await screen.findByText("sample_ID is required.")).toBeInTheDocument();
+    expect(screen.queryByText("Or choose a file")).not.toBeInTheDocument();
     expect(validateMetadataUpload).toHaveBeenCalledWith(
       expect.objectContaining({
         study_id: 11,
@@ -350,49 +527,124 @@ describe("StudyOnboardingWizard", () => {
     );
   });
 
-  it("derives mapping column options from uploaded metadata (not just template preview)", async () => {
+  it("derives mapping column options from uploaded metadata", async () => {
     renderWizard("/studies/11/onboarding?step=upload");
 
-    const input = screen.getByLabelText("Or choose a file") as HTMLInputElement;
+    const input = await screen.findByTestId("metadata-file-input");
     const file = new File(["sample_ID,sample_name,group,plate,solvent_control\n"], "metadata.csv", { type: "text/csv" });
     fireEvent.change(input, { target: { files: [file] } });
-
     expect(await screen.findByText("sample_ID is required.")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(await screen.findByRole("heading", { name: /contrasts \+ mappings/i })).toBeInTheDocument();
-    expect(fetchStudyOnboardingState).toHaveBeenCalledWith(11);
-
-    fireEvent.click(await screen.findByLabelText(/treatment level 1/i));
+    expect(await screen.findByRole("heading", { name: "Mappings" })).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Treatment level 1"));
     expect(await screen.findByRole("option", { name: "plate" })).toBeInTheDocument();
   });
 
-  it("allows saving a draft mapping before finalization and gates output generation until final", async () => {
-    renderWizard("/studies/11/onboarding?step=mappings");
+  it("saves template context with chip selections and finalizes mappings", async () => {
+    const view = renderWizard("/studies/11/onboarding?step=template");
 
-    expect(await screen.findByText(/status: draft/i)).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: /finalize mappings/i })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /treatment/i }));
+    fireEvent.change(screen.getByLabelText("Treatment vars"), { target: { value: "group" } });
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    fireEvent.click(await screen.findByLabelText(/treatment level 1/i));
-    fireEvent.click(await screen.findByRole("option", { name: "group" }));
-
-    fireEvent.click(await screen.findByRole("button", { name: /save draft/i }));
     await waitFor(() =>
       expect(patchStudyOnboardingState).toHaveBeenCalledWith(
         11,
         expect.objectContaining({
-          mappings: expect.objectContaining({ treatment_level_1: "group" }),
+          template_context: expect.objectContaining({
+            study_design_elements: ["treatment"],
+            treatment_vars: ["group"],
+          }),
         }),
       ),
     );
 
+    view.unmount();
+    renderWizard("/studies/11/onboarding?step=mappings");
+    fireEvent.click(await screen.findByLabelText("Treatment level 1"));
+    fireEvent.click(await screen.findByRole("option", { name: "group" }));
     fireEvent.click(await screen.findByRole("button", { name: /finalize mappings/i }));
+
     await waitFor(() => expect(finalizeStudyOnboardingState).toHaveBeenCalledWith(11));
     expect(updateStudy).toHaveBeenCalledWith(
       11,
       expect.objectContaining({
         title: "Hepatocyte mercury dose response",
+      }),
+    );
+  });
+
+  it("shows a warning only after successfully saving an incomplete step", async () => {
+    renderWizard("/studies/11/onboarding");
+
+    expect(await screen.findByRole("heading", { name: "Study details" })).toBeInTheDocument();
+    expect(screen.queryByText("Saved, needs more info")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Template design/i }));
+
+    await screen.findByRole("heading", { name: "Template design" });
+    expect(updateStudy).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({
+        title: "Hepatocyte mercury dose response",
+        species: null,
+        celltype: null,
+      }),
+    );
+
+    const detailsStep = screen.getByRole("button", { name: /Study details/i });
+    expect(within(detailsStep).getByText("Saved, needs more info")).toBeInTheDocument();
+    expect(detailsStep).toHaveTextContent("1");
+  });
+
+  it("keeps an invalid edited step neutral until it is saved", async () => {
+    renderWizard("/studies/11/onboarding?step=template");
+
+    await screen.findByRole("heading", { name: "Template design" });
+    fireEvent.click(screen.getByRole("button", { name: /chemical/i }));
+    expect(screen.queryByText("Saved, needs more info")).not.toBeInTheDocument();
+  });
+
+  it("preserves attempted warning states across reloads from local draft storage", async () => {
+    const { unmount } = renderWizard("/studies/11/onboarding");
+
+    await screen.findByRole("heading", { name: "Study details" });
+    fireEvent.click(screen.getByRole("button", { name: /Template design/i }));
+    await screen.findByRole("heading", { name: "Template design" });
+    expect(screen.getByText("Saved, needs more info")).toBeInTheDocument();
+
+    unmount();
+
+    renderWizard("/studies/11/onboarding?step=template");
+    await screen.findByRole("heading", { name: "Template design" });
+    expect(screen.getByText("Saved, needs more info")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Study details/i })).toHaveTextContent("1");
+  });
+
+  it("shows a checkmark only after a step is complete and saved", async () => {
+    renderWizard("/studies/11/onboarding");
+
+    await screen.findByRole("heading", { name: "Study details" });
+    fireEvent.change(screen.getByLabelText("Study title"), { target: { value: "Updated study title" } });
+    fireEvent.change(screen.getByLabelText("Cell type"), { target: { value: "hepatocyte" } });
+    fireEvent.click(screen.getByLabelText("Species"));
+    fireEvent.click(await screen.findByRole("option", { name: "Human" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Template design/i }));
+
+    await screen.findByRole("heading", { name: "Template design" });
+    const detailsStep = screen.getByRole("button", { name: /Study details/i });
+    expect(within(detailsStep).getByText("Complete and saved")).toBeInTheDocument();
+    expect(within(detailsStep).queryByText("1")).not.toBeInTheDocument();
+    expect(updateStudy).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({
+        title: "Updated study title",
+        species: "human",
+        celltype: "hepatocyte",
       }),
     );
   });

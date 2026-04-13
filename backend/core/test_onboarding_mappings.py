@@ -78,7 +78,13 @@ def test_onboarding_state_persists_template_mappings_and_config_before_finalize(
     patch_response = client.patch(
         f"/api/studies/{study.id}/onboarding-state/",
         {
-            "optional_field_keys": ["group", "dose"],
+            "template_context": {
+                "study_design_elements": ["dose", "treatment"],
+                "treatment_vars": ["group"],
+                "batch_vars": [],
+                "optional_field_keys": ["group"],
+                "custom_field_keys": [],
+            },
             "mappings": {"treatment_level_1": "group", "batch": ""},
             "config": {
                 "common": {"dose": "dose", "units": "uM"},
@@ -91,7 +97,9 @@ def test_onboarding_state_persists_template_mappings_and_config_before_finalize(
     )
     assert patch_response.status_code == 200
     assert "group" in patch_response.json()["template_columns"]
+    assert "dose" in patch_response.json()["template_columns"]
     assert patch_response.json()["mappings"]["treatment_level_1"] == "group"
+    assert patch_response.json()["template_context"]["study_design_elements"] == ["dose", "treatment"]
 
     client.post(
         "/api/metadata-validation/",
@@ -114,6 +122,56 @@ def test_onboarding_state_persists_template_mappings_and_config_before_finalize(
     finalize_response = client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
     assert finalize_response.status_code == 200
     assert finalize_response.json()["status"] == "final"
+    study.refresh_from_db()
+    assert study.treatment_var == "group"
+    assert study.batch_var is None
+
+
+@pytest.mark.django_db
+def test_onboarding_finalize_rejects_missing_required_template_context_choices() -> None:
+    client = APIClient()
+    user = User.objects.create_user(username="admin", password="admin123")
+    user.profile.role = UserProfile.Role.ADMIN
+    user.profile.save()
+    client.force_authenticate(user=user)
+
+    project = Project.objects.create(
+        owner=user,
+        pi_name="Dr. Curie",
+        researcher_name="Researcher A",
+        bioinformatician_assigned="Bioinfo",
+        title="Mercury tox study",
+        description="",
+    )
+    study = Study.objects.create(project=project, title="Study", species=Study.Species.HUMAN, celltype="Hepatocyte")
+
+    client.patch(
+        f"/api/studies/{study.id}/onboarding-state/",
+        {
+            "template_context": {
+                "study_design_elements": ["treatment", "batch"],
+                "treatment_vars": [],
+                "batch_vars": [],
+                "optional_field_keys": ["group"],
+                "custom_field_keys": [],
+            },
+            "mappings": {"treatment_level_1": "group"},
+            "config": {
+                "common": {"dose": "dose", "units": "uM"},
+                "pipeline": {"mode": "se", "threads": 8},
+                "qc": {"dendro_color_by": "group"},
+                "deseq2": {"cpus": 4},
+            },
+        },
+        format="json",
+    )
+
+    response = client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
+
+    assert response.status_code == 400
+    messages = [item["message"] for item in response.json()["errors"]]
+    assert "Add at least one treatment variable before finalizing onboarding." in messages
+    assert "Add at least one batch variable before finalizing onboarding." in messages
 
 
 @pytest.mark.django_db
@@ -140,7 +198,13 @@ def test_generate_config_is_blocked_until_onboarding_is_final() -> None:
     client.patch(
         f"/api/studies/{study.id}/onboarding-state/",
         {
-            "optional_field_keys": ["group", "dose"],
+            "template_context": {
+                "study_design_elements": ["dose", "treatment", "batch"],
+                "treatment_vars": ["group", "timepoint"],
+                "batch_vars": ["plate", "operator"],
+                "optional_field_keys": ["group"],
+                "custom_field_keys": [],
+            },
             "mappings": {"treatment_level_1": "group"},
             "selected_contrasts": [{"reference_group": "control", "comparison_group": "treated"}],
             "config": {
@@ -164,6 +228,9 @@ def test_generate_config_is_blocked_until_onboarding_is_final() -> None:
         format="json",
     )
     client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
+    study.refresh_from_db()
+    assert study.treatment_var == "group, timepoint"
+    assert study.batch_var == "plate, operator"
 
     Sample.objects.create(
         study=study,

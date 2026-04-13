@@ -1,3 +1,4 @@
+import type { StudyTemplateContext } from "./studyOnboarding";
 import { apiFetch, parseErrorMessage } from "./http";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
@@ -6,6 +7,7 @@ export type MetadataTemplatePreviewRequest = {
   study_id: number;
   optional_field_keys: string[];
   custom_field_keys: string[];
+  template_context?: StudyTemplateContext;
 };
 
 export type MetadataTemplatePreviewResponse = {

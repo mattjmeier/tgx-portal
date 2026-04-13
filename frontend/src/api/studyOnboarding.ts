@@ -7,6 +7,14 @@ export type ContrastPair = {
   comparison_group: string;
 };
 
+export type StudyTemplateContext = {
+  study_design_elements: string[];
+  treatment_vars: string[];
+  batch_vars: string[];
+  optional_field_keys: string[];
+  custom_field_keys: string[];
+};
+
 export type StudyOnboardingMappings = {
   treatment_level_1: string;
   treatment_level_2: string;
@@ -26,13 +34,14 @@ export type StudyOnboardingState = {
   status: StudyOnboardingStatus;
   metadata_columns: string[];
   mappings: StudyOnboardingMappings;
+  template_context: StudyTemplateContext;
   suggested_contrasts: ContrastPair[];
   selected_contrasts: ContrastPair[];
   updated_at: string | null;
   finalized_at: string | null;
 };
 
-export type PatchStudyOnboardingStatePayload = Partial<Pick<StudyOnboardingState, "mappings" | "selected_contrasts">>;
+export type PatchStudyOnboardingStatePayload = Partial<Pick<StudyOnboardingState, "mappings" | "selected_contrasts" | "template_context">>;
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -68,4 +77,3 @@ export async function finalizeStudyOnboardingState(studyId: number): Promise<Stu
   }
   return response.json();
 }
-

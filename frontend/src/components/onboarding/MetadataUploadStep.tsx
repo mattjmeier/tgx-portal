@@ -9,7 +9,6 @@ import {
 } from "../../api/metadataValidation";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { Label } from "../ui/label";
 
 type MetadataUploadStepProps = {
   studyId: number;
@@ -142,14 +141,12 @@ export function MetadataUploadStep({
         <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
           Choose file
         </Button>
-      </div>
-
-      <div className="grid gap-2">
-        <Label htmlFor="filePicker">Or choose a file</Label>
         <Input
           ref={fileInputRef}
+          data-testid="metadata-file-input"
           id="filePicker"
           type="file"
+          className="hidden"
           accept=".csv,.tsv,text/csv,text/tab-separated-values"
           onChange={(event) => {
             const file = event.target.files?.[0];
@@ -158,7 +155,7 @@ export function MetadataUploadStep({
             }
           }}
         />
-        <p className="text-sm text-muted-foreground">Selected file: {fileName ? fileName : "None"}</p>
+        <p className="text-xs text-muted-foreground">Selected file: {fileName ? fileName : "None"}</p>
       </div>
 
       {parseError ? <p className="text-sm text-destructive">{parseError}</p> : null}

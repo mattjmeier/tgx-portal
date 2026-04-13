@@ -31,12 +31,22 @@ def test_lookups_returns_enriched_metadata_field_definitions_and_controlled_valu
     technical_control_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "technical_control")
     reference_rna_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "reference_rna")
     solvent_control_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "solvent_control")
+    concentration_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "concentration")
+    i5_index_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "i5_index")
+    i7_index_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "i7_index")
+    well_id_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "well_id")
+    sequencing_mode_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "sequencing_mode")
     assert sample_id_field["is_core"] is True
     assert sample_id_field["scope"] == "sample"
     assert "regex" in sample_id_field
     assert technical_control_field["required"] is True
     assert reference_rna_field["required"] is True
     assert solvent_control_field["required"] is True
+    assert concentration_field["group"] == "Toxicology"
+    assert i5_index_field["group"] == "Sequencing"
+    assert i7_index_field["group"] == "Sequencing"
+    assert well_id_field["group"] == "Sequencing"
+    assert sequencing_mode_field["group"] == "Sequencing"
     genome_versions = payload["lookups"]["controlled"]["genome_version"]["values"]
     assert genome_versions == ["hg38"]
 
@@ -104,7 +114,18 @@ def test_metadata_template_preview_persists_minimal_core_and_optional_fields() -
 
     response = client.post(
         "/api/metadata-templates/preview/",
-        {"study_id": study.id, "optional_field_keys": ["sample_name", "dose"], "custom_field_keys": ["timepoint"]},
+        {
+            "study_id": study.id,
+            "template_context": {
+                "study_design_elements": ["dose", "timepoint"],
+                "treatment_vars": [],
+                "batch_vars": [],
+                "optional_field_keys": ["sample_name", "i5_index", "concentration"],
+                "custom_field_keys": ["timepoint"],
+            },
+            "optional_field_keys": ["sample_name", "i5_index", "concentration"],
+            "custom_field_keys": ["timepoint"],
+        },
         format="json",
     )
 
@@ -112,8 +133,11 @@ def test_metadata_template_preview_persists_minimal_core_and_optional_fields() -
     payload = response.json()
     assert payload["columns"][:4] == ["sample_ID", "technical_control", "reference_rna", "solvent_control"]
     assert "sample_name" in payload["columns"]
+    assert "i5_index" in payload["columns"]
+    assert "concentration" in payload["columns"]
     assert "dose" in payload["columns"]
     assert "timepoint" in payload["columns"]
+    assert {"key": "dose", "reason": "dose study design selected"} in payload["auto_included"]
     assert study.metadata_field_selections.filter(is_active=True).count() == len(payload["columns"])
 
 
