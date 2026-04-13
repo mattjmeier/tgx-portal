@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import type { Project } from "../api/projects";
 import { deleteStudy, fetchStudies } from "../api/studies";
 import { collaborationStudyCreatePath, studyOnboardingPath, studyWorkspacePath } from "../lib/routes";
+import { clearDeletedStudyClientState } from "../lib/studyDeletion";
 import { StudyDeleteDialog } from "./StudyDeleteDialog";
 import { StudiesTable } from "./StudiesTable";
 import { Button } from "./ui/button";
@@ -49,8 +50,12 @@ export function ProjectWorkspace({
 
   const deleteStudyMutation = useMutation<void, Error, number>({
     mutationFn: deleteStudy,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["studies", selectedProjectId] });
+    onSuccess: async (_, deletedStudyId) => {
+      clearDeletedStudyClientState(queryClient, deletedStudyId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["studies", selectedProjectId] }),
+        queryClient.invalidateQueries({ queryKey: ["studies-index"] }),
+      ]);
     },
   });
 

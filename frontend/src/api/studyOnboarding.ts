@@ -29,19 +29,30 @@ export type StudyOnboardingMappings = {
   report_faceting_group: string;
 };
 
+export type StudyOnboardingConfig = {
+  common: Record<string, unknown>;
+  pipeline: Record<string, unknown>;
+  qc: Record<string, unknown>;
+  deseq2: Record<string, unknown>;
+};
+
 export type StudyOnboardingState = {
   study_id: number;
   status: StudyOnboardingStatus;
   metadata_columns: string[];
   mappings: StudyOnboardingMappings;
   template_context: StudyTemplateContext;
+  template_columns?: string[];
+  config: StudyOnboardingConfig;
   suggested_contrasts: ContrastPair[];
   selected_contrasts: ContrastPair[];
   updated_at: string | null;
   finalized_at: string | null;
 };
 
-export type PatchStudyOnboardingStatePayload = Partial<Pick<StudyOnboardingState, "mappings" | "selected_contrasts" | "template_context">>;
+export type PatchStudyOnboardingStatePayload = Partial<
+  Pick<StudyOnboardingState, "mappings" | "selected_contrasts" | "template_context" | "config">
+>;
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
 

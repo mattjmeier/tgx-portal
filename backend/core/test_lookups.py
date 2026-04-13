@@ -21,12 +21,47 @@ def test_lookups_returns_enriched_metadata_field_definitions_and_controlled_valu
         value="hg38",
         is_active=True,
     )
+    ControlledLookupValue.objects.create(
+        category=ControlledLookupValue.Category.PLATFORM,
+        value="RNA-Seq",
+        is_active=True,
+    )
+    ControlledLookupValue.objects.create(
+        category=ControlledLookupValue.Category.INSTRUMENT_MODEL,
+        value="Illumina NovaSeq 6000",
+        is_active=True,
+    )
+    ControlledLookupValue.objects.create(
+        category=ControlledLookupValue.Category.BIOSPYDER_KIT,
+        value="hwt2-1",
+        is_active=True,
+    )
+    ControlledLookupValue.objects.create(
+        category=ControlledLookupValue.Category.SEQUENCED_BY,
+        value="HC Genomics lab",
+        is_active=True,
+    )
+
+    Project.objects.create(
+        owner=user,
+        pi_name="Dr. Curie",
+        researcher_name="Researcher A",
+        bioinformatician_assigned="Bioinfo",
+        title="Mercury tox study",
+        description="",
+    )
+    Study.objects.create(
+        project=Project.objects.first(),
+        title="Study",
+        species=Study.Species.HUMAN,
+        celltype="Hepatocyte",
+    )
 
     response = client.get("/api/lookups/")
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["version"] == 1
+    assert payload["version"] == 2
     sample_id_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "sample_ID")
     technical_control_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "technical_control")
     reference_rna_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "reference_rna")
@@ -35,7 +70,6 @@ def test_lookups_returns_enriched_metadata_field_definitions_and_controlled_valu
     i5_index_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "i5_index")
     i7_index_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "i7_index")
     well_id_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "well_id")
-    sequencing_mode_field = next(item for item in payload["metadata_field_definitions"] if item["key"] == "sequencing_mode")
     assert sample_id_field["is_core"] is True
     assert sample_id_field["scope"] == "sample"
     assert "regex" in sample_id_field
@@ -46,9 +80,56 @@ def test_lookups_returns_enriched_metadata_field_definitions_and_controlled_valu
     assert i5_index_field["group"] == "Sequencing"
     assert i7_index_field["group"] == "Sequencing"
     assert well_id_field["group"] == "Sequencing"
-    assert sequencing_mode_field["group"] == "Sequencing"
+    assert all(item["key"] != "sequencing_mode" for item in payload["metadata_field_definitions"])
     genome_versions = payload["lookups"]["controlled"]["genome_version"]["values"]
     assert genome_versions == ["hg38"]
+    assert payload["lookups"]["controlled"]["platform"]["values"] == ["RNA-Seq"]
+    assert payload["lookups"]["controlled"]["instrument_model"]["values"] == ["Illumina NovaSeq 6000"]
+    assert payload["lookups"]["controlled"]["biospyder_kit"]["values"] == [
+        {"label": "Human Whole Transcriptome 2.1", "value": "hwt2-1"}
+    ]
+    assert payload["lookups"]["soft"]["celltype"]["values"] == ["Hepatocyte"]
+    assert payload["lookups"]["soft"]["sequenced_by"]["values"] == ["HC Genomics lab"]
+
+
+@pytest.mark.django_db
+def test_lookups_falls_back_to_default_onboarding_option_sets_when_controlled_values_are_unseeded() -> None:
+    client = APIClient()
+    user = User.objects.create_user(username="admin", password="admin123")
+    user.profile.role = UserProfile.Role.ADMIN
+    user.profile.save()
+    client.force_authenticate(user=user)
+
+    project = Project.objects.create(
+        owner=user,
+        pi_name="Dr. Curie",
+        researcher_name="Researcher A",
+        bioinformatician_assigned="Bioinfo",
+        title="Mercury tox study",
+        description="",
+    )
+    Study.objects.create(
+        project=project,
+        title="Study",
+        species=Study.Species.HUMAN,
+        celltype="Hepatocyte",
+    )
+
+    response = client.get("/api/lookups/")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["lookups"]["controlled"]["platform"]["values"] == ["TempO-Seq", "RNA-Seq", "DrugSeq"]
+    assert "Illumina NovaSeq 6000" in payload["lookups"]["controlled"]["instrument_model"]["values"]
+    assert payload["lookups"]["controlled"]["biospyder_kit"]["values"][0] == {
+        "label": "Human Whole Transcriptome 2.1",
+        "value": "hwt2-1",
+    }
+    assert payload["lookups"]["soft"]["sequenced_by"]["values"] == [
+        "HC Genomics lab",
+        "HC foods lab",
+        "Yauk lab",
+    ]
 
 
 @pytest.mark.django_db
@@ -118,12 +199,12 @@ def test_metadata_template_preview_persists_minimal_core_and_optional_fields() -
             "study_id": study.id,
             "template_context": {
                 "study_design_elements": ["dose", "timepoint"],
-                "treatment_vars": [],
-                "batch_vars": [],
-                "optional_field_keys": ["sample_name", "i5_index", "concentration"],
+                "treatment_vars": ["group"],
+                "batch_vars": ["plate"],
+                "optional_field_keys": ["sample_name", "i5_index", "concentration", "sequencing_mode"],
                 "custom_field_keys": ["timepoint"],
             },
-            "optional_field_keys": ["sample_name", "i5_index", "concentration"],
+            "optional_field_keys": ["sample_name", "i5_index", "concentration", "sequencing_mode"],
             "custom_field_keys": ["timepoint"],
         },
         format="json",
@@ -137,6 +218,9 @@ def test_metadata_template_preview_persists_minimal_core_and_optional_fields() -
     assert "concentration" in payload["columns"]
     assert "dose" in payload["columns"]
     assert "timepoint" in payload["columns"]
+    assert "group" in payload["columns"]
+    assert "plate" in payload["columns"]
+    assert "sequencing_mode" not in payload["columns"]
     assert {"key": "dose", "reason": "dose study design selected"} in payload["auto_included"]
     assert study.metadata_field_selections.filter(is_active=True).count() == len(payload["columns"])
 

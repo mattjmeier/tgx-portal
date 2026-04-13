@@ -15,6 +15,7 @@ import {
   studiesIndexPath,
   studyWorkspacePath,
 } from "../lib/routes";
+import { clearDeletedStudyClientState } from "../lib/studyDeletion";
 import { cn } from "../lib/utils";
 import { Collapsible, CollapsibleContent } from "./ui/collapsible";
 import {
@@ -200,8 +201,10 @@ export function AppSidebar() {
   const deleteStudyMutation = useMutation<void, Error, number>({
     mutationFn: deleteStudy,
     onSuccess: async (_, deletedStudyId) => {
+      clearDeletedStudyClientState(queryClient, deletedStudyId);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["studies"] }),
+        queryClient.invalidateQueries({ queryKey: ["studies-index"] }),
         queryClient.invalidateQueries({ queryKey: ["study"] }),
       ]);
 

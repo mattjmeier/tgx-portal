@@ -174,11 +174,20 @@ def validate_final_ready(*, metadata_columns: list[str], mappings: dict[str, str
     return errors
 
 
-def validate_template_context_for_finalize(template_context: dict[str, list[str]]) -> list[dict[str, str]]:
+def validate_template_context_for_finalize(
+    template_context: dict[str, list[str]],
+    *,
+    metadata_columns: list[str] | None = None,
+) -> list[dict[str, str]]:
     errors: list[dict[str, str]] = []
     study_design_elements = template_context.get("study_design_elements", [])
     treatment_vars = template_context.get("treatment_vars", [])
     batch_vars = template_context.get("batch_vars", [])
+    normalized_columns = {
+        value.strip()
+        for value in (metadata_columns or [])
+        if isinstance(value, str) and value.strip()
+    }
 
     if not study_design_elements:
         errors.append(
@@ -201,6 +210,23 @@ def validate_template_context_for_finalize(template_context: dict[str, list[str]
                 "message": "Add at least one batch variable before finalizing onboarding.",
             }
         )
+    if normalized_columns:
+        for value in treatment_vars:
+            if value not in normalized_columns:
+                errors.append(
+                    {
+                        "field": "template_context.treatment_vars",
+                        "message": f"Primary experimental variable '{value}' is not present in the last uploaded metadata.",
+                    }
+                )
+        for value in batch_vars:
+            if value not in normalized_columns:
+                errors.append(
+                    {
+                        "field": "template_context.batch_vars",
+                        "message": f"Primary batch variable '{value}' is not present in the last uploaded metadata.",
+                    }
+                )
 
     return errors
 

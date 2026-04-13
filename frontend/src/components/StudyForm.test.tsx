@@ -64,7 +64,7 @@ describe("StudyForm", () => {
     renderForm();
 
     fireEvent.change(screen.getByRole("textbox", { name: /study title/i }), { target: { value: "Hepatocyte mercury dose response" } });
-    fireEvent.click(screen.getByRole("button", { name: /start onboarding/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create study/i }));
 
     expect(await screen.findByText("Study onboarding wizard")).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/studies/11/onboarding");

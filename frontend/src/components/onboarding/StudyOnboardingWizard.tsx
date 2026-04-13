@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AlertCircle, Check, Plus, X } from "lucide-react";
 
-import { fetchLookups, type MetadataFieldDefinition } from "../../api/lookups";
+import {
+  fetchLookups,
+  type LookupOption,
+  type LookupValue,
+  type MetadataFieldDefinition,
+} from "../../api/lookups";
 import { downloadMetadataTemplate, previewMetadataTemplate } from "../../api/metadataTemplates";
 import { downloadProjectConfig } from "../../api/projects";
 import {
+  deleteStudy,
   fetchStudy,
   updateStudy,
   type Study,
@@ -17,10 +23,12 @@ import {
   patchStudyOnboardingState,
   type ContrastPair,
   type StudyOnboardingMappings,
+  type StudyOnboardingConfig,
   type StudyOnboardingStatus,
   type StudyTemplateContext,
 } from "../../api/studyOnboarding";
 import { MetadataUploadStep } from "./MetadataUploadStep";
+import { StudyDeleteDialog } from "../StudyDeleteDialog";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
@@ -37,8 +45,10 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
+import { studiesIndexPath } from "../../lib/routes";
+import { clearDeletedStudyClientState, onboardingDraftStorageKey } from "../../lib/studyDeletion";
 
-type OnboardingStepKey = "details" | "template" | "upload" | "mappings" | "review";
+type OnboardingStepKey = "details" | "design" | "metadata" | "upload" | "finalize";
 
 type StepAttemptState = Partial<Record<OnboardingStepKey, boolean>>;
 
@@ -111,6 +121,7 @@ type OnboardingDraftV6 = {
     celltype: string;
     context: StudyTemplateContext;
   };
+  config: StudyOnboardingConfig;
   upload: {
     fileName: string;
     metadataColumns: string[];
@@ -119,6 +130,10 @@ type OnboardingDraftV6 = {
   mappings: StudyOnboardingMappings & {
     selected_contrasts: ContrastPair[];
   };
+};
+
+type OnboardingDraftV7 = Omit<OnboardingDraftV6, "version"> & {
+  version: 7;
 };
 
 type ChipSelectOrAddProps = {
@@ -168,7 +183,7 @@ const STUDY_DESIGN_FIELD_MAP: Record<string, string[]> = {
   batch: [],
 };
 
-const SEQUENCING_FIELD_KEYS = ["i5_index", "i7_index", "well_id", "sequencing_mode"] as const;
+const SEQUENCING_FIELD_KEYS = ["i5_index", "i7_index", "well_id"] as const;
 const STANDARD_UI_FIELD_KEYS = new Set<string>(["timepoint"]);
 const FIELD_DESCRIPTION_OVERRIDES: Record<string, string> = {
   concentration: "Select for in vitro experiments.",
@@ -186,24 +201,24 @@ const steps: Array<{
     description: "Capture the basic study context before defining the metadata template.",
   },
   {
-    key: "template",
+    key: "design",
     title: "Template design",
-    description: "Choose study design elements and download the right metadata template.",
+    description: "Define the experimental constraints that must be represented in the metadata template.",
+  },
+  {
+    key: "metadata",
+    title: "Finalize metadata",
+    description: "Preview the generated template and choose optional or custom metadata columns.",
   },
   {
     key: "upload",
     title: "Upload metadata",
-    description: "Preview the sheet and validate every issue in one pass before mappings.",
+    description: "Preview the sheet and validate every issue in one pass before finalizing onboarding.",
   },
   {
-    key: "mappings",
-    title: "Mappings",
-    description: "Pick the primary treatment and batch columns used for downstream generation.",
-  },
-  {
-    key: "review",
-    title: "Review",
-    description: "Confirm the template context and generate outputs once onboarding is final.",
+    key: "finalize",
+    title: "Review & finalize",
+    description: "Review the study setup, confirm mappings and contrasts, then finalize onboarding.",
   },
 ];
 
@@ -217,6 +232,12 @@ function parseStudyId(value: string | undefined): number | null {
 }
 
 function parseStep(value: string | null): OnboardingStepKey {
+  if (value === "template") {
+    return "design";
+  }
+  if (value === "mappings" || value === "review") {
+    return "finalize";
+  }
   const keys = steps.map((step) => step.key);
   if (value && keys.includes(value as OnboardingStepKey)) {
     return value as OnboardingStepKey;
@@ -225,7 +246,7 @@ function parseStep(value: string | null): OnboardingStepKey {
 }
 
 function draftStorageKey(studyId: number) {
-  return `tgx:onboarding:v2:study:${studyId}`;
+  return onboardingDraftStorageKey(studyId);
 }
 
 function createEmptyTemplateContext(): StudyTemplateContext {
@@ -238,9 +259,9 @@ function createEmptyTemplateContext(): StudyTemplateContext {
   };
 }
 
-function createDefaultDraft(studyId: number): OnboardingDraftV6 {
+function createDefaultDraft(studyId: number): OnboardingDraftV7 {
   return {
-    version: 6,
+    version: 7,
     studyId,
     updatedAt: new Date().toISOString(),
     attempts: {},
@@ -254,6 +275,24 @@ function createDefaultDraft(studyId: number): OnboardingDraftV6 {
       species: null,
       celltype: "",
       context: createEmptyTemplateContext(),
+    },
+    config: {
+      common: {
+        platform: "RNA-Seq",
+        instrument_model: "",
+        sequenced_by: "",
+        biospyder_kit: null,
+        dose: null,
+        units: "",
+      },
+      pipeline: {
+        mode: "se",
+        threads: 8,
+      },
+      qc: {},
+      deseq2: {
+        cpus: 4,
+      },
     },
     upload: {
       fileName: "",
@@ -318,42 +357,62 @@ function migrateDraftV5ToV6(draft: OnboardingDraftV5): OnboardingDraftV6 {
   const next = createDefaultDraft(draft.studyId);
   return {
     ...next,
+    version: 6,
     updatedAt: draft.updatedAt,
     details: draft.details,
     template: draft.template,
+    config: next.config,
     upload: draft.upload,
     mappings: draft.mappings,
   };
 }
 
-function loadDraft(studyId: number): OnboardingDraftV6 {
+function migrateDraftV6ToV7(draft: OnboardingDraftV6): OnboardingDraftV7 {
+  const next = createDefaultDraft(draft.studyId);
+  return {
+    ...next,
+    version: 7,
+    updatedAt: draft.updatedAt,
+    attempts: draft.attempts,
+    details: draft.details,
+    template: draft.template,
+    config: draft.config ?? next.config,
+    upload: draft.upload,
+    mappings: draft.mappings,
+  };
+}
+
+function loadDraft(studyId: number): OnboardingDraftV7 {
   const raw = localStorage.getItem(draftStorageKey(studyId));
   if (!raw) {
-    return createDefaultDraft(studyId);
+    return migrateDraftV6ToV7(createDefaultDraft(studyId));
   }
 
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (typeof parsed !== "object" || parsed === null) {
-      return createDefaultDraft(studyId);
+      return migrateDraftV6ToV7(createDefaultDraft(studyId));
+    }
+    if ((parsed as { version?: unknown }).version === 7) {
+      return parsed as OnboardingDraftV7;
     }
     if ((parsed as { version?: unknown }).version === 6) {
-      return parsed as OnboardingDraftV6;
+      return migrateDraftV6ToV7(parsed as OnboardingDraftV6);
     }
     if ((parsed as { version?: unknown }).version === 5) {
-      return migrateDraftV5ToV6(parsed as OnboardingDraftV5);
+      return migrateDraftV6ToV7(migrateDraftV5ToV6(parsed as OnboardingDraftV5));
     }
     if ((parsed as { version?: unknown }).version === 4) {
-      return migrateDraftV5ToV6(migrateDraftV4ToV5(parsed as LegacyOnboardingDraftV4));
+      return migrateDraftV6ToV7(migrateDraftV5ToV6(migrateDraftV4ToV5(parsed as LegacyOnboardingDraftV4)));
     }
   } catch {
-    return createDefaultDraft(studyId);
+    return migrateDraftV6ToV7(createDefaultDraft(studyId));
   }
 
-  return createDefaultDraft(studyId);
+  return migrateDraftV6ToV7(createDefaultDraft(studyId));
 }
 
-function saveDraft(draft: OnboardingDraftV6) {
+function saveDraft(draft: OnboardingDraftV7) {
   localStorage.setItem(draftStorageKey(draft.studyId), JSON.stringify(draft));
 }
 
@@ -384,6 +443,16 @@ function getDerivedOptionalFieldKeys(
       if (available.has(key) && !derived.includes(key)) {
         derived.push(key);
       }
+    }
+  }
+  for (const key of context.treatment_vars) {
+    if (available.has(key) && !derived.includes(key)) {
+      derived.push(key);
+    }
+  }
+  for (const key of context.batch_vars) {
+    if (available.has(key) && !derived.includes(key)) {
+      derived.push(key);
     }
   }
   return derived;
@@ -422,6 +491,32 @@ function areMappingsEqual(
     left.report_faceting_group === right.report_faceting_group &&
     JSON.stringify(left.selected_contrasts) === JSON.stringify(selectedContrasts)
   );
+}
+
+function lookupValueLabel(value: LookupValue): string {
+  return typeof value === "string" ? value : value.label;
+}
+
+function lookupValueId(value: LookupValue): string {
+  return typeof value === "string" ? value : value.value;
+}
+
+function lookupValueRaw(value: LookupValue): string {
+  return typeof value === "string" ? value : value.value;
+}
+
+function lookupStringValues(values: LookupValue[] | undefined): string[] {
+  return (values ?? []).map((value) => lookupValueRaw(value));
+}
+
+function lookupOptions(values: LookupValue[] | undefined): LookupOption[] {
+  return (values ?? []).map((value) =>
+    typeof value === "string" ? { label: value, value } : value,
+  );
+}
+
+function withStringFallback(values: string[], fallback: string[]): string[] {
+  return values.length > 0 ? values : fallback;
 }
 
 function ChipSelectOrAdd({
@@ -496,9 +591,9 @@ function ChipSelectOrAdd({
             <option key={suggestion} value={suggestion} />
           ))}
         </datalist>
-        <Button type="button" variant="secondary" onClick={addCurrentValue}>
+        <Button type="button" variant="secondary" aria-label={addLabel} onClick={addCurrentValue}>
           <Plus className="h-4 w-4" />
-          Add
+          {addLabel}
         </Button>
       </div>
     </div>
@@ -644,13 +739,15 @@ export function StudyOnboardingWizard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeStep = useMemo(() => parseStep(searchParams.get("step")), [searchParams]);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [templateDownloadError, setTemplateDownloadError] = useState<string | null>(null);
   const [onboardingSaveError, setOnboardingSaveError] = useState<string | null>(null);
   const [onboardingFinalizeError, setOnboardingFinalizeError] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [deleteStudyError, setDeleteStudyError] = useState<string | null>(null);
 
-  const [draft, setDraft] = useState<OnboardingDraftV6 | null>(() => {
+  const [draft, setDraft] = useState<OnboardingDraftV7 | null>(() => {
     if (studyId === null) {
       return null;
     }
@@ -688,7 +785,7 @@ export function StudyOnboardingWizard() {
     queryFn: fetchLookups,
   });
 
-  function updateDraft(updater: (current: OnboardingDraftV6) => OnboardingDraftV6) {
+  function updateDraft(updater: (current: OnboardingDraftV7) => OnboardingDraftV7) {
     setDraft((current) => (current ? updater(current) : current));
   }
 
@@ -721,6 +818,10 @@ export function StudyOnboardingWizard() {
       Boolean(draft.mappings.batch) ||
       draft.mappings.selected_contrasts.length > 0;
     const hasLocalTemplateContext = !isTemplateContextEmpty(draft.template.context);
+    const hasLocalConfig =
+      Boolean((draft.config.common.instrument_model as string | undefined)?.toString().trim()) ||
+      Boolean((draft.config.common.sequenced_by as string | undefined)?.toString().trim()) ||
+      Boolean(draft.config.common.biospyder_kit);
 
     updateDraft((current) => ({
       ...current,
@@ -728,6 +829,7 @@ export function StudyOnboardingWizard() {
         ...current.template,
         context: hasLocalTemplateContext ? current.template.context : onboardingStateQuery.data.template_context,
       },
+      config: hasLocalConfig ? current.config : onboardingStateQuery.data.config,
       upload: {
         ...current.upload,
         metadataColumns: current.upload.metadataColumns.length
@@ -753,6 +855,7 @@ export function StudyOnboardingWizard() {
       mappings?: StudyOnboardingMappings;
       selected_contrasts?: ContrastPair[];
       template_context?: StudyTemplateContext;
+      config?: StudyOnboardingConfig;
     }) => patchStudyOnboardingState(studyId as number, payload),
     onSuccess: async (result) => {
       setOnboardingSaveError(null);
@@ -820,6 +923,24 @@ export function StudyOnboardingWizard() {
     },
   });
 
+  const deleteStudyMutation = useMutation<void, Error, number>({
+    mutationFn: deleteStudy,
+    onSuccess: async (_, deletedStudyId) => {
+      setDeleteStudyError(null);
+      clearDeletedStudyClientState(queryClient, deletedStudyId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["studies"] }),
+        queryClient.invalidateQueries({ queryKey: ["studies-index"] }),
+        queryClient.invalidateQueries({ queryKey: ["study"] }),
+        queryClient.invalidateQueries({ queryKey: ["study-onboarding-state"] }),
+      ]);
+      navigate(studiesIndexPath);
+    },
+    onError: (error) => {
+      setDeleteStudyError(error instanceof Error ? error.message : "Unable to delete the study.");
+    },
+  });
+
   const activeIndex = steps.findIndex((step) => step.key === activeStep);
   const nextStep = activeIndex < steps.length - 1 ? steps[activeIndex + 1].key : null;
   const prevStep = activeIndex > 0 ? steps[activeIndex - 1].key : null;
@@ -843,6 +964,21 @@ export function StudyOnboardingWizard() {
   }
 
   const fieldDefinitions = lookupsQuery.data?.metadata_field_definitions ?? [];
+  const platformOptions = withStringFallback(
+    lookupStringValues(lookupsQuery.data?.lookups.controlled.platform.values),
+    ["TempO-Seq", "RNA-Seq", "DrugSeq"],
+  );
+  const instrumentModelOptions = withStringFallback(
+    lookupStringValues(lookupsQuery.data?.lookups.controlled.instrument_model.values),
+    [],
+  );
+  const featuredInstrumentModels = lookupsQuery.data?.lookups.featured?.instrument_model ?? [];
+  const biospyderKitOptions = lookupOptions(lookupsQuery.data?.lookups.controlled.biospyder_kit.values ?? []);
+  const celltypeSuggestions = lookupStringValues(lookupsQuery.data?.lookups.soft.celltype.values ?? []);
+  const sequencedBySuggestions = withStringFallback(
+    lookupStringValues(lookupsQuery.data?.lookups.soft.sequenced_by.values),
+    ["HC Genomics lab", "HC foods lab", "Yauk lab"],
+  );
   const requiredFields = fieldDefinitions.filter((field) => field.required);
   const optionalStandardFields = fieldDefinitions.filter(
     (field) => !field.required && (field.kind === "standard" || STANDARD_UI_FIELD_KEYS.has(field.key)),
@@ -897,26 +1033,42 @@ export function StudyOnboardingWizard() {
       ? draft.upload.suggestedContrasts
       : onboardingStateQuery.data?.suggested_contrasts ?? [];
   const onboardingStatus: StudyOnboardingStatus = onboardingStateQuery.data?.status ?? "draft";
-  const batchSelectValue = draft.mappings.batch ? draft.mappings.batch : "__none__";
   const templateContext = draft.template.context;
-  const templateStepBlocked =
+  const defaultTreatmentMapping =
+    templateContext.treatment_vars[0] && metadataColumns.includes(templateContext.treatment_vars[0])
+      ? templateContext.treatment_vars[0]
+      : "";
+  const defaultBatchMapping =
+    templateContext.batch_vars[0] && metadataColumns.includes(templateContext.batch_vars[0])
+      ? templateContext.batch_vars[0]
+      : "";
+  const effectivePrimaryTreatmentMapping = draft.mappings.treatment_level_1 || defaultTreatmentMapping;
+  const effectivePrimaryBatchMapping = draft.mappings.batch || defaultBatchMapping;
+  const batchSelectValue = effectivePrimaryBatchMapping ? effectivePrimaryBatchMapping : "__none__";
+  const designStepBlocked =
     templateContext.study_design_elements.length === 0 ||
     (templateContext.study_design_elements.includes("treatment") && templateContext.treatment_vars.length === 0) ||
     (templateContext.study_design_elements.includes("batch") && templateContext.batch_vars.length === 0);
   const canDownloadTemplate =
-    !templateStepBlocked &&
+    !designStepBlocked &&
     !templatePreviewQuery.isLoading &&
     !templatePreviewQuery.isError &&
     Boolean(templatePreviewQuery.data);
   const detailsStepComplete =
     draft.details.title.trim().length > 0 &&
     draft.template.species !== null &&
-    draft.template.celltype.trim().length > 0;
+    draft.template.celltype.trim().length > 0 &&
+    String(draft.config.common.platform ?? "").trim().length > 0 &&
+    String(draft.config.common.instrument_model ?? "").trim().length > 0 &&
+    String(draft.config.common.sequenced_by ?? "").trim().length > 0 &&
+    String(draft.config.pipeline.mode ?? "").trim().length > 0 &&
+    (draft.config.common.platform !== "TempO-Seq" || Boolean(draft.config.common.biospyder_kit));
   const detailsStepSaved =
     draft.details.title.trim() === (studyQuery.data?.title ?? "").trim() &&
     draft.details.description.trim() === (studyQuery.data?.description ?? "").trim() &&
     (draft.template.species ?? null) === (studyQuery.data?.species ?? null) &&
-    draft.template.celltype.trim() === (studyQuery.data?.celltype ?? "").trim();
+    draft.template.celltype.trim() === (studyQuery.data?.celltype ?? "").trim() &&
+    JSON.stringify(draft.config) === JSON.stringify(onboardingStateQuery.data?.config ?? createDefaultDraft(studyId).config);
   const templateStepSaved = areTemplateContextsEqual(
     draft.template.context,
     onboardingStateQuery.data?.template_context ?? createEmptyTemplateContext(),
@@ -941,6 +1093,8 @@ export function StudyOnboardingWizard() {
     },
     onboardingStateQuery.data?.selected_contrasts ?? [],
   );
+  const metadataStepComplete = Boolean(draft.attempts.metadata) && canDownloadTemplate;
+  const metadataStepSaved = Boolean(draft.attempts.metadata) && templateStepSaved;
   const markStepAttempted = (stepKey: OnboardingStepKey) => {
     setDraft((current) => {
       if (!current) {
@@ -971,6 +1125,46 @@ export function StudyOnboardingWizard() {
   const selectedCustomFieldKeys = draft.template.context.custom_field_keys;
   const selectedOptionalFieldKeySet = new Set(draft.template.context.optional_field_keys);
   const selectedCustomFieldKeySet = new Set(draft.template.context.custom_field_keys);
+  const selectedPlatform = String(draft.config.common.platform ?? "");
+  const selectedMode = String(draft.config.pipeline.mode ?? "");
+  const selectedInstrumentModel = String(draft.config.common.instrument_model ?? "");
+  const selectedSequencedBy = String(draft.config.common.sequenced_by ?? "");
+  const selectedBiospyderKit = draft.config.common.biospyder_kit;
+
+  useEffect(() => {
+    const nextTreatment = templateContext.treatment_vars[0] ?? "";
+    const nextBatch = templateContext.batch_vars[0] ?? "";
+    const availableColumns = new Set(metadataColumns);
+
+    if (
+      nextTreatment &&
+      !draft.mappings.treatment_level_1 &&
+      availableColumns.has(nextTreatment)
+    ) {
+      updateDraft((current) => ({
+        ...current,
+        mappings: {
+          ...current.mappings,
+          treatment_level_1: nextTreatment,
+        },
+      }));
+    }
+
+    if (
+      nextBatch &&
+      !draft.mappings.batch &&
+      availableColumns.has(nextBatch)
+    ) {
+      updateDraft((current) => ({
+        ...current,
+        mappings: {
+          ...current.mappings,
+          batch: nextBatch,
+        },
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metadataColumns.join("|"), templateContext.treatment_vars.join("|"), templateContext.batch_vars.join("|")]);
 
   async function persistTemplateContext() {
     await saveOnboardingDraftMutation.mutateAsync({
@@ -982,20 +1176,26 @@ export function StudyOnboardingWizard() {
     setOnboardingSaveError(null);
     if (stepKey === "details") {
       await saveStudyDetailsMutation.mutateAsync();
+      await saveOnboardingDraftMutation.mutateAsync({ config: draft.config });
       markStepAttempted(stepKey);
       return;
     }
-    if (stepKey === "template") {
+    if (stepKey === "design" || stepKey === "metadata") {
       await persistTemplateContext();
       markStepAttempted(stepKey);
       return;
     }
-    if (stepKey === "mappings") {
+    if (stepKey === "finalize") {
       const { selected_contrasts, ...mappingsPayload } = draft.mappings;
       await saveOnboardingDraftMutation.mutateAsync({
-        mappings: mappingsPayload,
+        mappings: {
+          ...mappingsPayload,
+          treatment_level_1: effectivePrimaryTreatmentMapping,
+          batch: effectivePrimaryBatchMapping,
+        },
         selected_contrasts,
         template_context: draft.template.context,
+        config: draft.config,
       });
       markStepAttempted(stepKey);
     }
@@ -1021,11 +1221,18 @@ export function StudyOnboardingWizard() {
         isAttempted: Boolean(draft.attempts.details),
       };
     }
-    if (step.key === "template") {
+    if (step.key === "design") {
       return {
         isSaved: templateStepSaved,
-        isComplete: !templateStepBlocked,
-        isAttempted: Boolean(draft.attempts.template),
+        isComplete: !designStepBlocked,
+        isAttempted: Boolean(draft.attempts.design),
+      };
+    }
+    if (step.key === "metadata") {
+      return {
+        isSaved: metadataStepSaved,
+        isComplete: metadataStepComplete,
+        isAttempted: Boolean(draft.attempts.metadata),
       };
     }
     if (step.key === "upload") {
@@ -1035,17 +1242,17 @@ export function StudyOnboardingWizard() {
         isAttempted: Boolean(draft.attempts.upload),
       };
     }
-    if (step.key === "mappings") {
+    if (step.key === "finalize") {
       return {
-        isSaved: mappingsStepSaved,
-        isComplete: mappingsStepComplete,
-        isAttempted: Boolean(draft.attempts.mappings),
+        isSaved: onboardingStatus === "final" || mappingsStepSaved,
+        isComplete: onboardingStatus === "final" || mappingsStepComplete,
+        isAttempted: Boolean(draft.attempts.finalize),
       };
     }
     return {
-      isSaved: onboardingStatus === "final",
-      isComplete: onboardingStatus === "final",
-      isAttempted: Boolean(draft.attempts.review),
+      isSaved: false,
+      isComplete: false,
+      isAttempted: false,
     };
   });
 
@@ -1062,7 +1269,8 @@ export function StudyOnboardingWizard() {
     }
   }
 
-  const topLevelErrorMessage = onboardingFinalizeError || onboardingSaveError || templateDownloadError || generationError;
+  const topLevelErrorMessage =
+    deleteStudyError || onboardingFinalizeError || onboardingSaveError || templateDownloadError || generationError;
 
   return (
     <section className="space-y-5">
@@ -1242,6 +1450,7 @@ export function StudyOnboardingWizard() {
                 <Label htmlFor="studyCelltype">Cell type</Label>
                 <Input
                   id="studyCelltype"
+                  list={`celltypeSuggestions-${studyId}`}
                   value={draft.template.celltype}
                   onChange={(event) =>
                     updateDraft((current) => ({
@@ -1250,6 +1459,11 @@ export function StudyOnboardingWizard() {
                     }))
                   }
                 />
+                <datalist id={`celltypeSuggestions-${studyId}`}>
+                  {celltypeSuggestions.map((value) => (
+                    <option key={value} value={value} />
+                  ))}
+                </datalist>
               </div>
 
               <div className="grid gap-2 md:col-span-2">
@@ -1265,17 +1479,305 @@ export function StudyOnboardingWizard() {
                   }
                 />
               </div>
+
+              <div className="grid gap-4 rounded-xl border border-border/70 bg-muted/20 p-4 md:col-span-2">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">Sequencing setup</p>
+                  <p className="text-xs text-muted-foreground">
+                    Capture platform and run configuration here. These are study config values, not sample metadata columns.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label id="platformLabel">Platform</Label>
+                    <div aria-labelledby="platformLabel" className="flex flex-wrap gap-2" role="group">
+                      {platformOptions.map((value) => {
+                        const selected = selectedPlatform === value;
+                        return (
+                          <Button
+                            key={value}
+                            type="button"
+                            variant={selected ? "default" : "outline"}
+                            onClick={() =>
+                              updateDraft((current) => ({
+                                ...current,
+                                config: {
+                                  ...current.config,
+                                  common: {
+                                    ...current.config.common,
+                                    platform: value,
+                                    biospyder_kit: value === "TempO-Seq" ? current.config.common.biospyder_kit : null,
+                                  },
+                                  pipeline: {
+                                    ...current.config.pipeline,
+                                    mode: value === "TempO-Seq" || value === "DrugSeq" ? "se" : current.config.pipeline.mode,
+                                  },
+                                },
+                              }))
+                            }
+                          >
+                            {value}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label id="sequencingModeLabel">Sequencing mode</Label>
+                    <div aria-labelledby="sequencingModeLabel" className="flex flex-wrap gap-2" role="group">
+                      {[
+                        { label: "Single-end", value: "se" },
+                        { label: "Paired-end", value: "pe" },
+                      ].map((option) => {
+                        const disabled =
+                          option.value === "pe" && (selectedPlatform === "TempO-Seq" || selectedPlatform === "DrugSeq");
+                        return (
+                          <Button
+                            key={option.value}
+                            type="button"
+                            variant={selectedMode === option.value ? "default" : "outline"}
+                            disabled={disabled}
+                            onClick={() =>
+                              updateDraft((current) => ({
+                                ...current,
+                                config: {
+                                  ...current.config,
+                                  pipeline: {
+                                    ...current.config.pipeline,
+                                    mode: option.value,
+                                  },
+                                },
+                              }))
+                            }
+                          >
+                            {option.label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="instrumentModel">Instrument model</Label>
+                    <Input
+                      id="instrumentModel"
+                      list={`instrumentModelSuggestions-${studyId}`}
+                      value={selectedInstrumentModel}
+                      onChange={(event) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          config: {
+                            ...current.config,
+                            common: {
+                              ...current.config.common,
+                              instrument_model: event.target.value,
+                            },
+                          },
+                        }))
+                      }
+                    />
+                    <datalist id={`instrumentModelSuggestions-${studyId}`}>
+                      {[...featuredInstrumentModels, ...instrumentModelOptions.filter((value) => !featuredInstrumentModels.includes(value))].map((value) => (
+                        <option key={value} value={value} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="sequencedBy">Sequenced by</Label>
+                    <Input
+                      id="sequencedBy"
+                      list={`sequencedBySuggestions-${studyId}`}
+                      value={selectedSequencedBy}
+                      onChange={(event) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          config: {
+                            ...current.config,
+                            common: {
+                              ...current.config.common,
+                              sequenced_by: event.target.value,
+                            },
+                          },
+                        }))
+                      }
+                    />
+                    <datalist id={`sequencedBySuggestions-${studyId}`}>
+                      {sequencedBySuggestions.map((value) => (
+                        <option key={value} value={value} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  {selectedPlatform === "TempO-Seq" ? (
+                    <div className="grid gap-2">
+                      <Label htmlFor="biospyderKit">Biospyder kit</Label>
+                      <Select
+                        value={selectedBiospyderKit ? String(selectedBiospyderKit) : "__none__"}
+                        onValueChange={(value) =>
+                          updateDraft((current) => ({
+                            ...current,
+                            config: {
+                              ...current.config,
+                              common: {
+                                ...current.config.common,
+                                biospyder_kit: value === "__none__" ? null : value,
+                              },
+                            },
+                          }))
+                        }
+                      >
+                        <SelectTrigger id="biospyderKit" aria-label="Biospyder kit">
+                          <SelectValue placeholder="Select a Biospyder kit" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Select a Biospyder kit</SelectItem>
+                          {biospyderKitOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
             </div>
           ) : null}
 
-          {activeStep === "template" ? (
+          {activeStep === "design" ? (
+            <div className="space-y-5">
+              <div className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-foreground">Study design elements</p>
+                    <Badge variant="outline">Required</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Select what must be represented in the metadata template so the generated columns reflect the study design.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  {STUDY_DESIGN_OPTIONS.map((option) => {
+                    const selected = templateContext.study_design_elements.includes(option.key);
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        className={[
+                          "rounded-xl border px-4 py-3 text-left transition-colors",
+                          selected
+                            ? "border-foreground bg-background shadow-sm"
+                            : "border-border bg-background/70 hover:border-foreground/40",
+                        ].join(" ")}
+                        onClick={() =>
+                          updateDraft((current) => ({
+                            ...current,
+                            template: {
+                              ...current.template,
+                              context: {
+                                ...current.template.context,
+                                study_design_elements: toggleValue(
+                                  current.template.context.study_design_elements,
+                                  option.key,
+                                ),
+                              },
+                            },
+                          }))
+                        }
+                      >
+                        <div className="flex items-start gap-3">
+                          <span
+                            className={[
+                              "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border",
+                              selected
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-background text-transparent",
+                            ].join(" ")}
+                            aria-hidden="true"
+                          >
+                            <Check className="h-3 w-3" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-base font-medium leading-tight text-foreground">{option.label}</p>
+                            <p className="mt-1 text-sm leading-6 text-muted-foreground">{option.description}</p>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {(templateContext.study_design_elements.includes("treatment") ||
+                templateContext.study_design_elements.includes("batch")) ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {templateContext.study_design_elements.includes("treatment") ? (
+                    <ChipSelectOrAdd
+                      inputId="treatment-vars"
+                      label="Treatment vars"
+                      description="Name the treatment dimension(s) that must appear in the metadata template. The first value will prefill the primary treatment mapping later."
+                      values={templateContext.treatment_vars}
+                      suggestions={metadataColumnSuggestions}
+                      addLabel="Add a treatment variable"
+                      required
+                      onChange={(values) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          template: {
+                            ...current.template,
+                            context: { ...current.template.context, treatment_vars: values },
+                          },
+                        }))
+                      }
+                    />
+                  ) : null}
+
+                  {templateContext.study_design_elements.includes("batch") ? (
+                    <ChipSelectOrAdd
+                      inputId="batch-vars"
+                      label="Batch vars"
+                      description="Add one or more batch variables when batch effects need to be tracked in the metadata template. The first value will prefill the primary batch mapping later."
+                      values={templateContext.batch_vars}
+                      suggestions={metadataColumnSuggestions}
+                      addLabel="Add a batch variable"
+                      required
+                      onChange={(values) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          template: {
+                            ...current.template,
+                            context: { ...current.template.context, batch_vars: values },
+                          },
+                        }))
+                      }
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+
+              {designStepBlocked ? (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+                  <p className="text-sm font-medium text-destructive">
+                    Select at least one study design element, then name any treatment or batch variables required by that design before continuing.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {activeStep === "metadata" ? (
             <div className="space-y-6">
               <div className="rounded-2xl border border-border/70 bg-muted/20 p-4 text-sm">
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:grid-rows-[auto_auto]">
                   <div className="min-w-0">
                     <p className="font-medium text-foreground">Template preview</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Review the generated metadata columns before downloading the sheet.
+                      Review the generated metadata columns, then download the finalized template.
                     </p>
                   </div>
                   <div className="flex flex-col items-start gap-2 lg:items-end">
@@ -1286,7 +1788,7 @@ export function StudyOnboardingWizard() {
                         setTemplateDownloadError(null);
                         try {
                           await persistTemplateContext();
-                          markStepAttempted("template");
+                          markStepAttempted("metadata");
                           const { blob, filename } = await downloadMetadataTemplate({
                             study_id: studyId,
                             optional_field_keys: draft.template.context.optional_field_keys,
@@ -1375,303 +1877,188 @@ export function StudyOnboardingWizard() {
                       </div>
                     )}
                   </div>
-
-                  <div className="min-h-0 lg:row-start-2 lg:flex lg:justify-end">
-                    {templateStepBlocked ? (
-                      <p className="max-w-sm text-sm font-medium text-destructive lg:text-right">
-                        Select at least one study design element. Treatment and batch choices also require at least one chip value before download.
-                      </p>
-                    ) : null}
-                  </div>
                 </div>
               </div>
 
-              <div className="space-y-5">
-                <div className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-foreground">Study design elements</p>
-                      <Badge variant="outline">Required</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Users must choose at least one design element so the downloaded template only contains relevant columns.
-                    </p>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {STUDY_DESIGN_OPTIONS.map((option) => {
-                      const selected = templateContext.study_design_elements.includes(option.key);
-                      return (
-                        <button
-                          key={option.key}
-                          type="button"
-                          className={[
-                            "rounded-xl border px-4 py-3 text-left transition-colors",
-                            selected
-                              ? "border-foreground bg-background shadow-sm"
-                              : "border-border bg-background/70 hover:border-foreground/40",
-                          ].join(" ")}
-                          onClick={() =>
-                            updateDraft((current) => ({
-                              ...current,
-                              template: {
-                                ...current.template,
-                                context: {
-                                  ...current.template.context,
-                                  study_design_elements: toggleValue(
-                                    current.template.context.study_design_elements,
-                                    option.key,
-                                  ),
-                                },
-                              },
-                            }))
-                          }
-                        >
-                          <div className="flex items-start gap-3">
-                            <span
-                              className={[
-                                "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border",
-                                selected
-                                  ? "border-primary bg-primary text-primary-foreground"
-                                  : "border-border bg-background text-transparent",
-                              ].join(" ")}
-                              aria-hidden="true"
-                            >
-                              <Check className="h-3 w-3" />
-                            </span>
-                            <div className="min-w-0">
-                              <p className="text-base font-medium leading-tight text-foreground">{option.label}</p>
-                              <p className="mt-1 text-sm leading-6 text-muted-foreground">{option.description}</p>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+              <div className="space-y-4 rounded-xl border border-border/70 bg-muted/20 p-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">Optional metadata columns</p>
+                  <p className="text-xs text-muted-foreground">
+                    Keep the template compact by selecting only the extra fields this study needs. Required and auto-included columns stay locked.
+                  </p>
                 </div>
 
-                <div className="space-y-4 rounded-xl border border-border/70 bg-muted/20 p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-foreground">Template columns</p>
-                    <p className="text-xs text-muted-foreground">
-                      Keep the template compact by selecting only the fields the study needs. Auto-included columns stay locked.
-                    </p>
-                  </div>
-
-                  <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)] xl:items-start">
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Required</p>
-                        <div className="grid gap-2">
-                          {requiredFields.map((field) => {
-                            const checkboxId = `required-${field.key}`;
-                            return (
-                              <div key={field.key} className="flex items-start gap-3 rounded-xl border border-border/70 bg-background p-3">
-                                <Checkbox
-                                  id={checkboxId}
-                                  data-testid={`required-field-checkbox-${field.key}`}
-                                  aria-label={field.label}
-                                  checked
-                                  disabled
-                                />
-
-                                <div className="min-w-0">
-                                  <Label htmlFor={checkboxId} className="cursor-pointer text-sm font-medium text-foreground">
-                                    {field.label}
-                                  </Label>
-                                  <p className="text-xs text-muted-foreground">
-                                    {FIELD_DESCRIPTION_OVERRIDES[field.key] ?? (field.description ? field.description : field.key)}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {sequencingFields.length > 0 ? (
-                        <div className="space-y-2">
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Sequencing</p>
-                          <div className="grid gap-2">
-                            {sequencingFields.map((field) => (
-                              <TemplateFieldOption
-                                key={field.key}
-                                field={field}
-                                selected={effectiveOptionalFieldKeys.includes(field.key)}
-                                locked={derivedOptionalFieldKeys.includes(field.key)}
-                                onCheckedChange={(checked) =>
-                                  updateDraft((current) => ({
-                                    ...current,
-                                    template: {
-                                      ...current.template,
-                                      context: {
-                                        ...current.template.context,
-                                        optional_field_keys: checked
-                                          ? normalizeValueList([
-                                              ...current.template.context.optional_field_keys,
-                                              field.key,
-                                            ])
-                                          : current.template.context.optional_field_keys.filter((key) => key !== field.key),
-                                      },
-                                    },
-                                  }))
-                                }
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="space-y-4">
-                      {templateContext.study_design_elements.includes("treatment") ? (
-                        <ChipSelectOrAdd
-                          inputId="treatment-vars"
-                          label="Treatment vars"
-                          description="Choose one or more treatment descriptors to carry through onboarding and compatibility summaries."
-                          values={templateContext.treatment_vars}
-                          suggestions={metadataColumnSuggestions}
-                          addLabel="Add a treatment variable"
-                          required
-                          onChange={(values) =>
-                            updateDraft((current) => ({
-                              ...current,
-                              template: {
-                                ...current.template,
-                                context: { ...current.template.context, treatment_vars: values },
-                              },
-                            }))
-                          }
-                        />
-                      ) : null}
-
-                      {templateContext.study_design_elements.includes("batch") ? (
-                        <ChipSelectOrAdd
-                          inputId="batch-vars"
-                          label="Batch vars"
-                          description="Choose one or more batch descriptors to preserve in onboarding context and summaries."
-                          values={templateContext.batch_vars}
-                          suggestions={metadataColumnSuggestions}
-                          addLabel="Add a batch variable"
-                          required
-                          onChange={(values) =>
-                            updateDraft((current) => ({
-                              ...current,
-                              template: {
-                                ...current.template,
-                                context: { ...current.template.context, batch_vars: values },
-                              },
-                            }))
-                          }
-                        />
-                      ) : null}
-
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Additional standard fields</p>
-                        <div className="grid gap-2 md:grid-cols-2">
-                          {Object.values(additionalStandardGroups)
-                            .flat()
-                            .map((field) => (
-                              <TemplateFieldOption
-                                key={field.key}
-                                field={field}
-                                selected={effectiveOptionalFieldKeys.includes(field.key)}
-                                locked={derivedOptionalFieldKeys.includes(field.key)}
-                                onCheckedChange={(checked) =>
-                                  updateDraft((current) => ({
-                                    ...current,
-                                    template: {
-                                      ...current.template,
-                                      context: {
-                                        ...current.template.context,
-                                        optional_field_keys: checked
-                                          ? normalizeValueList([
-                                              ...current.template.context.optional_field_keys,
-                                              field.key,
-                                            ])
-                                          : current.template.context.optional_field_keys.filter((key) => key !== field.key),
-                                      },
-                                    },
-                                  }))
-                                }
-                              />
-                            ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Custom additions</p>
-                      <p className="text-xs text-muted-foreground">
-                        Use common study-specific fields when they exist, or add your own only when needed.
-                      </p>
-                    </div>
-
-                    {optionalCustomFields.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {optionalCustomFields.map((field) => {
-                          const selected =
-                            templateContext.custom_field_keys.includes(field.key) ||
-                            derivedOptionalFieldKeys.includes(field.key);
-                          const locked = derivedOptionalFieldKeys.includes(field.key);
+                <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)] xl:items-start">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Required</p>
+                      <div className="grid gap-2">
+                        {requiredFields.map((field) => {
+                          const checkboxId = `required-${field.key}`;
                           return (
-                            <button
+                            <div key={field.key} className="flex items-start gap-3 rounded-xl border border-border/70 bg-background p-3">
+                              <Checkbox
+                                id={checkboxId}
+                                data-testid={`required-field-checkbox-${field.key}`}
+                                aria-label={field.label}
+                                checked
+                                disabled
+                              />
+
+                              <div className="min-w-0">
+                                <Label htmlFor={checkboxId} className="cursor-pointer text-sm font-medium text-foreground">
+                                  {field.label}
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                  {FIELD_DESCRIPTION_OVERRIDES[field.key] ?? (field.description ? field.description : field.key)}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {sequencingFields.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Sequencing identifiers</p>
+                        <div className="grid gap-2">
+                          {sequencingFields.map((field) => (
+                            <TemplateFieldOption
                               key={field.key}
-                              type="button"
-                              disabled={locked}
-                              className={[
-                                "rounded-full border px-3 py-1 text-sm transition-colors",
-                                selected ? "border-foreground bg-background text-foreground" : "",
-                                !selected ? "border-border bg-background/70 text-muted-foreground hover:border-foreground/40" : "",
-                                locked ? "cursor-not-allowed opacity-70" : "",
-                              ].join(" ")}
-                              onClick={() =>
+                              field={field}
+                              selected={effectiveOptionalFieldKeys.includes(field.key)}
+                              locked={derivedOptionalFieldKeys.includes(field.key)}
+                              onCheckedChange={(checked) =>
                                 updateDraft((current) => ({
                                   ...current,
                                   template: {
                                     ...current.template,
                                     context: {
                                       ...current.template.context,
-                                      custom_field_keys: selected
-                                        ? current.template.context.custom_field_keys.filter((key) => key !== field.key)
-                                        : normalizeValueList([
-                                            ...current.template.context.custom_field_keys,
+                                      optional_field_keys: checked
+                                        ? normalizeValueList([
+                                            ...current.template.context.optional_field_keys,
                                             field.key,
-                                          ]),
+                                          ])
+                                        : current.template.context.optional_field_keys.filter((key) => key !== field.key),
                                     },
                                   },
                                 }))
                               }
-                            >
-                              {field.label}
-                            </button>
-                          );
-                        })}
+                            />
+                          ))}
+                        </div>
                       </div>
                     ) : null}
-
-                    <CustomFieldAdder
-                      suggestions={metadataColumnSuggestions}
-                      existingValues={templateContext.custom_field_keys}
-                      onAdd={(value) =>
-                        updateDraft((current) => ({
-                          ...current,
-                          template: {
-                            ...current.template,
-                            context: {
-                              ...current.template.context,
-                              custom_field_keys: normalizeValueList([
-                                ...current.template.context.custom_field_keys,
-                                value,
-                              ]),
-                            },
-                          },
-                        }))
-                      }
-                    />
                   </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Additional standard fields</p>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {Object.values(additionalStandardGroups)
+                          .flat()
+                          .map((field) => (
+                            <TemplateFieldOption
+                              key={field.key}
+                              field={field}
+                              selected={effectiveOptionalFieldKeys.includes(field.key)}
+                              locked={derivedOptionalFieldKeys.includes(field.key)}
+                              onCheckedChange={(checked) =>
+                                updateDraft((current) => ({
+                                  ...current,
+                                  template: {
+                                    ...current.template,
+                                    context: {
+                                      ...current.template.context,
+                                      optional_field_keys: checked
+                                        ? normalizeValueList([
+                                            ...current.template.context.optional_field_keys,
+                                            field.key,
+                                          ])
+                                        : current.template.context.optional_field_keys.filter((key) => key !== field.key),
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                          ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Custom additions</p>
+                    <p className="text-xs text-muted-foreground">
+                      Use common study-specific fields when they exist, or add your own only when needed.
+                    </p>
+                  </div>
+
+                  {optionalCustomFields.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {optionalCustomFields.map((field) => {
+                        const selected =
+                          templateContext.custom_field_keys.includes(field.key) ||
+                          derivedOptionalFieldKeys.includes(field.key);
+                        const locked = derivedOptionalFieldKeys.includes(field.key);
+                        return (
+                          <button
+                            key={field.key}
+                            type="button"
+                            disabled={locked}
+                            className={[
+                              "rounded-full border px-3 py-1 text-sm transition-colors",
+                              selected ? "border-foreground bg-background text-foreground" : "",
+                              !selected ? "border-border bg-background/70 text-muted-foreground hover:border-foreground/40" : "",
+                              locked ? "cursor-not-allowed opacity-70" : "",
+                            ].join(" ")}
+                            onClick={() =>
+                              updateDraft((current) => ({
+                                ...current,
+                                template: {
+                                  ...current.template,
+                                  context: {
+                                    ...current.template.context,
+                                    custom_field_keys: selected
+                                      ? current.template.context.custom_field_keys.filter((key) => key !== field.key)
+                                      : normalizeValueList([
+                                          ...current.template.context.custom_field_keys,
+                                          field.key,
+                                        ]),
+                                  },
+                                },
+                              }))
+                            }
+                          >
+                            {field.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
+                  <CustomFieldAdder
+                    suggestions={metadataColumnSuggestions}
+                    existingValues={templateContext.custom_field_keys}
+                    onAdd={(value) =>
+                      updateDraft((current) => ({
+                        ...current,
+                        template: {
+                          ...current.template,
+                          context: {
+                            ...current.template.context,
+                            custom_field_keys: normalizeValueList([
+                              ...current.template.context.custom_field_keys,
+                              value,
+                            ]),
+                          },
+                        },
+                      }))
+                    }
+                  />
                 </div>
               </div>
             </div>
@@ -1719,7 +2106,7 @@ export function StudyOnboardingWizard() {
             />
           ) : null}
 
-          {activeStep === "mappings" ? (
+          {activeStep === "finalize" ? (
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-4">
                 <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
@@ -1745,7 +2132,7 @@ export function StudyOnboardingWizard() {
                     <div className="space-y-2">
                       <Label htmlFor="treatment_level_1">Treatment level 1 (required)</Label>
                       <Select
-                        value={draft.mappings.treatment_level_1 || "__none__"}
+                        value={effectivePrimaryTreatmentMapping || "__none__"}
                         onValueChange={(value) =>
                           updateDraft((current) => ({
                             ...current,
@@ -1886,13 +2273,18 @@ export function StudyOnboardingWizard() {
                       setOnboardingSaveError(null);
                       saveOnboardingDraftMutation.mutate(
                         {
-                          mappings: mappingsPayload,
+                          mappings: {
+                            ...mappingsPayload,
+                            treatment_level_1: effectivePrimaryTreatmentMapping,
+                            batch: effectivePrimaryBatchMapping,
+                          },
                           selected_contrasts,
                           template_context: draft.template.context,
+                          config: draft.config,
                         },
                         {
                           onSuccess: () => {
-                            markStepAttempted("mappings");
+                            markStepAttempted("finalize");
                           },
                         },
                       );
@@ -1908,26 +2300,65 @@ export function StudyOnboardingWizard() {
                       setOnboardingFinalizeError(null);
                       try {
                         await saveOnboardingDraftMutation.mutateAsync({
-                          mappings: mappingsPayload,
+                          mappings: {
+                            ...mappingsPayload,
+                            treatment_level_1: effectivePrimaryTreatmentMapping,
+                            batch: effectivePrimaryBatchMapping,
+                          },
                           selected_contrasts,
                           template_context: draft.template.context,
+                          config: draft.config,
                         });
-                        markStepAttempted("mappings");
+                        markStepAttempted("finalize");
                         await finalizeOnboardingMutation.mutateAsync();
                       } catch {
                         // mutation handlers surface errors
                       }
                     }}
                   >
-                    {finalizeOnboardingMutation.isPending ? "Finalizing…" : "Finalize mappings"}
+                    {finalizeOnboardingMutation.isPending ? "Finalizing…" : "Finalize onboarding"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={onboardingStatus !== "final" || generateOutputsMutation.isPending}
+                    onClick={() => {
+                      setGenerationError(null);
+                      generateOutputsMutation.mutate();
+                    }}
+                  >
+                    {generateOutputsMutation.isPending ? "Generating…" : "Generate outputs"}
                   </Button>
                 </div>
                 {saveStudyDetailsMutation.isPending || saveOnboardingDraftMutation.isPending ? (
                   <p className="text-sm text-muted-foreground">Saving changes before moving on…</p>
                 ) : null}
+                {onboardingStatus !== "final" ? (
+                  <p className="text-sm text-muted-foreground">
+                    Finalize onboarding to unlock output generation for this study.
+                  </p>
+                ) : null}
               </div>
 
               <div className="space-y-4">
+                <div className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm">
+                  <p className="font-medium text-foreground">Summary</p>
+                  <ul className="mt-3 space-y-2 text-muted-foreground">
+                    <li>Title: {draft.details.title || "—"}</li>
+                    <li>Platform: {selectedPlatform || "—"}</li>
+                    <li>Sequencing mode: {selectedMode || "—"}</li>
+                    <li>Instrument model: {selectedInstrumentModel || "—"}</li>
+                    <li>Sequenced by: {selectedSequencedBy || "—"}</li>
+                    <li>Biospyder kit: {selectedBiospyderKit ? String(selectedBiospyderKit) : "—"}</li>
+                    <li>Study design: {templateContext.study_design_elements.join(", ") || "—"}</li>
+                    <li>Primary experimental variable: {templateContext.treatment_vars[0] || "—"}</li>
+                    <li>Primary batch variable: {templateContext.batch_vars[0] || "—"}</li>
+                    <li>Template columns: {stagedColumns.join(", ") || "—"}</li>
+                    <li>Upload: {draft.upload.fileName || "—"}</li>
+                    <li>Onboarding status: {onboardingStatus}</li>
+                  </ul>
+                </div>
+
                 <div className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm">
                   <p className="font-medium text-foreground">Suggested contrasts</p>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -2029,64 +2460,36 @@ export function StudyOnboardingWizard() {
               </div>
             </div>
           ) : null}
-
-          {activeStep === "review" ? (
-            <div className="space-y-4 text-sm">
-              <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
-                <p className="font-medium text-foreground">Summary</p>
-                <ul className="mt-3 space-y-2 text-muted-foreground">
-                  <li>Title: {draft.details.title || "—"}</li>
-                  <li>PI: {draft.details.piName || "—"}</li>
-                  <li>Researcher: {draft.details.researcherName || "—"}</li>
-                  <li>Species: {draft.template.species || "—"}</li>
-                  <li>Cell type: {draft.template.celltype || "—"}</li>
-                  <li>Study design: {templateContext.study_design_elements.join(", ") || "—"}</li>
-                  <li>Treatment variables: {templateContext.treatment_vars.join(", ") || "—"}</li>
-                  <li>Batch variables: {templateContext.batch_vars.join(", ") || "—"}</li>
-                  <li>Template columns: {stagedColumns.join(", ") || "—"}</li>
-                  <li>Upload: {draft.upload.fileName || "—"}</li>
-                  <li>Primary treatment mapping: {draft.mappings.treatment_level_1 || "—"}</li>
-                  <li>Primary batch mapping: {draft.mappings.batch || "—"}</li>
-                  <li>Onboarding status: {onboardingStatus}</li>
-                </ul>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" onClick={() => updateDraft(() => createDefaultDraft(studyId))}>
-                  Reset draft
-                </Button>
-                <Button
-                  type="button"
-                  disabled={onboardingStatus !== "final" || generateOutputsMutation.isPending}
-                  onClick={() => {
-                    setGenerationError(null);
-                    generateOutputsMutation.mutate();
-                  }}
-                >
-                  {generateOutputsMutation.isPending ? "Generating…" : "Generate outputs"}
-                </Button>
-              </div>
-              {onboardingStatus !== "final" ? (
-                <p className="text-sm text-muted-foreground">
-                  Finalize mappings in the previous step to unblock output generation.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
         </CardContent>
 
-        <CardFooter className="justify-between border-t bg-muted/10 p-6">
+        <CardFooter className="flex flex-col gap-3 border-t bg-muted/10 p-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <StudyDeleteDialog
+              studyId={studyId}
+              studyTitle={draft.details.title.trim() || studyQuery.data?.title || "Untitled study"}
+              isDeleting={deleteStudyMutation.isPending}
+              onConfirmDelete={(nextStudyId) => {
+                setDeleteStudyError(null);
+                deleteStudyMutation.mutate(nextStudyId);
+              }}
+            >
+              <Button type="button" variant="destructive">
+                Delete study
+              </Button>
+            </StudyDeleteDialog>
+            {prevStep ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => goToStep(prevStep)}
+              >
+                Back
+              </Button>
+            ) : null}
+          </div>
           <Button
             type="button"
-            variant="outline"
-            disabled={!prevStep}
-            onClick={() => prevStep && goToStep(prevStep)}
-          >
-            Back
-          </Button>
-          <Button
-            type="button"
-            disabled={!nextStep || (activeStep === "template" && templateStepBlocked)}
+            disabled={!nextStep || (activeStep === "design" && designStepBlocked)}
             onClick={() => {
               void handleContinue();
             }}

@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 
 import { deleteStudy, fetchStudiesIndex } from "../api/studies";
 import { collaborationPath, globalStudyCreateRoute, studyOnboardingPath, studyWorkspacePath } from "../lib/routes";
+import { clearDeletedStudyClientState } from "../lib/studyDeletion";
 import { StudyDeleteDialog } from "./StudyDeleteDialog";
 import { StudiesTable } from "./StudiesTable";
 import { WorkspaceSectionCard } from "./WorkspaceSectionCard";
@@ -45,8 +46,12 @@ export function StudyIndexPanel() {
 
   const deleteStudyMutation = useMutation<void, Error, number>({
     mutationFn: deleteStudy,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["studies"] });
+    onSuccess: async (_, deletedStudyId) => {
+      clearDeletedStudyClientState(queryClient, deletedStudyId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["studies"] }),
+        queryClient.invalidateQueries({ queryKey: ["studies-index"] }),
+      ]);
     },
   });
 

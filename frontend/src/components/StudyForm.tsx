@@ -72,7 +72,7 @@ export function StudyForm({ className, projectId }: StudyFormProps) {
               The wizard will collect the rest of the study details and metadata-driving fields.
             </p>
             <Button disabled={mutation.isPending} type="submit">
-              {mutation.isPending ? "Starting..." : "Start onboarding"}
+              {mutation.isPending ? "Starting..." : "Create study"}
             </Button>
           </div>
           {errorMessage ? <p className="error-text">{errorMessage}</p> : null}

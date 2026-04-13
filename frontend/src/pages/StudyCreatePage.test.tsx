@@ -110,7 +110,7 @@ describe("StudyCreatePage", () => {
     expect(definitions.queryByText(/^batch variable$/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /collaboration/i })).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /study title/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /start onboarding/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /create study/i })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /species/i })).not.toBeInTheDocument();
   });
 

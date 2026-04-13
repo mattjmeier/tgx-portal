@@ -61,9 +61,18 @@ from .onboarding import (
     validate_final_ready,
     validate_template_context_for_finalize,
 )
+from .onboarding_options import (
+    ALL_INSTRUMENT_MODELS,
+    BIOSPYDER_KIT_LABELS,
+    BIOSPYDER_KIT_VALUES,
+    PLATFORM_VALUES,
+    SEQUENCED_BY_VALUES,
+)
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+EXCLUDED_TEMPLATE_FIELD_KEYS = {"sequencing_mode"}
 
 
 def _get_user_role(user) -> str | None:
@@ -133,7 +142,8 @@ def _get_or_create_study_config(study: Study) -> StudyConfig:
     return config
 
 
-def _study_finalize_errors(study: Study) -> dict[str, list[str]]:
+def _study_finalize_errors(study: Study) -> list[dict[str, str]]:
+    config = getattr(study, "config", None)
     errors: dict[str, list[str]] = {}
     if not study.title:
         errors["title"] = ["Provide a study title before finalizing onboarding."]
@@ -141,22 +151,76 @@ def _study_finalize_errors(study: Study) -> dict[str, list[str]]:
         errors["species"] = ["Select a species before finalizing onboarding."]
     if not study.celltype:
         errors["celltype"] = ["Provide a cell type before finalizing onboarding."]
-    if not hasattr(study, "config"):
+    if config is None:
         errors["config"] = ["Persist study configuration before finalizing onboarding."]
-    return errors
+    else:
+        platform = str((config.common or {}).get("platform") or "").strip()
+        instrument_model = str((config.common or {}).get("instrument_model") or "").strip()
+        sequenced_by = str((config.common or {}).get("sequenced_by") or "").strip()
+        biospyder_kit = (config.common or {}).get("biospyder_kit")
+        mode = str((config.pipeline or {}).get("mode") or "").strip()
+
+        if not platform:
+            errors.setdefault("config.common.platform", []).append("Select a platform before finalizing onboarding.")
+        if not instrument_model:
+            errors.setdefault("config.common.instrument_model", []).append(
+                "Provide an instrument model before finalizing onboarding."
+            )
+        if not sequenced_by:
+            errors.setdefault("config.common.sequenced_by", []).append(
+                "Provide where the study was sequenced before finalizing onboarding."
+            )
+        if not mode:
+            errors.setdefault("config.pipeline.mode", []).append("Choose a sequencing mode before finalizing onboarding.")
+        if platform == "TempO-Seq" and not biospyder_kit:
+            errors.setdefault("config.common.biospyder_kit", []).append(
+                "Select a Biospyder kit before finalizing onboarding."
+            )
+        if platform in {"TempO-Seq", "DrugSeq"} and mode and mode != "se":
+            errors.setdefault("config.pipeline.mode", []).append(
+                f"{platform} studies must use single-end sequencing mode."
+            )
+
+    flattened: list[dict[str, str]] = []
+    for field, messages in errors.items():
+        for message in messages:
+            flattened.append({"field": field, "message": message})
+    return flattened
 
 
 class LookupViewSet(viewsets.ViewSet):
     def list(self, request):
         projects = _projects_accessible_to_user(request.user)
+        studies = Study.objects.filter(project__in=projects)
         pi_values = sorted({value for value in projects.values_list("pi_name", flat=True) if value})
         researcher_values = sorted({value for value in projects.values_list("researcher_name", flat=True) if value})
+        celltype_values = sorted({value for value in studies.values_list("celltype", flat=True) if value})
+
+        sequenced_by_values = set()
+        for config in StudyConfig.objects.filter(study__in=studies).only("common"):
+            value = (config.common or {}).get("sequenced_by")
+            if isinstance(value, str) and value.strip():
+                sequenced_by_values.add(value.strip())
 
         controlled_values: dict[str, list[str]] = {category: [] for category, _ in ControlledLookupValue.Category.choices}
         for item in ControlledLookupValue.objects.filter(is_active=True).order_by("category", "value"):
             controlled_values[item.category].append(item.value)
+            if item.category == ControlledLookupValue.Category.SEQUENCED_BY and item.value:
+                sequenced_by_values.add(item.value)
 
-        field_definitions = MetadataFieldDefinition.objects.filter(is_active=True).order_by(
+        if not controlled_values[ControlledLookupValue.Category.PLATFORM]:
+            controlled_values[ControlledLookupValue.Category.PLATFORM] = PLATFORM_VALUES.copy()
+        if not controlled_values[ControlledLookupValue.Category.INSTRUMENT_MODEL]:
+            controlled_values[ControlledLookupValue.Category.INSTRUMENT_MODEL] = ALL_INSTRUMENT_MODELS.copy()
+        if not controlled_values[ControlledLookupValue.Category.BIOSPYDER_KIT]:
+            controlled_values[ControlledLookupValue.Category.BIOSPYDER_KIT] = BIOSPYDER_KIT_VALUES.copy()
+        if not sequenced_by_values:
+            sequenced_by_values.update(SEQUENCED_BY_VALUES)
+
+        field_definitions = MetadataFieldDefinition.objects.filter(
+            is_active=True,
+            scope=MetadataFieldDefinition.Scope.SAMPLE,
+        ).exclude(key__in=EXCLUDED_TEMPLATE_FIELD_KEYS).order_by(
             "-required",
             "group",
             "key",
@@ -185,7 +249,7 @@ class LookupViewSet(viewsets.ViewSet):
         ]
 
         payload = {
-            "version": 1,
+            "version": 2,
             "metadata_field_definitions": serialized_fields,
             "lookups": {
                 "soft": {
@@ -197,13 +261,34 @@ class LookupViewSet(viewsets.ViewSet):
                         "policy": "scoped_select_or_create",
                         "values": researcher_values,
                     },
+                    "celltype": {
+                        "policy": "scoped_select_or_create",
+                        "values": celltype_values,
+                    },
+                    "sequenced_by": {
+                        "policy": "scoped_select_or_create",
+                        "values": sorted(sequenced_by_values),
+                    },
                 },
                 "controlled": {
                     category: {
                         "policy": "admin_managed",
-                        "values": values,
+                        "values": (
+                            [
+                                {
+                                    "label": BIOSPYDER_KIT_LABELS.get(value, value),
+                                    "value": value,
+                                }
+                                for value in values
+                            ]
+                            if category == ControlledLookupValue.Category.BIOSPYDER_KIT
+                            else values
+                        ),
                     }
                     for category, values in controlled_values.items()
+                },
+                "featured": {
+                    "instrument_model": ALL_INSTRUMENT_MODELS[:7],
                 },
             },
         }
@@ -236,7 +321,9 @@ def _upsert_study_template(study: Study, template_context: dict[str, list[str]])
     core_defs.sort(key=lambda definition: core_order.get(definition.key, 100 + definition.id))
     known_defs = {
         item.key: item
-        for item in MetadataFieldDefinition.objects.filter(scope=MetadataFieldDefinition.Scope.SAMPLE)
+        for item in MetadataFieldDefinition.objects.filter(scope=MetadataFieldDefinition.Scope.SAMPLE).exclude(
+            key__in=EXCLUDED_TEMPLATE_FIELD_KEYS
+        )
     }
 
     ordered_keys = [definition.key for definition in core_defs]
@@ -257,8 +344,52 @@ def _upsert_study_template(study: Study, template_context: dict[str, list[str]])
     for key in derived_optional_keys:
         add_key(key)
 
+    for raw_key in template_context.get("treatment_vars", []):
+        key = _normalize_field_key(raw_key)
+        if key in EXCLUDED_TEMPLATE_FIELD_KEYS:
+            continue
+        if key not in known_defs:
+            definition = MetadataFieldDefinition.objects.create(
+                key=key,
+                label=raw_key.strip() or key,
+                group="Study design",
+                description="Primary experimental variable selected during onboarding.",
+                scope=MetadataFieldDefinition.Scope.SAMPLE,
+                system_key=key,
+                data_type=MetadataFieldDefinition.DataType.STRING,
+                kind=MetadataFieldDefinition.Kind.CUSTOM,
+                required=False,
+                is_core=False,
+                allow_null=True,
+            )
+            known_defs[key] = definition
+        add_key(key, reason="primary experimental variable selected")
+
+    for raw_key in template_context.get("batch_vars", []):
+        key = _normalize_field_key(raw_key)
+        if key in EXCLUDED_TEMPLATE_FIELD_KEYS:
+            continue
+        if key not in known_defs:
+            definition = MetadataFieldDefinition.objects.create(
+                key=key,
+                label=raw_key.strip() or key,
+                group="Study design",
+                description="Primary batch variable selected during onboarding.",
+                scope=MetadataFieldDefinition.Scope.SAMPLE,
+                system_key=key,
+                data_type=MetadataFieldDefinition.DataType.STRING,
+                kind=MetadataFieldDefinition.Kind.CUSTOM,
+                required=False,
+                is_core=False,
+                allow_null=True,
+            )
+            known_defs[key] = definition
+        add_key(key, reason="primary batch variable selected")
+
     for raw_key in template_context.get("optional_field_keys", []):
         key = _normalize_field_key(raw_key)
+        if key in EXCLUDED_TEMPLATE_FIELD_KEYS:
+            continue
         if key not in known_defs:
             raise ValueError(f"Unknown metadata field definitions: {key}")
         add_key(key)
@@ -267,6 +398,8 @@ def _upsert_study_template(study: Study, template_context: dict[str, list[str]])
 
     for raw_key in template_context.get("custom_field_keys", []):
         key = _normalize_field_key(raw_key)
+        if key in EXCLUDED_TEMPLATE_FIELD_KEYS:
+            continue
         definition = known_defs.get(key)
         if definition is None:
             definition = MetadataFieldDefinition.objects.create(
@@ -653,16 +786,14 @@ class StudyViewSet(viewsets.ModelViewSet):
         template_context = normalize_template_context(state.template_context)
 
         errors = _study_finalize_errors(study)
-        if errors:
-            return Response({"errors": errors}, status=status.HTTP_400_BAD_REQUEST)
-
-        template_context_errors = validate_template_context_for_finalize(template_context)
-        if template_context_errors:
-            return Response({"errors": template_context_errors}, status=status.HTTP_400_BAD_REQUEST)
-
+        template_context_errors = validate_template_context_for_finalize(
+            template_context,
+            metadata_columns=state.metadata_columns,
+        )
         onboarding_errors = validate_final_ready(metadata_columns=get_study_template_columns(study), mappings=mappings)
-        if onboarding_errors:
-            return Response({"errors": onboarding_errors}, status=status.HTTP_400_BAD_REQUEST)
+        all_errors = errors + template_context_errors + onboarding_errors
+        if all_errors:
+            return Response({"errors": all_errors}, status=status.HTTP_400_BAD_REQUEST)
 
         state.status = StudyOnboardingState.Status.FINAL
         now = timezone.now()

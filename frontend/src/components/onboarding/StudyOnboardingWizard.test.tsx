@@ -1,17 +1,18 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { vi } from "vitest";
 
 import { StudyOnboardingWizard } from "./StudyOnboardingWizard";
+import { fetchLookups } from "../../api/lookups";
 import { validateMetadataUpload } from "../../api/metadataValidation";
 import { downloadMetadataTemplate } from "../../api/metadataTemplates";
 import {
   fetchStudyOnboardingState,
-  patchStudyOnboardingState,
   finalizeStudyOnboardingState,
+  patchStudyOnboardingState,
 } from "../../api/studyOnboarding";
-import { updateStudy } from "../../api/studies";
+import { deleteStudy, updateStudy } from "../../api/studies";
 
 let mockStudy = {
   id: 11,
@@ -24,6 +25,54 @@ let mockStudy = {
   celltype: null as string | null,
   treatment_var: null as string | null,
   batch_var: null as string | null,
+};
+
+let mockOnboardingState = {
+  study_id: 11,
+  status: "draft" as const,
+  metadata_columns: ["group", "plate", "sample_ID", "sample_name", "solvent_control"],
+  mappings: {
+    treatment_level_1: "",
+    treatment_level_2: "",
+    treatment_level_3: "",
+    treatment_level_4: "",
+    treatment_level_5: "",
+    batch: "",
+    pca_color: "",
+    pca_shape: "",
+    pca_alpha: "",
+    clustering_group: "",
+    report_faceting_group: "",
+  },
+  template_context: {
+    study_design_elements: [] as string[],
+    treatment_vars: [] as string[],
+    batch_vars: [] as string[],
+    optional_field_keys: [] as string[],
+    custom_field_keys: [] as string[],
+  },
+  config: {
+    common: {
+      platform: "RNA-Seq",
+      instrument_model: "",
+      sequenced_by: "",
+      biospyder_kit: null,
+      dose: null,
+      units: "",
+    },
+    pipeline: {
+      mode: "se",
+      threads: 8,
+    },
+    qc: {},
+    deseq2: {
+      cpus: 4,
+    },
+  },
+  suggested_contrasts: [{ reference_group: "control", comparison_group: "treated" }],
+  selected_contrasts: [] as Array<{ reference_group: string; comparison_group: string }>,
+  updated_at: "2026-04-08T00:00:00.000Z",
+  finalized_at: null as string | null,
 };
 
 vi.mock("papaparse", () => ({
@@ -59,7 +108,450 @@ vi.mock("../../api/studyOnboarding", async () => {
   const actual = await vi.importActual<typeof import("../../api/studyOnboarding")>("../../api/studyOnboarding");
   return {
     ...actual,
-    fetchStudyOnboardingState: vi.fn(async () => ({
+    fetchStudyOnboardingState: vi.fn(async () => mockOnboardingState),
+    patchStudyOnboardingState: vi.fn(async (_studyId: number, payload: Record<string, unknown>) => {
+      mockOnboardingState = {
+        ...mockOnboardingState,
+        ...(payload.template_context ? { template_context: payload.template_context } : {}),
+        ...(payload.mappings ? { mappings: { ...mockOnboardingState.mappings, ...payload.mappings } } : {}),
+        ...(payload.selected_contrasts ? { selected_contrasts: payload.selected_contrasts as typeof mockOnboardingState.selected_contrasts } : {}),
+        ...(payload.config
+          ? {
+              config: {
+                ...mockOnboardingState.config,
+                ...(payload.config as typeof mockOnboardingState.config),
+                common: {
+                  ...mockOnboardingState.config.common,
+                  ...((payload.config as typeof mockOnboardingState.config).common ?? {}),
+                },
+                pipeline: {
+                  ...mockOnboardingState.config.pipeline,
+                  ...((payload.config as typeof mockOnboardingState.config).pipeline ?? {}),
+                },
+                qc: {
+                  ...mockOnboardingState.config.qc,
+                  ...((payload.config as typeof mockOnboardingState.config).qc ?? {}),
+                },
+                deseq2: {
+                  ...mockOnboardingState.config.deseq2,
+                  ...((payload.config as typeof mockOnboardingState.config).deseq2 ?? {}),
+                },
+              },
+            }
+          : {}),
+      };
+      return mockOnboardingState;
+    }),
+    finalizeStudyOnboardingState: vi.fn(async () => ({
+      ...mockOnboardingState,
+      status: "final" as const,
+      mappings: {
+        ...mockOnboardingState.mappings,
+        treatment_level_1: mockOnboardingState.template_context.treatment_vars[0] ?? "",
+        batch: mockOnboardingState.template_context.batch_vars[0] ?? "",
+      },
+      finalized_at: "2026-04-08T00:00:00.000Z",
+    })),
+  };
+});
+
+vi.mock("../../api/lookups", async () => {
+  const actual = await vi.importActual<typeof import("../../api/lookups")>("../../api/lookups");
+  return {
+    ...actual,
+    fetchLookups: vi.fn(async () => ({
+      version: 2,
+      metadata_field_definitions: [
+        {
+          key: "sample_ID",
+          label: "Sample ID",
+          group: "Core",
+          description: "",
+          scope: "sample",
+          system_key: "sample_ID",
+          data_type: "string",
+          kind: "standard",
+          required: true,
+          is_core: true,
+          allow_null: false,
+          choices: [],
+          regex: "^[a-zA-Z0-9-_]*$",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+        },
+        {
+          key: "technical_control",
+          label: "Technical control",
+          group: "Core",
+          description: "",
+          scope: "sample",
+          system_key: "technical_control",
+          data_type: "boolean",
+          kind: "standard",
+          required: true,
+          is_core: true,
+          allow_null: false,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+        },
+        {
+          key: "reference_rna",
+          label: "Reference RNA",
+          group: "Core",
+          description: "",
+          scope: "sample",
+          system_key: "reference_rna",
+          data_type: "boolean",
+          kind: "standard",
+          required: true,
+          is_core: true,
+          allow_null: false,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+        },
+        {
+          key: "solvent_control",
+          label: "Solvent control",
+          group: "Core",
+          description: "",
+          scope: "sample",
+          system_key: "solvent_control",
+          data_type: "boolean",
+          kind: "standard",
+          required: true,
+          is_core: true,
+          allow_null: false,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+        },
+        {
+          key: "sample_name",
+          label: "Sample name",
+          group: "Core",
+          description: "",
+          scope: "sample",
+          system_key: "sample_name",
+          data_type: "string",
+          kind: "standard",
+          required: false,
+          is_core: false,
+          allow_null: true,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+        },
+        {
+          key: "chemical",
+          label: "Chemical",
+          group: "Toxicology",
+          description: "Selecting this auto-adds CASN.",
+          scope: "sample",
+          system_key: "chemical",
+          data_type: "string",
+          kind: "standard",
+          required: false,
+          is_core: false,
+          allow_null: true,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: ["CASN"],
+        },
+        {
+          key: "CASN",
+          label: "CAS Number",
+          group: "Toxicology",
+          description: "",
+          scope: "sample",
+          system_key: "CASN",
+          data_type: "string",
+          kind: "standard",
+          required: false,
+          is_core: false,
+          allow_null: true,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+        },
+        {
+          key: "group",
+          label: "Group",
+          group: "Study design",
+          description: "Primary experimental grouping.",
+          scope: "sample",
+          system_key: "group",
+          data_type: "string",
+          kind: "standard",
+          required: false,
+          is_core: false,
+          allow_null: true,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+        },
+        {
+          key: "plate",
+          label: "Plate",
+          group: "Study design",
+          description: "Primary batch grouping.",
+          scope: "sample",
+          system_key: "plate",
+          data_type: "string",
+          kind: "standard",
+          required: false,
+          is_core: false,
+          allow_null: true,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+        },
+        {
+          key: "dose",
+          label: "Dose",
+          group: "Toxicology",
+          description: "Select for in vivo experiments.",
+          scope: "sample",
+          system_key: "dose",
+          data_type: "float",
+          kind: "standard",
+          required: false,
+          is_core: false,
+          allow_null: true,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+        },
+        {
+          key: "i5_index",
+          label: "i5 index",
+          group: "Sequencing",
+          description: "i5 sample index.",
+          scope: "sample",
+          system_key: "i5_index",
+          data_type: "string",
+          kind: "standard",
+          required: false,
+          is_core: false,
+          allow_null: true,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+        },
+        {
+          key: "i7_index",
+          label: "i7 index",
+          group: "Sequencing",
+          description: "i7 sample index.",
+          scope: "sample",
+          system_key: "i7_index",
+          data_type: "string",
+          kind: "standard",
+          required: false,
+          is_core: false,
+          allow_null: true,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+        },
+        {
+          key: "well_id",
+          label: "Well ID",
+          group: "Sequencing",
+          description: "Plate well identifier.",
+          scope: "sample",
+          system_key: "well_id",
+          data_type: "string",
+          kind: "standard",
+          required: false,
+          is_core: false,
+          allow_null: true,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+        },
+      ],
+      lookups: {
+        soft: {
+          pi_name: { policy: "scoped_select_or_create", values: ["Dr. Example"] },
+          researcher_name: { policy: "scoped_select_or_create", values: ["Researcher Example"] },
+          celltype: { policy: "scoped_select_or_create", values: ["Hepatocyte"] },
+          sequenced_by: { policy: "scoped_select_or_create", values: ["HC Genomics lab", "Yauk lab"] },
+        },
+        controlled: {
+          genome_version: { policy: "admin_managed", values: [] },
+          platform: { policy: "admin_managed", values: ["RNA-Seq", "TempO-Seq", "DrugSeq"] },
+          instrument_model: { policy: "admin_managed", values: ["Illumina NovaSeq 6000", "Illumina MiSeq"] },
+          biospyder_kit: {
+            policy: "admin_managed",
+            values: [
+              { label: "Human Whole Transcriptome 2.1", value: "hwt2-1" },
+              { label: "Mouse Whole Transcriptome 1.0", value: "mousewt1-0" },
+            ],
+          },
+        },
+      },
+    })),
+  };
+});
+
+vi.mock("../../api/studies", async () => {
+  const actual = await vi.importActual<typeof import("../../api/studies")>("../../api/studies");
+  return {
+    ...actual,
+    fetchStudy: vi.fn(async () => mockStudy),
+    deleteStudy: vi.fn(async () => undefined),
+    updateStudy: vi.fn(async (_studyId: number, payload: Record<string, unknown>) => {
+      mockStudy = {
+        ...mockStudy,
+        title: String(payload.title ?? mockStudy.title),
+        description: String(payload.description ?? mockStudy.description),
+        species: (payload.species as typeof mockStudy.species | undefined) ?? mockStudy.species,
+        celltype: (payload.celltype as string | null | undefined) ?? mockStudy.celltype,
+      };
+      return mockStudy;
+    }),
+  };
+});
+
+vi.mock("../../api/metadataTemplates", async () => {
+  const actual = await vi.importActual<typeof import("../../api/metadataTemplates")>("../../api/metadataTemplates");
+  return {
+    ...actual,
+    previewMetadataTemplate: vi.fn(async (payload: {
+      optional_field_keys: string[];
+      custom_field_keys: string[];
+      template_context?: {
+        study_design_elements?: string[];
+        treatment_vars?: string[];
+        batch_vars?: string[];
+      };
+    }) => {
+      const columns = ["sample_ID", "technical_control", "reference_rna", "solvent_control"];
+      const autoIncluded: Array<{ key: string; reason: string }> = [];
+      const templateContext = payload.template_context ?? {};
+      const designElements = templateContext.study_design_elements ?? [];
+
+      if (designElements.includes("chemical")) {
+        columns.push("chemical");
+        autoIncluded.push({ key: "chemical", reason: "chemical study design selected" });
+      }
+
+      for (const key of templateContext.treatment_vars ?? []) {
+        if (!columns.includes(key)) {
+          columns.push(key);
+          autoIncluded.push({ key, reason: "primary experimental variable selected" });
+        }
+      }
+
+      for (const key of templateContext.batch_vars ?? []) {
+        if (!columns.includes(key)) {
+          columns.push(key);
+          autoIncluded.push({ key, reason: "primary batch variable selected" });
+        }
+      }
+
+      for (const key of payload.optional_field_keys ?? []) {
+        if (key === "sequencing_mode") {
+          continue;
+        }
+        if (!columns.includes(key)) {
+          columns.push(key);
+        }
+      }
+
+      for (const key of payload.custom_field_keys ?? []) {
+        if (!columns.includes(key)) {
+          columns.push(key);
+        }
+      }
+
+      return {
+        columns,
+        auto_included: autoIncluded,
+        deprecated_fields: [],
+        project_code: "example-7",
+        filename: "example-7_metadata.csv",
+      };
+    }),
+    downloadMetadataTemplate: vi.fn(async () => ({
+      blob: new Blob(["sample_ID,technical_control,reference_rna,solvent_control,group\n"], { type: "text/csv" }),
+      filename: "example-7_metadata.csv",
+    })),
+  };
+});
+
+function LocationDisplay() {
+  const location = useLocation();
+  return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
+}
+
+function renderWizard(initialEntry: string) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Routes>
+          <Route
+            path="/studies/:studyId/onboarding"
+            element={(
+              <>
+                <StudyOnboardingWizard />
+                <LocationDisplay />
+              </>
+            )}
+          />
+          <Route path="/studies" element={<LocationDisplay />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+describe("StudyOnboardingWizard", () => {
+  beforeEach(() => {
+    mockStudy = {
+      id: 11,
+      project: 7,
+      project_title: "Mercury tox study",
+      title: "Hepatocyte mercury dose response",
+      description: "",
+      status: "draft",
+      species: null,
+      celltype: null,
+      treatment_var: null,
+      batch_var: null,
+    };
+    mockOnboardingState = {
       study_id: 11,
       status: "draft",
       metadata_columns: ["group", "plate", "sample_ID", "sample_name", "solvent_control"],
@@ -83,492 +575,257 @@ vi.mock("../../api/studyOnboarding", async () => {
         optional_field_keys: [],
         custom_field_keys: [],
       },
+      config: {
+        common: {
+          platform: "RNA-Seq",
+          instrument_model: "",
+          sequenced_by: "",
+          biospyder_kit: null,
+          dose: null,
+          units: "",
+        },
+        pipeline: {
+          mode: "se",
+          threads: 8,
+        },
+        qc: {},
+        deseq2: {
+          cpus: 4,
+        },
+      },
       suggested_contrasts: [{ reference_group: "control", comparison_group: "treated" }],
       selected_contrasts: [],
       updated_at: "2026-04-08T00:00:00.000Z",
       finalized_at: null,
-    })),
-    patchStudyOnboardingState: vi.fn(async (studyId: number, payload: Record<string, unknown>) => {
-      const base = await (fetchStudyOnboardingState as unknown as (studyId: number) => Promise<Record<string, unknown>>)(studyId);
-      return {
-        ...base,
-        ...payload,
-      };
-    }),
-    finalizeStudyOnboardingState: vi.fn(async () => ({
-      study_id: 11,
-      status: "final",
-      metadata_columns: ["group", "plate", "sample_ID", "sample_name", "solvent_control"],
-      mappings: {
-        treatment_level_1: "group",
-        treatment_level_2: "",
-        treatment_level_3: "",
-        treatment_level_4: "",
-        treatment_level_5: "",
-        batch: "plate",
-        pca_color: "",
-        pca_shape: "",
-        pca_alpha: "",
-        clustering_group: "",
-        report_faceting_group: "",
-      },
-      template_context: {
-        study_design_elements: ["chemical", "treatment", "batch"],
-        treatment_vars: ["group"],
-        batch_vars: ["plate"],
-        optional_field_keys: [],
-        custom_field_keys: [],
-      },
-      suggested_contrasts: [{ reference_group: "control", comparison_group: "treated" }],
-      selected_contrasts: [{ reference_group: "control", comparison_group: "treated" }],
-      updated_at: "2026-04-08T00:00:00.000Z",
-      finalized_at: "2026-04-08T00:00:00.000Z",
-    })),
-  };
-});
-
-vi.mock("../../api/lookups", async () => {
-  const actual = await vi.importActual<typeof import("../../api/lookups")>("../../api/lookups");
-  return {
-    ...actual,
-    fetchLookups: vi.fn(async () => ({
-      version: 1,
-      metadata_field_definitions: [
-        {
-          key: "sample_ID",
-          label: "Sample ID",
-          group: "Core",
-          description: "",
-          data_type: "string",
-          kind: "standard",
-          required: true,
-          auto_include_keys: [],
-        },
-        {
-          key: "sample_name",
-          label: "Sample name",
-          group: "Core",
-          description: "",
-          data_type: "string",
-          kind: "standard",
-          required: true,
-          auto_include_keys: [],
-        },
-        {
-          key: "group",
-          label: "Group",
-          group: "Core",
-          description: "",
-          data_type: "string",
-          kind: "standard",
-          required: true,
-          auto_include_keys: [],
-        },
-        {
-          key: "chemical",
-          label: "Chemical",
-          group: "Toxicology",
-          description: "Selecting this auto-adds CASN.",
-          data_type: "string",
-          kind: "standard",
-          required: false,
-          auto_include_keys: ["CASN"],
-        },
-        {
-          key: "CASN",
-          label: "CAS Number",
-          group: "Toxicology",
-          description: "",
-          data_type: "string",
-          kind: "standard",
-          required: false,
-          auto_include_keys: [],
-        },
-        {
-          key: "dose",
-          label: "Dose",
-          group: "Toxicology",
-          description: "",
-          data_type: "float",
-          kind: "standard",
-          required: false,
-          auto_include_keys: [],
-        },
-        {
-          key: "concentration",
-          label: "Concentration",
-          group: "Toxicology",
-          description: "",
-          data_type: "float",
-          kind: "standard",
-          required: false,
-          auto_include_keys: [],
-        },
-        {
-          key: "i5_index",
-          label: "i5 index",
-          group: "Sequencing",
-          description: "i5 sample index.",
-          data_type: "string",
-          kind: "standard",
-          required: false,
-          auto_include_keys: [],
-        },
-        {
-          key: "i7_index",
-          label: "i7 index",
-          group: "Sequencing",
-          description: "i7 sample index.",
-          data_type: "string",
-          kind: "standard",
-          required: false,
-          auto_include_keys: [],
-        },
-        {
-          key: "well_id",
-          label: "Well ID",
-          group: "Sequencing",
-          description: "Plate well identifier.",
-          data_type: "string",
-          kind: "standard",
-          required: false,
-          auto_include_keys: [],
-        },
-        {
-          key: "sequencing_mode",
-          label: "Sequencing mode",
-          group: "Sequencing",
-          description: "Single-end or paired-end sequencing mode.",
-          data_type: "string",
-          kind: "standard",
-          required: false,
-          auto_include_keys: [],
-        },
-        {
-          key: "timepoint",
-          label: "Timepoint",
-          group: "Study design",
-          description: "",
-          data_type: "string",
-          kind: "custom",
-          required: false,
-          auto_include_keys: [],
-        },
-      ],
-      lookups: {
-        soft: {
-          pi_name: { policy: "scoped_select_or_create", values: ["Dr. Example"] },
-          researcher_name: { policy: "scoped_select_or_create", values: ["Researcher Example"] },
-        },
-        controlled: {
-          genome_version: { policy: "admin_managed", values: [] },
-        },
-      },
-    })),
-  };
-});
-
-vi.mock("../../api/studies", async () => {
-  const actual = await vi.importActual<typeof import("../../api/studies")>("../../api/studies");
-  return {
-    ...actual,
-    fetchStudy: vi.fn(async () => mockStudy),
-    updateStudy: vi.fn(async (_studyId: number, payload: Record<string, unknown>) => {
-      mockStudy = {
-        ...mockStudy,
-        title: String(payload.title ?? mockStudy.title),
-        description: String(payload.description ?? mockStudy.description),
-        species: (payload.species as typeof mockStudy.species | undefined) ?? mockStudy.species,
-        celltype: (payload.celltype as string | null | undefined) ?? mockStudy.celltype,
-      };
-      return mockStudy;
-    }),
-  };
-});
-
-vi.mock("../../api/metadataTemplates", async () => {
-  const actual = await vi.importActual<typeof import("../../api/metadataTemplates")>("../../api/metadataTemplates");
-  return {
-    ...actual,
-    previewMetadataTemplate: vi.fn(async (payload: {
-      optional_field_keys: string[];
-      custom_field_keys: string[];
-      template_context?: { study_design_elements?: string[] };
-    }) => {
-      const required = ["sample_ID", "sample_name", "group"];
-      const columns = [...required];
-      const autoIncluded: Array<{ key: string; reason: string }> = [];
-      const studyDesignElements = payload.template_context?.study_design_elements ?? [];
-
-      if (studyDesignElements.includes("chemical") && !columns.includes("chemical")) {
-        columns.push("chemical");
-        autoIncluded.push({ key: "chemical", reason: "chemical study design selected" });
-      }
-
-      if (studyDesignElements.includes("timepoint") && !columns.includes("timepoint")) {
-        columns.push("timepoint");
-        autoIncluded.push({ key: "timepoint", reason: "timepoint study design selected" });
-      }
-
-      for (const key of payload.optional_field_keys ?? []) {
-        if (!columns.includes(key)) {
-          columns.push(key);
-        }
-        if (key === "chemical" && !columns.includes("CASN")) {
-          columns.push("CASN");
-          autoIncluded.push({ key: "CASN", reason: "chemical selected" });
-        }
-      }
-
-      for (const key of payload.custom_field_keys ?? []) {
-        if (!columns.includes(key)) {
-          columns.push(key);
-        }
-      }
-
-      return {
-        columns,
-        auto_included: autoIncluded,
-        deprecated_fields: [],
-        project_code: "example-7",
-        filename: "example-7_metadata.csv",
-      };
-    }),
-    downloadMetadataTemplate: vi.fn(async () => ({
-      blob: new Blob(["sample_ID,sample_name,group\n"], { type: "text/csv" }),
-      filename: "example-7_metadata.csv",
-    })),
-  };
-});
-
-function LocationDisplay() {
-  const location = useLocation();
-  return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
-}
-
-function renderWizard(initialEntry: string) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[initialEntry]}>
-        <Routes>
-          <Route
-            path="/studies/:studyId/onboarding"
-            element={(
-              <div>
-                <LocationDisplay />
-                <StudyOnboardingWizard />
-              </div>
-            )}
-          />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
-}
-
-describe("StudyOnboardingWizard", () => {
-  beforeEach(() => {
-    localStorage.clear();
-    mockStudy = {
-      id: 11,
-      project: 7,
-      project_title: "Mercury tox study",
-      title: "Hepatocyte mercury dose response",
-      description: "",
-      status: "draft",
-      species: null,
-      celltype: null,
-      treatment_var: null,
-      batch_var: null,
     };
+    localStorage.clear();
+    vi.clearAllMocks();
   });
 
-  it("defaults to the details step when the step query param is missing", async () => {
+  it("renders the new five-step order", async () => {
     renderWizard("/studies/11/onboarding");
 
     expect(await screen.findByRole("heading", { name: "Study details" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Back to study" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Studies" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Study title")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Study details/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Template design/i })).toBeInTheDocument();
+    const metadataStepButton = screen.getByRole("button", { name: /Finalize metadata/i });
+    expect(metadataStepButton).toBeInTheDocument();
+    expect(metadataStepButton).toHaveTextContent("Not started");
+    expect(metadataStepButton).not.toHaveTextContent("Complete and saved");
+    expect(screen.getByRole("button", { name: /Upload metadata/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Review & finalize/i })).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/studies/11/onboarding");
-    expect(screen.queryByText("Saved, needs more info")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Not started")).toHaveLength(4);
-    expect(screen.getByRole("button", { name: /Study details/i })).toHaveTextContent("1");
-    expect(screen.getByRole("button", { name: /Template design/i })).toHaveTextContent("2");
-    expect(screen.getByRole("button", { name: /Upload metadata/i })).toHaveTextContent("3");
-    expect(screen.getByRole("button", { name: /Mappings/i })).toHaveTextContent("4");
-    expect(screen.getByRole("button", { name: /Review/i })).toHaveTextContent("5");
   });
 
-  it("honors the step query param when present", async () => {
-    renderWizard("/studies/11/onboarding?step=upload");
+  it("shows sequencing config fields on study details and conditionally reveals Biospyder kit", async () => {
+    renderWizard("/studies/11/onboarding");
 
-    expect(await screen.findByRole("heading", { name: "Upload metadata" })).toBeInTheDocument();
-    expect(screen.getByTestId("location")).toHaveTextContent("/studies/11/onboarding?step=upload");
+    expect(await screen.findByText("Sequencing setup")).toBeInTheDocument();
+    expect(await screen.findByRole("group", { name: "Platform" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Sequencing mode" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Instrument model")).toBeInTheDocument();
+    expect(screen.getByLabelText("Sequenced by")).toBeInTheDocument();
+    expect(screen.queryByText("Config summary")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Biospyder kit")).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: "TempO-Seq" }));
+
+    expect(await screen.findByLabelText("Biospyder kit")).toBeInTheDocument();
   });
 
-  it("persists draft state in localStorage scoped to the study", async () => {
-    const { unmount } = renderWizard("/studies/11/onboarding");
+  it("places the description field above sequencing setup on the study details step", async () => {
+    renderWizard("/studies/11/onboarding");
 
-    fireEvent.change(await screen.findByLabelText("PI name"), { target: { value: "Dr. Example" } });
-    expect(screen.getByDisplayValue("Dr. Example")).toBeInTheDocument();
+    const description = await screen.findByLabelText("Description");
+    const sequencingHeading = screen.getByText("Sequencing setup");
+    const descriptionField = description.closest(".grid");
+    const descriptionPosition = descriptionField?.compareDocumentPosition(sequencingHeading) ?? 0;
 
-    unmount();
+    expect(descriptionPosition & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows a delete-study action on the first step and deletes the study through the confirmation dialog", async () => {
+    renderWizard("/studies/11/onboarding");
+
+    const deleteTrigger = await screen.findByRole("button", { name: /delete study/i });
+    fireEvent.click(deleteTrigger);
+
+    expect(await screen.findByRole("dialog", { name: /delete study/i })).toBeInTheDocument();
+
+    const confirmButton = screen.getByRole("button", { name: /^delete study$/i });
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/type the study title/i), {
+      target: { value: mockStudy.title },
+    });
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => expect(deleteStudy).toHaveBeenCalled());
+    expect(vi.mocked(deleteStudy).mock.calls.at(-1)?.[0]).toBe(11);
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/studies"));
+  });
+
+  it("keeps the delete-study action available on later onboarding steps", async () => {
+    renderWizard("/studies/11/onboarding?step=design");
+
+    expect(await screen.findByRole("button", { name: /delete study/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
+  });
+
+  it("falls back to default platform and sequenced-by options when lookup buckets are empty", async () => {
+    vi.mocked(fetchLookups).mockResolvedValueOnce({
+      version: 2,
+      metadata_field_definitions: [],
+      lookups: {
+        soft: {
+          pi_name: { policy: "scoped_select_or_create", values: [] },
+          researcher_name: { policy: "scoped_select_or_create", values: [] },
+          celltype: { policy: "scoped_select_or_create", values: [] },
+          sequenced_by: { policy: "scoped_select_or_create", values: [] },
+        },
+        controlled: {
+          genome_version: { policy: "admin_managed", values: [] },
+          platform: { policy: "admin_managed", values: [] },
+          instrument_model: { policy: "admin_managed", values: [] },
+          biospyder_kit: { policy: "admin_managed", values: [] },
+        },
+      },
+    });
 
     renderWizard("/studies/11/onboarding");
-    expect(await screen.findByDisplayValue("Dr. Example")).toBeInTheDocument();
+
+    expect(await screen.findByRole("button", { name: "TempO-Seq" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "RNA-Seq" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "DrugSeq" })).toBeInTheDocument();
+
+    const sequencedBy = screen.getByLabelText("Sequenced by");
+    expect(sequencedBy).toHaveAttribute("list");
+    const listId = sequencedBy.getAttribute("list");
+    expect(listId).toBeTruthy();
+    const datalist = document.getElementById(String(listId));
+    expect(datalist).not.toBeNull();
+    expect(datalist?.querySelector('option[value="HC Genomics lab"]')).not.toBeNull();
+    expect(datalist?.querySelector('option[value="HC foods lab"]')).not.toBeNull();
+    expect(datalist?.querySelector('option[value="Yauk lab"]')).not.toBeNull();
   });
 
-  it("requires at least one study design element before continuing from template design", async () => {
-    renderWizard("/studies/11/onboarding?step=template");
+  it("prompts for treatment and batch variable names only when those design elements are selected", async () => {
+    renderWizard("/studies/11/onboarding?step=design");
+
+    expect(await screen.findByRole("heading", { name: "Template design" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Treatment vars")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Batch vars")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Treatment/i }));
+    expect(await screen.findByLabelText("Treatment vars")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Batch vars")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Batch/i }));
+    expect(await screen.findByLabelText("Batch vars")).toBeInTheDocument();
+  });
+
+  it("requires treatment naming and supports multiple batch variables before continuing from template design", async () => {
+    renderWizard("/studies/11/onboarding?step=design");
 
     const continueButton = await screen.findByRole("button", { name: "Continue" });
     expect(continueButton).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: /chemical/i }));
-    expect(continueButton).not.toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Treatment/i }));
+    expect(continueButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Treatment vars"), { target: { value: "radiation" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add a treatment variable" }));
+    expect(continueButton).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Batch/i }));
+    expect(continueButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Batch vars"), { target: { value: "plate" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add a batch variable" }));
+    expect(continueButton).toBeEnabled();
+    fireEvent.change(screen.getByLabelText("Batch vars"), { target: { value: "operator" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add a batch variable" }));
+
+    expect(screen.getByText("plate")).toBeInTheDocument();
+    expect(screen.getByText("operator")).toBeInTheDocument();
   });
 
-  it("auto-adds study-design driven columns in the template preview", async () => {
-    renderWizard("/studies/11/onboarding?step=template");
+  it("keeps sequencing mode out of finalize metadata and labels sequencing fields as identifiers", async () => {
+    mockOnboardingState.template_context = {
+      study_design_elements: ["chemical"],
+      treatment_vars: ["group"],
+      batch_vars: ["plate"],
+      optional_field_keys: ["i5_index", "sequencing_mode"],
+      custom_field_keys: [],
+    };
 
-    fireEvent.click(await screen.findByRole("button", { name: /chemical/i }));
+    renderWizard("/studies/11/onboarding?step=metadata");
 
-    expect(await screen.findByText("Auto-added chemical: chemical study design selected")).toBeInTheDocument();
-  });
-
-  it("renders the template preview before the template configurator content", async () => {
-    renderWizard("/studies/11/onboarding?step=template");
-
-    const previewHeading = await screen.findByText("Template preview");
-    const designHeading = screen.getByText("Study design elements");
-    const columnsHeading = screen.getByText("Template columns");
-
-    expect(
-      Boolean(previewHeading.compareDocumentPosition(designHeading) & Node.DOCUMENT_POSITION_FOLLOWING),
-    ).toBe(true);
-    expect(
-      Boolean(designHeading.compareDocumentPosition(columnsHeading) & Node.DOCUMENT_POSITION_FOLLOWING),
-    ).toBe(true);
-  });
-
-  it("renders required and sequencing groups inside the template columns card", async () => {
-    renderWizard("/studies/11/onboarding?step=template");
-
-    expect(await screen.findByText("Template columns")).toBeInTheDocument();
-    expect(screen.getAllByText("Required").length).toBeGreaterThan(0);
-
-    expect((await screen.findAllByText("Sample ID")).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: /remove sample id/i })).not.toBeInTheDocument();
-
-    expect(screen.getByText("i5 index")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Finalize metadata" })).toBeInTheDocument();
+    expect(await screen.findByText("i5 index")).toBeInTheDocument();
     expect(screen.getByText("i7 index")).toBeInTheDocument();
     expect(screen.getByText("Well ID")).toBeInTheDocument();
-    expect(screen.getByText("Sequencing mode")).toBeInTheDocument();
-    expect(screen.getByText("Concentration")).toBeInTheDocument();
-    expect(screen.getByText("Select for in vitro experiments.")).toBeInTheDocument();
-    expect(screen.getByText("Select for in vivo experiments.")).toBeInTheDocument();
+    expect(screen.queryByText("Sequencing mode")).not.toBeInTheDocument();
   });
 
-  it("shows study-design-derived fields as selected and locked", async () => {
-    renderWizard("/studies/11/onboarding?step=template");
+  it("validates uploads against the finalized template without sequencing_mode", async () => {
+    mockOnboardingState.template_context = {
+      study_design_elements: ["chemical"],
+      treatment_vars: ["group"],
+      batch_vars: ["plate"],
+      optional_field_keys: ["i5_index"],
+      custom_field_keys: [],
+    };
 
-    fireEvent.click(await screen.findByRole("button", { name: /chemical/i }));
-
-    const chemicalCheckbox = await screen.findByLabelText("Chemical");
-    expect(chemicalCheckbox).toBeChecked();
-    expect(chemicalCheckbox).toBeDisabled();
-    expect(screen.getByText("Auto-included from study design.")).toBeInTheDocument();
-  });
-
-  it("creates removable custom chips through the progressive add control", async () => {
-    renderWizard("/studies/11/onboarding?step=template");
-
-    fireEvent.click(await screen.findByRole("button", { name: "Add custom field" }));
-
-    fireEvent.change(screen.getByLabelText("Custom field name"), { target: { value: "plate_layout" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add field" }));
-
-    expect(await screen.findByText("plate_layout")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /remove plate_layout/i })).toBeInTheDocument();
-  });
-
-  it("keeps the download template button disabled until the template configuration is valid", async () => {
-    renderWizard("/studies/11/onboarding?step=template");
-
-    const downloadButton = await screen.findByRole("button", { name: "Download template" });
-    expect(downloadButton).toBeDisabled();
-
-    fireEvent.click(downloadButton);
-    expect(downloadMetadataTemplate).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: /chemical/i }));
-    await waitFor(() => expect(downloadButton).toBeEnabled());
-  });
-
-  it("parses an uploaded sheet, shows a preview, and keeps only one file chooser path", async () => {
-    renderWizard("/studies/11/onboarding?step=upload");
-
-    const input = await screen.findByTestId("metadata-file-input");
-    const file = new File(["sample_ID,sample_name,group\n,sample-a,control\n"], "metadata.csv", { type: "text/csv" });
-    fireEvent.change(input, { target: { files: [file] } });
-
-    expect(await screen.findByText("sample_ID is required.")).toBeInTheDocument();
-    expect(screen.queryByText("Or choose a file")).not.toBeInTheDocument();
-    expect(validateMetadataUpload).toHaveBeenCalledWith(
-      expect.objectContaining({
-        study_id: 11,
-        expected_columns: expect.arrayContaining(["sample_ID", "sample_name", "group"]),
-      }),
-    );
-  });
-
-  it("derives mapping column options from uploaded metadata", async () => {
     renderWizard("/studies/11/onboarding?step=upload");
 
     const input = await screen.findByTestId("metadata-file-input");
     const file = new File(["sample_ID,sample_name,group,plate,solvent_control\n"], "metadata.csv", { type: "text/csv" });
     fireEvent.change(input, { target: { files: [file] } });
-    expect(await screen.findByText("sample_ID is required.")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(validateMetadataUpload).toHaveBeenCalledWith(
+        expect.objectContaining({
+          study_id: 11,
+          expected_columns: expect.arrayContaining(["sample_ID", "technical_control", "reference_rna", "solvent_control", "group", "plate"]),
+        }),
+      ),
+    );
 
-    expect(await screen.findByRole("heading", { name: "Mappings" })).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Treatment level 1"));
-    expect(await screen.findByRole("option", { name: "plate" })).toBeInTheDocument();
+    const expectedColumns = (validateMetadataUpload as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0].expected_columns as string[];
+    expect(expectedColumns).not.toContain("sequencing_mode");
   });
 
-  it("saves template context with chip selections and finalizes mappings", async () => {
-    const view = renderWizard("/studies/11/onboarding?step=template");
+  it("prefills finalize mappings from the primary variables and finalizes onboarding", async () => {
+    mockOnboardingState.template_context = {
+      study_design_elements: ["chemical"],
+      treatment_vars: ["group"],
+      batch_vars: ["plate"],
+      optional_field_keys: [],
+      custom_field_keys: [],
+    };
+    mockOnboardingState.metadata_columns = ["group", "plate", "sample_ID", "technical_control", "reference_rna", "solvent_control"];
 
-    fireEvent.click(await screen.findByRole("button", { name: /treatment/i }));
-    fireEvent.change(screen.getByLabelText("Treatment vars"), { target: { value: "group" } });
-    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    renderWizard("/studies/11/onboarding?step=finalize");
+
+    expect(await screen.findByRole("heading", { name: "Review & finalize" })).toBeInTheDocument();
+    expect(await screen.findByText("Primary experimental variable: group")).toBeInTheDocument();
+    expect(screen.getByText("Primary batch variable: plate")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Finalize onboarding/i }));
 
     await waitFor(() =>
       expect(patchStudyOnboardingState).toHaveBeenCalledWith(
         11,
         expect.objectContaining({
-          template_context: expect.objectContaining({
-            study_design_elements: ["treatment"],
-            treatment_vars: ["group"],
+          mappings: expect.objectContaining({
+            treatment_level_1: "group",
+            batch: "plate",
           }),
         }),
       ),
     );
-
-    view.unmount();
-    renderWizard("/studies/11/onboarding?step=mappings");
-    fireEvent.click(await screen.findByLabelText("Treatment level 1"));
-    fireEvent.click(await screen.findByRole("option", { name: "group" }));
-    fireEvent.click(await screen.findByRole("button", { name: /finalize mappings/i }));
-
-    await waitFor(() => expect(finalizeStudyOnboardingState).toHaveBeenCalledWith(11));
+    expect(finalizeStudyOnboardingState).toHaveBeenCalledWith(11);
     expect(updateStudy).toHaveBeenCalledWith(
       11,
       expect.objectContaining({
@@ -577,75 +834,21 @@ describe("StudyOnboardingWizard", () => {
     );
   });
 
-  it("shows a warning only after successfully saving an incomplete step", async () => {
-    renderWizard("/studies/11/onboarding");
+  it("downloads the finalized metadata template from the dedicated metadata step", async () => {
+    mockOnboardingState.template_context = {
+      study_design_elements: ["chemical"],
+      treatment_vars: ["group"],
+      batch_vars: [],
+      optional_field_keys: ["i5_index"],
+      custom_field_keys: [],
+    };
 
-    expect(await screen.findByRole("heading", { name: "Study details" })).toBeInTheDocument();
-    expect(screen.queryByText("Saved, needs more info")).not.toBeInTheDocument();
+    renderWizard("/studies/11/onboarding?step=metadata");
 
-    fireEvent.click(screen.getByRole("button", { name: /Template design/i }));
+    const downloadButton = await screen.findByRole("button", { name: "Download template" });
+    await waitFor(() => expect(downloadButton).not.toBeDisabled());
+    fireEvent.click(downloadButton);
 
-    await screen.findByRole("heading", { name: "Template design" });
-    expect(updateStudy).toHaveBeenCalledWith(
-      11,
-      expect.objectContaining({
-        title: "Hepatocyte mercury dose response",
-        species: null,
-        celltype: null,
-      }),
-    );
-
-    const detailsStep = screen.getByRole("button", { name: /Study details/i });
-    expect(within(detailsStep).getByText("Saved, needs more info")).toBeInTheDocument();
-    expect(detailsStep).toHaveTextContent("1");
-  });
-
-  it("keeps an invalid edited step neutral until it is saved", async () => {
-    renderWizard("/studies/11/onboarding?step=template");
-
-    await screen.findByRole("heading", { name: "Template design" });
-    fireEvent.click(screen.getByRole("button", { name: /chemical/i }));
-    expect(screen.queryByText("Saved, needs more info")).not.toBeInTheDocument();
-  });
-
-  it("preserves attempted warning states across reloads from local draft storage", async () => {
-    const { unmount } = renderWizard("/studies/11/onboarding");
-
-    await screen.findByRole("heading", { name: "Study details" });
-    fireEvent.click(screen.getByRole("button", { name: /Template design/i }));
-    await screen.findByRole("heading", { name: "Template design" });
-    expect(screen.getByText("Saved, needs more info")).toBeInTheDocument();
-
-    unmount();
-
-    renderWizard("/studies/11/onboarding?step=template");
-    await screen.findByRole("heading", { name: "Template design" });
-    expect(screen.getByText("Saved, needs more info")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Study details/i })).toHaveTextContent("1");
-  });
-
-  it("shows a checkmark only after a step is complete and saved", async () => {
-    renderWizard("/studies/11/onboarding");
-
-    await screen.findByRole("heading", { name: "Study details" });
-    fireEvent.change(screen.getByLabelText("Study title"), { target: { value: "Updated study title" } });
-    fireEvent.change(screen.getByLabelText("Cell type"), { target: { value: "hepatocyte" } });
-    fireEvent.click(screen.getByLabelText("Species"));
-    fireEvent.click(await screen.findByRole("option", { name: "Human" }));
-
-    fireEvent.click(screen.getByRole("button", { name: /Template design/i }));
-
-    await screen.findByRole("heading", { name: "Template design" });
-    const detailsStep = screen.getByRole("button", { name: /Study details/i });
-    expect(within(detailsStep).getByText("Complete and saved")).toBeInTheDocument();
-    expect(within(detailsStep).queryByText("1")).not.toBeInTheDocument();
-    expect(updateStudy).toHaveBeenCalledWith(
-      11,
-      expect.objectContaining({
-        title: "Updated study title",
-        species: "human",
-        celltype: "hepatocyte",
-      }),
-    );
+    await waitFor(() => expect(downloadMetadataTemplate).toHaveBeenCalled());
   });
 });

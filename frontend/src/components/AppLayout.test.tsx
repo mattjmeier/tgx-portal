@@ -4,8 +4,10 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, vi } from "vitest";
 
 import { fetchProjects } from "../api/projects";
-import { fetchStudiesIndex } from "../api/studies";
+import { deleteStudy, fetchStudiesIndex } from "../api/studies";
 import { AppLayout } from "./AppLayout";
+
+const deletedStudyIds = new Set<number>();
 
 vi.mock("../auth/AuthProvider", () => ({
   useAuth: () => ({
@@ -122,7 +124,7 @@ vi.mock("../api/studies", async () => {
           batch_var: "batch-3",
           status: "active",
         },
-      ],
+      ].filter((study) => !deletedStudyIds.has(study.id)),
     })),
     fetchStudies: vi.fn(async (projectId: number) => ({
       count: projectId === 7 ? 2 : 1,
@@ -168,7 +170,9 @@ vi.mock("../api/studies", async () => {
               },
             ],
     })),
-    deleteStudy: vi.fn(async () => undefined),
+    deleteStudy: vi.fn(async (studyId: number) => {
+      deletedStudyIds.add(studyId);
+    }),
   };
 });
 
@@ -205,8 +209,9 @@ function renderLayout(initialEntry: string) {
 describe("AppLayout", () => {
   beforeEach(() => {
     localStorage.clear();
+    deletedStudyIds.clear();
 
-    vi.mocked(fetchStudiesIndex).mockResolvedValue({
+    vi.mocked(fetchStudiesIndex).mockImplementation(async () => ({
       count: 3,
       next: null,
       previous: null,
@@ -244,8 +249,8 @@ describe("AppLayout", () => {
           batch_var: "batch-3",
           status: "active",
         },
-      ],
-    });
+      ].filter((study) => !deletedStudyIds.has(study.id)),
+    }));
   });
 
   it("shows create and browse sections with collaboration-first labels", () => {
@@ -275,61 +280,143 @@ describe("AppLayout", () => {
     expect(within(footer as HTMLElement).getByText(/signed in/i)).toBeInTheDocument();
   });
 
-  it("shows a global onboarding reminder outside the wizard and supports icon controls", async () => {
+  it("shows an inline draft shelf outside the wizard for a single unfinished study", async () => {
     renderLayout("/collaborations");
 
-    expect(await screen.findByText(/finish study onboarding/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^continue$/i })).toHaveAttribute("href", "/studies/11/onboarding");
-    expect(screen.getByRole("button", { name: /minimize onboarding reminder/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /dismiss onboarding reminder/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /minimize onboarding reminder/i }));
-
-    expect(await screen.findByRole("button", { name: /expand onboarding reminder/i })).toBeInTheDocument();
-    expect(screen.getByText(/resume the saved draft when you are ready/i)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /dismiss onboarding reminder/i }));
-
-    expect(screen.queryByText(/finish study onboarding/i)).not.toBeInTheDocument();
+    expect(await screen.findByText(/draft study in progress/i)).toBeInTheDocument();
+    expect(screen.getByText(/hepatocyte mercury dose response/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /continue designing hepatocyte mercury dose response/i })).toHaveAttribute(
+      "href",
+      "/studies/11/onboarding",
+    );
   });
 
-  it("hides the global onboarding reminder while viewing the onboarding wizard itself", async () => {
+  it("shows multiple unfinished studies instead of collapsing to only the newest draft", async () => {
+    vi.mocked(fetchStudiesIndex).mockResolvedValueOnce({
+      count: 4,
+      next: null,
+      previous: null,
+      results: [
+        {
+          id: 11,
+          project: 7,
+          project_title: "Mercury tox study",
+          title: "Hepatocyte mercury dose response",
+          species: "human",
+          celltype: "hepatocyte",
+          treatment_var: "mercury",
+          batch_var: "batch-1",
+          status: "draft",
+        },
+        {
+          id: 13,
+          project: 7,
+          project_title: "Mercury tox study",
+          title: "Liver recovery pilot",
+          species: "mouse",
+          celltype: "liver",
+          treatment_var: "mercury",
+          batch_var: "batch-4",
+          status: "draft",
+        },
+        {
+          id: 12,
+          project: 7,
+          project_title: "Mercury tox study",
+          title: "Kidney cadmium follow-up",
+          species: "rat",
+          celltype: "kidney",
+          treatment_var: "cadmium",
+          batch_var: "batch-2",
+          status: "active",
+        },
+        {
+          id: 21,
+          project: 8,
+          project_title: "Cadmium follow-up",
+          title: "Mouse cortex lead pilot",
+          species: "mouse",
+          celltype: "cortex",
+          treatment_var: "lead",
+          batch_var: "batch-3",
+          status: "active",
+        },
+      ],
+    });
+
+    renderLayout("/collaborations");
+
+    expect(await screen.findByText(/2 draft studies in progress/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /continue designing liver recovery pilot/i })).toHaveAttribute(
+      "href",
+      "/studies/13/onboarding",
+    );
+    expect(screen.getByRole("link", { name: /continue designing hepatocyte mercury dose response/i })).toHaveAttribute(
+      "href",
+      "/studies/11/onboarding",
+    );
+    expect(screen.getByRole("link", { name: /view all studies/i })).toHaveAttribute("href", "/studies");
+  });
+
+  it("hides the inline draft shelf while viewing the onboarding wizard itself", async () => {
     renderLayout("/studies/11/onboarding");
 
     expect(await screen.findByText("Study onboarding page")).toBeInTheDocument();
-    expect(screen.queryByText(/finish study onboarding/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/draft study in progress/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/draft studies in progress/i)).not.toBeInTheDocument();
+  });
+
+  it("removes the draft shelf after deleting the unfinished study", async () => {
+    renderLayout("/studies/11");
+
+    expect(await screen.findByRole("link", { name: /continue designing hepatocyte mercury dose response/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /study actions for hepatocyte mercury dose response/i }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /delete study/i }));
+    expect(await screen.findByRole("dialog", { name: /delete study/i })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/type the study title/i), {
+      target: { value: "Hepatocyte mercury dose response" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^delete study$/i }));
+
+    expect(await screen.findByText("Studies page")).toBeInTheDocument();
+    expect(vi.mocked(deleteStudy).mock.calls.at(-1)?.[0]).toBe(11);
+    expect(screen.queryByText(/draft study in progress/i)).not.toBeInTheDocument();
   });
 
   it("lets users expand collaborations separately from studies in browse mode", async () => {
     renderLayout("/collaborations");
+    const navigation = screen.getByRole("navigation", { name: /application/i });
 
     fireEvent.click(screen.getByRole("button", { name: /toggle collaborations/i }));
 
-    expect(await screen.findByText(/mercury tox study/i)).toBeInTheDocument();
-    expect(screen.getByText(/cadmium follow-up/i)).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /collaboration registry/i })).not.toBeInTheDocument();
+    expect(await within(navigation).findByText(/mercury tox study/i)).toBeInTheDocument();
+    expect(within(navigation).getByText(/cadmium follow-up/i)).toBeInTheDocument();
+    expect(within(navigation).queryByRole("link", { name: /collaboration registry/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /toggle studies/i }));
 
-    expect(await screen.findByRole("link", { name: /hepatocyte mercury dose response/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /mouse cortex lead pilot/i })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /study directory/i })).not.toBeInTheDocument();
+    expect(await within(navigation).findByRole("link", { name: /hepatocyte mercury dose response/i })).toBeInTheDocument();
+    expect(within(navigation).getByRole("link", { name: /mouse cortex lead pilot/i })).toBeInTheDocument();
+    expect(within(navigation).queryByRole("link", { name: /study directory/i })).not.toBeInTheDocument();
   });
 
   it("keeps browse navigation on the links while expand buttons only reveal previews", async () => {
     renderLayout("/collaborations/7?study=11");
+    const navigation = screen.getByRole("navigation", { name: /application/i });
 
-    expect((await screen.findAllByRole("link", { name: /hepatocyte mercury dose response/i })).length).toBeGreaterThan(0);
+    expect((await within(navigation).findAllByRole("link", { name: /hepatocyte mercury dose response/i })).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("link", { name: /^studies$/i }));
 
     expect(await screen.findByText("Studies page")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /toggle studies/i }));
-    expect(screen.queryByRole("link", { name: /hepatocyte mercury dose response/i })).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole("link", { name: /hepatocyte mercury dose response/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /toggle studies/i }));
-    expect((await screen.findAllByRole("link", { name: /hepatocyte mercury dose response/i })).length).toBeGreaterThan(0);
+    expect((await within(navigation).findAllByRole("link", { name: /hepatocyte mercury dose response/i })).length).toBeGreaterThan(0);
   });
 
   it("supports a collapsed browse branch when clicked twice", async () => {
@@ -593,7 +680,7 @@ describe("AppLayout", () => {
     renderLayout("/collaborations/7?study=11");
 
     expect((await screen.findAllByText(/mercury tox study/i)).length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: /back to collaborations/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /back to collaborations/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /mercury tox study/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/manage studies, samples, and configuration outputs\./i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /more information about/i })).not.toBeInTheDocument();

@@ -13,9 +13,8 @@ import {
 } from "../lib/routes";
 import { ActiveContextHeader } from "./ActiveContextHeader";
 import { AppSidebar } from "./AppSidebar";
+import { DraftStudyShelf } from "./DraftStudyShelf";
 import { FlashBanner } from "./FlashBanner";
-import { OnboardingResumeBanner } from "./OnboardingResumeBanner";
-import { Button } from "./ui/button";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "./ui/sidebar";
 
 function formatStudyLabel(study: Study | null) {
@@ -179,12 +178,11 @@ export function AppLayout() {
     Number.isFinite(selectedStudyId) && studiesQuery.data
       ? studiesQuery.data.results.find((study) => study.id === selectedStudyId) ?? null
       : null;
-  const incompleteStudy =
+  const draftStudies =
     studiesIndexQuery.data?.results
       .filter((study) => study.status === "draft")
-      .sort((left, right) => right.id - left.id)[0] ?? null;
-  const isViewingIncompleteStudyOnboarding =
-    incompleteStudy !== null && pathname === studyOnboardingPath(incompleteStudy.id);
+      .sort((left, right) => right.id - left.id) ?? [];
+  const isStudyOnboardingRoute = Number.isFinite(currentStudyId) && pathname === studyOnboardingPath(currentStudyId);
   const shellCopy = getShellCopy(
     pathname,
     Number.isFinite(projectId) ? projectId : null,
@@ -210,23 +208,12 @@ export function AppLayout() {
                   title={shellCopy.title}
                 />
               </div>
-              {isWorkspaceRoute ? (
-                <Button asChild className="shrink-0" size="sm" variant="outline">
-                  <Link to={collaborationRegistryPath}>Back to collaborations</Link>
-                </Button>
-              ) : null}
             </div>
           </header>
 
+          {draftStudies.length > 0 && !isStudyOnboardingRoute ? <DraftStudyShelf studies={draftStudies} /> : null}
+
           <main className="flex-1 px-4 py-5 md:px-6 md:py-6">
-            {incompleteStudy && !isViewingIncompleteStudyOnboarding ? (
-              <OnboardingResumeBanner
-                description={`You left ${incompleteStudy.title} unfinished. Jump back into the wizard to complete metadata setup and mappings.`}
-                studyId={incompleteStudy.id}
-                title="Finish study onboarding"
-                to={studyOnboardingPath(incompleteStudy.id)}
-              />
-            ) : null}
             <FlashBanner />
             <Outlet />
           </main>

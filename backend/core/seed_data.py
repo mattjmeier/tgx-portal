@@ -7,6 +7,7 @@ from django.db import transaction
 
 from .models import (
     Assay,
+    ControlledLookupValue,
     MetadataFieldDefinition,
     Project,
     Sample,
@@ -17,6 +18,12 @@ from .models import (
     StudyOnboardingState,
     UserProfile,
     default_study_config,
+)
+from .onboarding_options import (
+    ALL_INSTRUMENT_MODELS,
+    BIOSPYDER_KIT_VALUES,
+    PLATFORM_VALUES,
+    SEQUENCED_BY_VALUES,
 )
 
 User = get_user_model()
@@ -655,7 +662,7 @@ def _infer_field_type(key: str):
 
 
 def _ensure_metadata_field_definition(key: str) -> MetadataFieldDefinition:
-    sequencing_keys = {"i5_index", "i7_index", "well_id", "sequencing_mode"}
+    sequencing_keys = {"i5_index", "i7_index", "well_id"}
     defaults = {
         "label": key.replace("_", " ").title(),
         "group": (
@@ -682,6 +689,38 @@ def _ensure_metadata_field_definition(key: str) -> MetadataFieldDefinition:
         defaults["regex"] = r"^[a-zA-Z0-9-_]*$"
     definition, _ = MetadataFieldDefinition.objects.update_or_create(key=key, defaults=defaults)
     return definition
+
+
+def _seed_controlled_lookups() -> None:
+    ControlledLookupValue.objects.filter(
+        category__in=[
+            ControlledLookupValue.Category.PLATFORM,
+            ControlledLookupValue.Category.INSTRUMENT_MODEL,
+            ControlledLookupValue.Category.BIOSPYDER_KIT,
+            ControlledLookupValue.Category.SEQUENCED_BY,
+        ]
+    ).delete()
+
+    ControlledLookupValue.objects.bulk_create(
+        [
+            *[
+                ControlledLookupValue(category=ControlledLookupValue.Category.PLATFORM, value=value)
+                for value in PLATFORM_VALUES
+            ],
+            *[
+                ControlledLookupValue(category=ControlledLookupValue.Category.INSTRUMENT_MODEL, value=value)
+                for value in ALL_INSTRUMENT_MODELS
+            ],
+            *[
+                ControlledLookupValue(category=ControlledLookupValue.Category.BIOSPYDER_KIT, value=value)
+                for value in BIOSPYDER_KIT_VALUES
+            ],
+            *[
+                ControlledLookupValue(category=ControlledLookupValue.Category.SEQUENCED_BY, value=value)
+                for value in SEQUENCED_BY_VALUES
+            ],
+        ]
+    )
 
 
 def _seed_study_config(study: Study, seed_study: SeedStudy) -> None:
@@ -742,6 +781,7 @@ def reset_seed_data() -> dict[str, int]:
     users = ensure_seed_users()
 
     Project.objects.all().delete()
+    _seed_controlled_lookups()
 
     project_count = 0
     study_count = 0

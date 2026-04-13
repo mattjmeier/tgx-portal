@@ -10,6 +10,7 @@ import { deleteStudy, fetchStudy } from "../api/studies";
 import { fetchStudyOnboardingState } from "../api/studyOnboarding";
 import { useAuth } from "../auth/AuthProvider";
 import { collaborationPath, studiesIndexPath, studyOnboardingPath } from "../lib/routes";
+import { clearDeletedStudyClientState } from "../lib/studyDeletion";
 import { AssayForm } from "./AssayForm";
 import { SampleForm } from "./SampleForm";
 import { StudyActionsMenu } from "./StudyActionsMenu";
@@ -114,9 +115,11 @@ export function StudyWorkspace() {
 
   const deleteStudyMutation = useMutation<void, Error, number>({
     mutationFn: deleteStudy,
-    onSuccess: async () => {
+    onSuccess: async (_, deletedStudyId) => {
+      clearDeletedStudyClientState(queryClient, deletedStudyId);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["studies"] }),
+        queryClient.invalidateQueries({ queryKey: ["studies-index"] }),
         queryClient.invalidateQueries({ queryKey: ["study"] }),
       ]);
       navigate(studiesIndexPath);
