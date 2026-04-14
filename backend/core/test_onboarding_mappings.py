@@ -2,6 +2,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
+from .onboarding import build_group_preview_rows, suggest_contrasts_from_rows
 from .models import Assay, MetadataFieldDefinition, Project, Sample, Study, StudyMetadataFieldSelection, UserProfile
 
 
@@ -17,6 +18,46 @@ def _select_fields(study: Study, *keys: str) -> None:
             required=True if key == "sample_ID" else definitions[key].is_core,
             sort_order=order,
         )
+
+
+@pytest.mark.django_db
+def test_build_group_preview_rows_joins_primary_and_additional_columns_in_order() -> None:
+    rows = [
+        {"sample_ID": "sample-1", "dose": "1uM", "culture": "2D", "solvent_control": False},
+        {"sample_ID": "sample-2", "dose": "C", "culture": "2D", "solvent_control": True},
+        {"sample_ID": "sample-3", "dose": "2uM", "culture": "3D", "solvent_control": False},
+    ]
+
+    preview = build_group_preview_rows(
+        rows,
+        {
+            "primary_column": "dose",
+            "additional_columns": ["culture"],
+            "batch_column": "plate",
+        },
+    )
+
+    assert [row["group"] for row in preview] == ["1uM_2D", "C_2D", "2uM_3D"]
+    assert [row["__group_context"] for row in preview] == ["2D", "2D", "3D"]
+
+
+@pytest.mark.django_db
+def test_suggest_contrasts_from_rows_matches_controls_with_shared_context() -> None:
+    rows = [
+        {"group": "C_2D", "__group_context": "2D", "solvent_control": True},
+        {"group": "1uM_2D", "__group_context": "2D", "solvent_control": False},
+        {"group": "2uM_2D", "__group_context": "2D", "solvent_control": False},
+        {"group": "C_3D", "__group_context": "3D", "solvent_control": True},
+        {"group": "1uM_3D", "__group_context": "3D", "solvent_control": False},
+        {"group": "2uM_3D", "__group_context": "3D", "solvent_control": False},
+    ]
+
+    assert suggest_contrasts_from_rows(rows) == [
+        {"reference_group": "C_2D", "comparison_group": "1uM_2D"},
+        {"reference_group": "C_2D", "comparison_group": "2uM_2D"},
+        {"reference_group": "C_3D", "comparison_group": "1uM_3D"},
+        {"reference_group": "C_3D", "comparison_group": "2uM_3D"},
+    ]
 
 
 @pytest.mark.django_db
@@ -78,6 +119,11 @@ def test_onboarding_state_persists_template_mappings_and_config_before_finalize(
     patch_response = client.patch(
         f"/api/studies/{study.id}/onboarding-state/",
         {
+            "group_builder": {
+                "primary_column": "group",
+                "additional_columns": [],
+                "batch_column": "plate",
+            },
             "template_context": {
                 "study_design_elements": ["exposure", "treatment"],
                 "exposure_label_mode": "both",
@@ -111,6 +157,7 @@ def test_onboarding_state_persists_template_mappings_and_config_before_finalize(
     assert patch_response.json()["mappings"]["treatment_level_1"] == "group"
     assert patch_response.json()["template_context"]["study_design_elements"] == ["exposure", "treatment"]
     assert patch_response.json()["template_context"]["exposure_label_mode"] == "both"
+    assert patch_response.json()["group_builder"]["primary_column"] == "group"
     assert patch_response.json()["config"]["common"]["platform"] == "RNA-Seq"
     assert patch_response.json()["config"]["common"]["instrument_model"] == "Illumina NovaSeq 6000"
     assert patch_response.json()["config"]["common"]["sequenced_by"] == "HC Genomics lab"
@@ -165,6 +212,11 @@ def test_onboarding_finalize_rejects_missing_required_template_context_choices()
     client.patch(
         f"/api/studies/{study.id}/onboarding-state/",
         {
+            "group_builder": {
+                "primary_column": "",
+                "additional_columns": [],
+                "batch_column": "",
+            },
             "template_context": {
                 "study_design_elements": ["treatment", "batch"],
                 "treatment_vars": [],
@@ -218,6 +270,11 @@ def test_onboarding_finalize_requires_custom_exposure_label_when_custom_mode_is_
     client.patch(
         f"/api/studies/{study.id}/onboarding-state/",
         {
+            "group_builder": {
+                "primary_column": "group",
+                "additional_columns": [],
+                "batch_column": "",
+            },
             "template_context": {
                 "study_design_elements": ["exposure", "treatment"],
                 "exposure_label_mode": "custom",
@@ -272,6 +329,11 @@ def test_onboarding_finalize_rejects_missing_config_choices_and_missing_uploaded
     client.patch(
         f"/api/studies/{study.id}/onboarding-state/",
         {
+            "group_builder": {
+                "primary_column": "dose",
+                "additional_columns": ["culture"],
+                "batch_column": "plate",
+            },
             "template_context": {
                 "study_design_elements": ["treatment", "batch"],
                 "treatment_vars": ["group"],
@@ -317,7 +379,7 @@ def test_onboarding_finalize_rejects_missing_config_choices_and_missing_uploaded
     messages = [item["message"] for item in response.json()["errors"]]
     assert "Provide an instrument model before finalizing onboarding." in messages
     assert "Provide where the study was sequenced before finalizing onboarding." in messages
-    assert "Primary experimental variable 'group' is not present in the last uploaded metadata." in messages
+    assert "Choose at least one grouping variable to generate analysis groups." not in messages
     assert "Primary batch variable 'plate' is not present in the last uploaded metadata." in messages
 
 
@@ -421,3 +483,94 @@ def test_generate_config_is_blocked_until_onboarding_is_final() -> None:
 
     allowed = client.post(f"/api/projects/{project.id}/generate-config/")
     assert allowed.status_code == 200
+
+
+@pytest.mark.django_db
+def test_onboarding_finalize_accepts_derived_group_builder_when_uploaded_group_column_is_missing() -> None:
+    client = APIClient()
+    user = User.objects.create_user(username="admin", password="admin123")
+    user.profile.role = UserProfile.Role.ADMIN
+    user.profile.save()
+    client.force_authenticate(user=user)
+
+    project = Project.objects.create(
+        owner=user,
+        pi_name="Dr. Curie",
+        researcher_name="Researcher A",
+        bioinformatician_assigned="Bioinfo A",
+        title="Project Alpha",
+        description="A test project",
+    )
+    study = Study.objects.create(project=project, title="Config generation study", species=Study.Species.HUMAN, celltype="Hepatocyte")
+
+    patch_response = client.patch(
+        f"/api/studies/{study.id}/onboarding-state/",
+        {
+            "group_builder": {
+                "primary_column": "dose",
+                "additional_columns": ["culture"],
+                "batch_column": "plate",
+            },
+            "template_context": {
+                "study_design_elements": ["exposure", "treatment", "batch"],
+                "exposure_label_mode": "dose",
+                "exposure_custom_label": "",
+                "treatment_vars": ["group"],
+                "batch_vars": ["plate"],
+                "optional_field_keys": [],
+                "custom_field_keys": ["culture"],
+            },
+            "mappings": {"treatment_level_1": "group", "batch": "plate"},
+            "config": {
+                "common": {
+                    "dose": "dose",
+                    "units": "uM",
+                    "platform": "RNA-Seq",
+                    "instrument_model": "Illumina NovaSeq 6000",
+                    "sequenced_by": "HC Genomics lab",
+                },
+                "pipeline": {"mode": "se", "threads": 8},
+                "qc": {"dendro_color_by": "group"},
+                "deseq2": {"cpus": 4},
+            },
+        },
+        format="json",
+    )
+
+    assert patch_response.status_code == 200
+
+    validation_response = client.post(
+        "/api/metadata-validation/",
+        {
+            "study_id": study.id,
+            "rows": [
+                {
+                    "sample_ID": "sample-1",
+                    "technical_control": False,
+                    "reference_rna": False,
+                    "solvent_control": True,
+                    "dose": "C",
+                    "culture": "2D",
+                    "plate": "plate-1",
+                },
+                {
+                    "sample_ID": "sample-2",
+                    "technical_control": False,
+                    "reference_rna": False,
+                    "solvent_control": False,
+                    "dose": "1uM",
+                    "culture": "2D",
+                    "plate": "plate-1",
+                },
+            ],
+        },
+        format="json",
+    )
+
+    assert validation_response.status_code == 200
+    assert validation_response.json()["suggested_contrasts"] == [
+        {"reference_group": "C_2D", "comparison_group": "1uM_2D"},
+    ]
+
+    finalize_response = client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
+    assert finalize_response.status_code == 200

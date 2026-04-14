@@ -36,6 +36,26 @@ class StudyOnboardingMappingsSchema(BaseModel):
 
 DEFAULT_MAPPINGS: dict[str, str] = StudyOnboardingMappingsSchema().model_dump()
 
+
+class StudyGroupBuilderSchema(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    primary_column: str = ""
+    additional_columns: list[str] = Field(default_factory=list)
+    batch_column: str = ""
+
+    def normalized(self) -> dict[str, Any]:
+        primary_column = (self.primary_column or "").strip()
+        additional_columns = [
+            value for value in _normalize_list(self.additional_columns)
+            if value != primary_column
+        ]
+        return {
+            "primary_column": primary_column,
+            "additional_columns": additional_columns,
+            "batch_column": (self.batch_column or "").strip(),
+        }
+
 EXPOSURE_LABEL_MODES = {"dose", "concentration", "both", "custom"}
 
 STUDY_DESIGN_FIELD_MAP: dict[str, list[str]] = {
@@ -56,6 +76,9 @@ def _normalize_list(values: list[str]) -> list[str]:
         normalized.append(candidate)
         seen.add(candidate)
     return normalized
+
+
+DEFAULT_GROUP_BUILDER: dict[str, Any] = StudyGroupBuilderSchema().normalized()
 
 
 class StudyTemplateContextSchema(BaseModel):
@@ -115,6 +138,73 @@ def normalize_mappings(payload: Any) -> dict[str, str]:
 def normalize_template_context(payload: Any) -> dict[str, Any]:
     schema = StudyTemplateContextSchema.model_validate(payload or {})
     return schema.normalized()
+
+
+def normalize_group_builder(payload: Any) -> dict[str, Any]:
+    schema = StudyGroupBuilderSchema.model_validate(payload or {})
+    return schema.normalized()
+
+
+def get_group_builder_columns(group_builder: dict[str, Any]) -> list[str]:
+    primary_column = str(group_builder.get("primary_column") or "").strip()
+    additional_columns = [
+        value.strip()
+        for value in group_builder.get("additional_columns", [])
+        if isinstance(value, str) and value.strip()
+    ]
+    return [value for value in [primary_column, *additional_columns] if value]
+
+
+def _normalize_group_part(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip().replace(" ", "_")
+
+
+def build_group_preview_rows(rows: list[dict[str, Any]], group_builder: dict[str, Any]) -> list[dict[str, Any]]:
+    normalized_builder = normalize_group_builder(group_builder)
+    primary_column = normalized_builder["primary_column"]
+    additional_columns = normalized_builder["additional_columns"]
+
+    preview_rows: list[dict[str, Any]] = []
+    for row in rows:
+        normalized_row = dict(row)
+        if primary_column:
+            group_parts = [
+                _normalize_group_part(row.get(column))
+                for column in [primary_column, *additional_columns]
+            ]
+            group_parts = [value for value in group_parts if value]
+            if group_parts:
+                normalized_row["group"] = "_".join(group_parts)
+            context_parts = [
+                _normalize_group_part(row.get(column))
+                for column in additional_columns
+            ]
+            normalized_row["__group_context"] = "_".join([value for value in context_parts if value])
+        preview_rows.append(normalized_row)
+    return preview_rows
+
+
+def get_effective_metadata_columns(
+    metadata_columns: list[str] | None,
+    *,
+    group_builder: dict[str, Any] | None = None,
+    validated_rows: list[dict[str, Any]] | None = None,
+) -> list[str]:
+    normalized = [
+        value.strip()
+        for value in (metadata_columns or [])
+        if isinstance(value, str) and value.strip()
+    ]
+    if "group" in normalized:
+        return normalized
+
+    if group_builder and validated_rows:
+        preview_rows = build_group_preview_rows(validated_rows, group_builder)
+        if any(str(row.get("group") or "").strip() for row in preview_rows):
+            return [*normalized, "group"]
+    return normalized
 
 
 def get_exposure_field_keys(template_context: dict[str, Any]) -> list[str]:
@@ -307,9 +397,59 @@ def validate_template_context_for_finalize(
     return errors
 
 
+def validate_group_builder_for_finalize(
+    group_builder: dict[str, Any],
+    *,
+    metadata_columns: list[str] | None = None,
+    validated_rows: list[dict[str, Any]] | None = None,
+) -> list[dict[str, str]]:
+    errors: list[dict[str, str]] = []
+    normalized_builder = normalize_group_builder(group_builder)
+    normalized_columns = {
+        value.strip()
+        for value in (metadata_columns or [])
+        if isinstance(value, str) and value.strip()
+    }
+
+    if "group" in normalized_columns and not normalized_builder["primary_column"]:
+        return errors
+
+    if not normalized_builder["primary_column"]:
+        errors.append(
+            {
+                "field": "group_builder.primary_column",
+                "message": "Choose at least one grouping variable to generate analysis groups.",
+            }
+        )
+        return errors
+
+    for column in get_group_builder_columns(normalized_builder):
+        if column not in normalized_columns:
+            errors.append(
+                {
+                    "field": "group_builder",
+                    "message": f"Grouping column '{column}' is not present in the last uploaded metadata.",
+                }
+            )
+
+    if errors or not validated_rows:
+        return errors
+
+    preview_rows = build_group_preview_rows(validated_rows, normalized_builder)
+    if not any(str(row.get("group") or "").strip() for row in preview_rows):
+        errors.append(
+            {
+                "field": "group_builder.primary_column",
+                "message": "Choose at least one grouping variable to generate analysis groups.",
+            }
+        )
+    return errors
+
+
 def suggest_contrasts_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, str]]:
-    control_groups: set[str] = set()
-    experimental_groups: set[str] = set()
+    control_groups_by_context: dict[str, set[str]] = {}
+    all_control_groups: set[str] = set()
+    experimental_groups: set[tuple[str, str]] = set()
 
     for row in rows:
         group_value = row.get("group")
@@ -319,17 +459,25 @@ def suggest_contrasts_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, st
         if not group:
             continue
 
+        context = str(row.get("__group_context") or "").strip()
         solvent_value = row.get("solvent_control", False)
         is_control = normalize_spreadsheet_boolean(solvent_value) is True
         if is_control:
-            control_groups.add(group)
+            control_groups_by_context.setdefault(context, set()).add(group)
+            all_control_groups.add(group)
         else:
-            experimental_groups.add(group)
+            experimental_groups.add((group, context))
 
     suggestions: list[dict[str, str]] = []
-    for control in sorted(control_groups):
-        for experimental in sorted(experimental_groups):
+    seen: set[tuple[str, str]] = set()
+    for experimental, context in sorted(experimental_groups, key=lambda item: (item[1], item[0])):
+        controls = control_groups_by_context.get(context) or all_control_groups
+        for control in sorted(controls):
             if control == experimental:
                 continue
+            key = (control, experimental)
+            if key in seen:
+                continue
+            seen.add(key)
             suggestions.append({"reference_group": control, "comparison_group": experimental})
     return suggestions

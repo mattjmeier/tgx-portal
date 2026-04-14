@@ -31,6 +31,7 @@ let mockOnboardingState = {
   study_id: 11,
   status: "draft" as const,
   metadata_columns: ["group", "plate", "sample_ID", "sample_name", "solvent_control"],
+  validated_rows: [] as Array<Record<string, unknown>>,
   mappings: {
     treatment_level_1: "",
     treatment_level_2: "",
@@ -43,6 +44,11 @@ let mockOnboardingState = {
     pca_alpha: "",
     clustering_group: "",
     report_faceting_group: "",
+  },
+  group_builder: {
+    primary_column: "",
+    additional_columns: [] as string[],
+    batch_column: "",
   },
   template_context: {
     study_design_elements: [] as string[],
@@ -116,6 +122,7 @@ vi.mock("../../api/studyOnboarding", async () => {
         ...mockOnboardingState,
         ...(payload.template_context ? { template_context: payload.template_context } : {}),
         ...(payload.mappings ? { mappings: { ...mockOnboardingState.mappings, ...payload.mappings } } : {}),
+        ...(payload.group_builder ? { group_builder: payload.group_builder as typeof mockOnboardingState.group_builder } : {}),
         ...(payload.selected_contrasts ? { selected_contrasts: payload.selected_contrasts as typeof mockOnboardingState.selected_contrasts } : {}),
         ...(payload.config
           ? {
@@ -683,6 +690,7 @@ describe("StudyOnboardingWizard", () => {
       study_id: 11,
       status: "draft",
       metadata_columns: ["group", "plate", "sample_ID", "sample_name", "solvent_control"],
+      validated_rows: [],
       mappings: {
         treatment_level_1: "",
         treatment_level_2: "",
@@ -695,6 +703,11 @@ describe("StudyOnboardingWizard", () => {
         pca_alpha: "",
         clustering_group: "",
         report_faceting_group: "",
+      },
+      group_builder: {
+        primary_column: "",
+        additional_columns: [],
+        batch_column: "",
       },
       template_context: {
         study_design_elements: [],
@@ -1055,12 +1068,9 @@ describe("StudyOnboardingWizard", () => {
     renderWizard("/studies/11/onboarding?step=finalize");
 
     expect(await screen.findByRole("heading", { name: "Review & finalize" })).toBeInTheDocument();
-    expect(await screen.findByText("Primary analysis column")).toBeInTheDocument();
-    expect(screen.getByText("group")).toBeInTheDocument();
-    expect(screen.getByText("Batch column")).toBeInTheDocument();
-    expect(screen.getByText("plate")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Treatment level 1")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Treatment level 2")).not.toBeInTheDocument();
+    expect(await screen.findByText("Primary grouping variable")).toBeInTheDocument();
+    expect(await screen.findByText("Computed group = group")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Batch column" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Finalize onboarding/i }));
 
@@ -1068,6 +1078,10 @@ describe("StudyOnboardingWizard", () => {
       expect(patchStudyOnboardingState).toHaveBeenCalledWith(
         11,
         expect.objectContaining({
+          group_builder: expect.objectContaining({
+            primary_column: "group",
+            batch_column: "plate",
+          }),
           mappings: expect.objectContaining({
             treatment_level_1: "group",
             batch: "plate",
@@ -1082,6 +1096,77 @@ describe("StudyOnboardingWizard", () => {
         title: "Hepatocyte mercury dose response",
       }),
     );
+  });
+
+  it("recomputes derived group previews and suggested contrasts from selected grouping columns", async () => {
+    mockOnboardingState.metadata_columns = [
+      "sample_ID",
+      "sample_name",
+      "dose",
+      "culture",
+      "plate",
+      "solvent_control",
+      "technical_control",
+      "reference_rna",
+    ];
+    mockOnboardingState.validated_rows = [
+      {
+        sample_ID: "sample-1",
+        sample_name: "Control 2D",
+        dose: "C",
+        culture: "2D",
+        plate: "plate-1",
+        solvent_control: true,
+        technical_control: false,
+        reference_rna: false,
+      },
+      {
+        sample_ID: "sample-2",
+        sample_name: "Dose 2D",
+        dose: "1uM",
+        culture: "2D",
+        plate: "plate-1",
+        solvent_control: false,
+        technical_control: false,
+        reference_rna: false,
+      },
+      {
+        sample_ID: "sample-3",
+        sample_name: "Control 3D",
+        dose: "C",
+        culture: "3D",
+        plate: "plate-2",
+        solvent_control: true,
+        technical_control: false,
+        reference_rna: false,
+      },
+      {
+        sample_ID: "sample-4",
+        sample_name: "Dose 3D",
+        dose: "2uM",
+        culture: "3D",
+        plate: "plate-2",
+        solvent_control: false,
+        technical_control: false,
+        reference_rna: false,
+      },
+    ];
+
+    renderWizard("/studies/11/onboarding?step=finalize");
+
+    expect(await screen.findByText("Primary grouping variable")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("combobox", { name: /primary grouping variable/i }));
+    fireEvent.click(await screen.findByRole("option", { name: "dose" }));
+
+    fireEvent.click(await screen.findByLabelText("culture"));
+
+    expect(await screen.findByText("Computed group = dose + culture")).toBeInTheDocument();
+    expect(screen.getAllByText("C_2D").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("1uM_2D").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("C_3D").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("2uM_3D").length).toBeGreaterThan(0);
+    expect(screen.getByText("1uM_2D vs C_2D")).toBeInTheDocument();
+    expect(screen.getByText("2uM_3D vs C_3D")).toBeInTheDocument();
   });
 
   it("downloads the finalized metadata template from the dedicated metadata step", async () => {

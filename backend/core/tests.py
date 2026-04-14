@@ -20,6 +20,7 @@ from .models import (
     UserProfile,
     default_study_config,
 )
+from .onboarding import normalize_group_builder
 
 User = get_user_model()
 
@@ -318,6 +319,54 @@ class ConfigGenerationApiTests(TestCase):
         self.assertIn("platform: RNA-Seq", config_yaml)
         self.assertIn("sample_ID", metadata_tsv)
         self.assertIn("reference_group\tcomparison_group", contrasts_tsv)
+
+    def test_generate_config_uses_derived_group_from_onboarding_rows(self) -> None:
+        state = self.study.onboarding_state
+        state.validated_rows = [
+            {
+                "sample_ID": "sample-1",
+                "sample_name": "Sample 1",
+                "technical_control": False,
+                "reference_rna": False,
+                "solvent_control": True,
+                "dose": "C",
+                "culture": "2D",
+            },
+            {
+                "sample_ID": "sample-2",
+                "sample_name": "Sample 2",
+                "technical_control": False,
+                "reference_rna": False,
+                "solvent_control": False,
+                "dose": "1uM",
+                "culture": "2D",
+            },
+        ]
+        state.group_builder = normalize_group_builder(
+            {"primary_column": "dose", "additional_columns": ["culture"], "batch_column": ""}
+        )
+        state.metadata_columns = [
+            "sample_ID",
+            "sample_name",
+            "technical_control",
+            "reference_rna",
+            "solvent_control",
+            "dose",
+            "culture",
+        ]
+        state.suggested_contrasts = [{"reference_group": "C_2D", "comparison_group": "1uM_2D"}]
+        state.save(update_fields=["validated_rows", "group_builder", "metadata_columns", "suggested_contrasts"])
+
+        response = self.client.post(f"/api/projects/{self.project.id}/generate-config/")
+
+        self.assertEqual(response.status_code, 200)
+
+        with ZipFile(BytesIO(response.content)) as archive:
+            metadata_tsv = archive.read("config_generation_study/metadata.tsv").decode("utf-8")
+
+        self.assertIn("group", metadata_tsv.splitlines()[0].split("\t"))
+        self.assertIn("C_2D", metadata_tsv)
+        self.assertIn("1uM_2D", metadata_tsv)
 
     def test_generate_config_accepts_legacy_list_selected_contrasts(self) -> None:
         mapping = self.study.metadata_mapping

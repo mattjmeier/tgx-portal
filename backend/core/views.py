@@ -50,15 +50,20 @@ from .services import (
 )
 from .tasks import create_plane_ticket
 from .onboarding import (
+    DEFAULT_GROUP_BUILDER,
     DEFAULT_MAPPINGS,
     DEFAULT_TEMPLATE_CONTEXT,
+    build_group_preview_rows,
     build_compatibility_summary,
+    get_effective_metadata_columns,
     get_design_selected_field_keys,
     normalize_contrast_pairs,
+    normalize_group_builder,
     normalize_mappings,
     normalize_template_context,
     suggest_contrasts_from_rows,
     validate_final_ready,
+    validate_group_builder_for_finalize,
     validate_template_context_for_finalize,
 )
 from .onboarding_options import (
@@ -105,7 +110,11 @@ def _require_study_access(user, study: Study) -> None:
 def _get_or_create_onboarding_state(study: Study) -> StudyOnboardingState:
     state, created = StudyOnboardingState.objects.get_or_create(
         study=study,
-        defaults={"mappings": DEFAULT_MAPPINGS, "template_context": DEFAULT_TEMPLATE_CONTEXT},
+        defaults={
+            "mappings": DEFAULT_MAPPINGS,
+            "template_context": DEFAULT_TEMPLATE_CONTEXT,
+            "group_builder": DEFAULT_GROUP_BUILDER,
+        },
     )
     if created:
         return state
@@ -120,12 +129,23 @@ def _get_or_create_onboarding_state(study: Study) -> StudyOnboardingState:
         state.save(update_fields=["template_context"])
         return state
 
+    if not isinstance(state.group_builder, dict):
+        state.group_builder = DEFAULT_GROUP_BUILDER
+        state.save(update_fields=["group_builder"])
+        return state
+
     merged = {**DEFAULT_MAPPINGS, **{k: v for k, v in state.mappings.items() if isinstance(k, str)}}
     merged_template = normalize_template_context({**DEFAULT_TEMPLATE_CONTEXT, **state.template_context})
-    if merged != state.mappings or merged_template != state.template_context:
+    merged_group_builder = normalize_group_builder({**DEFAULT_GROUP_BUILDER, **state.group_builder})
+    if (
+        merged != state.mappings
+        or merged_template != state.template_context
+        or merged_group_builder != state.group_builder
+    ):
         state.mappings = merged
         state.template_context = merged_template
-        state.save(update_fields=["mappings", "template_context"])
+        state.group_builder = merged_group_builder
+        state.save(update_fields=["mappings", "template_context", "group_builder"])
     return state
 
 
@@ -568,8 +588,6 @@ class MetadataValidationViewSet(viewsets.ViewSet):
                 if isinstance(key, str) and key.strip()
             }
         )
-        suggested_contrasts = suggest_contrasts_from_rows(normalized_rows)
-
         valid, issues = validate_metadata_upload(
             study_id=study.id,
             rows=normalized_rows,
@@ -577,10 +595,15 @@ class MetadataValidationViewSet(viewsets.ViewSet):
         )
 
         state = _get_or_create_onboarding_state(study)
+        preview_rows = normalized_rows
+        if state.group_builder:
+            preview_rows = build_group_preview_rows(normalized_rows, state.group_builder)
+        suggested_contrasts = suggest_contrasts_from_rows(preview_rows)
         state.metadata_columns = columns
+        state.validated_rows = normalized_rows
         state.suggested_contrasts = suggested_contrasts
         state.updated_at = timezone.now()
-        state.save(update_fields=["metadata_columns", "suggested_contrasts", "updated_at"])
+        state.save(update_fields=["metadata_columns", "validated_rows", "suggested_contrasts", "updated_at"])
 
         return Response(
             {
@@ -647,8 +670,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
             if mapping_model is None:
                 blocking.append({"study_id": str(study.id), "reason": "Persisted metadata mappings are missing."})
                 continue
+            effective_columns = get_effective_metadata_columns(
+                state.metadata_columns,
+                group_builder=state.group_builder,
+                validated_rows=state.validated_rows,
+            )
             errors = validate_final_ready(
-                metadata_columns=get_study_template_columns(study),
+                metadata_columns=effective_columns,
                 mappings={**DEFAULT_MAPPINGS, **mapping_model.as_dict()},
             )
             if errors:
@@ -727,9 +755,11 @@ class StudyViewSet(viewsets.ModelViewSet):
             custom_field_keys = request.data.get("custom_field_keys", None)
             template_context_payload = request.data.get("template_context", None)
             config_payload = request.data.get("config", None)
+            group_builder_payload = request.data.get("group_builder", None)
 
             mapping_model = _get_or_create_metadata_mapping(study)
             normalized_template_context = normalize_template_context(state.template_context)
+            normalized_group_builder = normalize_group_builder(state.group_builder)
 
             if mappings_payload is not None:
                 normalized_mappings = normalize_mappings(mappings_payload)
@@ -758,12 +788,19 @@ class StudyViewSet(viewsets.ModelViewSet):
             if template_context_payload is not None or optional_field_keys is not None or custom_field_keys is not None:
                 state.template_context = normalized_template_context
                 _upsert_study_template(study, normalized_template_context)
+            if group_builder_payload is not None:
+                normalized_group_builder = normalize_group_builder(group_builder_payload)
+                state.group_builder = normalized_group_builder
             if config_payload is not None:
                 config = _get_or_create_study_config(study)
                 for section in ("common", "pipeline", "qc", "deseq2"):
                     if section in config_payload:
                         setattr(config, section, config_payload[section])
                 config.save()
+
+            if state.validated_rows:
+                preview_rows = build_group_preview_rows(state.validated_rows, normalized_group_builder)
+                state.suggested_contrasts = suggest_contrasts_from_rows(preview_rows)
 
             mapping_model.save()
             state.status = StudyOnboardingState.Status.DRAFT
@@ -772,8 +809,10 @@ class StudyViewSet(viewsets.ModelViewSet):
             state.save(
                 update_fields=[
                     "mappings",
+                    "group_builder",
                     "template_context",
                     "selected_contrasts",
+                    "suggested_contrasts",
                     "status",
                     "finalized_at",
                     "updated_at",
@@ -787,7 +826,9 @@ class StudyViewSet(viewsets.ModelViewSet):
                 "study_id": study.id,
                 "status": state.status,
                 "metadata_columns": state.metadata_columns,
+                "validated_rows": state.validated_rows,
                 "mappings": {**DEFAULT_MAPPINGS, **mapping_model.as_dict()},
+                "group_builder": normalize_group_builder(state.group_builder),
                 "template_context": normalize_template_context(state.template_context),
                 "suggested_contrasts": state.suggested_contrasts,
                 "selected_contrasts": mapping_model.selected_contrasts,
@@ -810,15 +851,26 @@ class StudyViewSet(viewsets.ModelViewSet):
         state = _get_or_create_onboarding_state(study)
         mapping_model = _get_or_create_metadata_mapping(study)
         mappings = {**DEFAULT_MAPPINGS, **mapping_model.as_dict()}
+        group_builder = normalize_group_builder(state.group_builder)
         template_context = normalize_template_context(state.template_context)
+        effective_metadata_columns = get_effective_metadata_columns(
+            state.metadata_columns,
+            group_builder=group_builder,
+            validated_rows=state.validated_rows,
+        )
 
         errors = _study_finalize_errors(study)
+        group_builder_errors = validate_group_builder_for_finalize(
+            group_builder,
+            metadata_columns=state.metadata_columns,
+            validated_rows=state.validated_rows,
+        )
         template_context_errors = validate_template_context_for_finalize(
             template_context,
-            metadata_columns=state.metadata_columns,
+            metadata_columns=effective_metadata_columns,
         )
-        onboarding_errors = validate_final_ready(metadata_columns=get_study_template_columns(study), mappings=mappings)
-        all_errors = errors + template_context_errors + onboarding_errors
+        onboarding_errors = validate_final_ready(metadata_columns=effective_metadata_columns, mappings=mappings)
+        all_errors = errors + group_builder_errors + template_context_errors + onboarding_errors
         if all_errors:
             return Response({"errors": all_errors}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -836,7 +888,9 @@ class StudyViewSet(viewsets.ModelViewSet):
                 "study_id": study.id,
                 "status": state.status,
                 "metadata_columns": state.metadata_columns,
+                "validated_rows": state.validated_rows,
                 "mappings": mappings,
+                "group_builder": group_builder,
                 "template_context": template_context,
                 "suggested_contrasts": state.suggested_contrasts,
                 "selected_contrasts": mapping_model.selected_contrasts,

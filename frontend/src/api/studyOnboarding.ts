@@ -7,6 +7,12 @@ export type ContrastPair = {
   comparison_group: string;
 };
 
+export type StudyOnboardingGroupBuilder = {
+  primary_column: string;
+  additional_columns: string[];
+  batch_column: string;
+};
+
 export type StudyTemplateContext = {
   study_design_elements: string[];
   exposure_label_mode: "dose" | "concentration" | "both" | "custom" | null;
@@ -42,7 +48,9 @@ export type StudyOnboardingState = {
   study_id: number;
   status: StudyOnboardingStatus;
   metadata_columns: string[];
+  validated_rows: Array<Record<string, unknown>>;
   mappings: StudyOnboardingMappings;
+  group_builder: StudyOnboardingGroupBuilder;
   template_context: StudyTemplateContext;
   template_columns?: string[];
   config: StudyOnboardingConfig;
@@ -53,7 +61,7 @@ export type StudyOnboardingState = {
 };
 
 export type PatchStudyOnboardingStatePayload = Partial<
-  Pick<StudyOnboardingState, "mappings" | "selected_contrasts" | "template_context" | "config">
+  Pick<StudyOnboardingState, "mappings" | "selected_contrasts" | "template_context" | "config" | "group_builder">
 >;
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";

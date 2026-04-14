@@ -22,6 +22,7 @@ import {
   finalizeStudyOnboardingState,
   patchStudyOnboardingState,
   type ContrastPair,
+  type StudyOnboardingGroupBuilder,
   type StudyOnboardingMappings,
   type StudyOnboardingConfig,
   type StudyOnboardingStatus,
@@ -122,6 +123,7 @@ type OnboardingDraftV6 = {
     celltype: string;
     context: StudyTemplateContext;
   };
+  groupBuilder?: StudyOnboardingGroupBuilder;
   config: StudyOnboardingConfig;
   upload: {
     fileName: string;
@@ -135,6 +137,11 @@ type OnboardingDraftV6 = {
 
 type OnboardingDraftV7 = Omit<OnboardingDraftV6, "version"> & {
   version: 7;
+};
+
+type OnboardingDraftV8 = Omit<OnboardingDraftV7, "version"> & {
+  version: 8;
+  groupBuilder: StudyOnboardingGroupBuilder;
 };
 
 type ExposureLabelMode = StudyTemplateContext["exposure_label_mode"];
@@ -279,9 +286,17 @@ function createEmptyTemplateContext(): StudyTemplateContext {
   };
 }
 
-function createDefaultDraft(studyId: number): OnboardingDraftV7 {
+function createEmptyGroupBuilder(): StudyOnboardingGroupBuilder {
   return {
-    version: 7,
+    primary_column: "",
+    additional_columns: [],
+    batch_column: "",
+  };
+}
+
+function createDefaultDraft(studyId: number): OnboardingDraftV8 {
+  return {
+    version: 8,
     studyId,
     updatedAt: new Date().toISOString(),
     attempts: {},
@@ -296,6 +311,7 @@ function createDefaultDraft(studyId: number): OnboardingDraftV7 {
       celltype: "",
       context: createEmptyTemplateContext(),
     },
+    groupBuilder: createEmptyGroupBuilder(),
     config: {
       common: {
         platform: "RNA-Seq",
@@ -352,6 +368,16 @@ function normalizeValueList(values: string[]): string[] {
 
 function normalizeExposureCustomLabel(value: string): string {
   return value.trim();
+}
+
+function normalizeGroupBuilder(groupBuilder: Partial<StudyOnboardingGroupBuilder> | null | undefined): StudyOnboardingGroupBuilder {
+  const primary = String(groupBuilder?.primary_column ?? "").trim();
+  const additional = normalizeValueList(groupBuilder?.additional_columns ?? []).filter((value) => value !== primary);
+  return {
+    primary_column: primary,
+    additional_columns: additional,
+    batch_column: String(groupBuilder?.batch_column ?? "").trim(),
+  };
 }
 
 function normalizeTemplateContext(context: Partial<StudyTemplateContext> | null | undefined): StudyTemplateContext {
@@ -483,16 +509,36 @@ function migrateDraftV6ToV7(draft: OnboardingDraftV6): OnboardingDraftV7 {
       ...draft.template,
       context: normalizeTemplateContext(draft.template.context),
     },
+    groupBuilder: normalizeGroupBuilder(draft.groupBuilder),
     config: draft.config ?? next.config,
     upload: draft.upload,
     mappings: draft.mappings,
   };
 }
 
-function loadDraft(studyId: number): OnboardingDraftV7 {
+function migrateDraftV7ToV8(draft: OnboardingDraftV7): OnboardingDraftV8 {
+  const next = createDefaultDraft(draft.studyId);
+  return {
+    ...next,
+    version: 8,
+    updatedAt: draft.updatedAt,
+    attempts: draft.attempts,
+    details: draft.details,
+    template: {
+      ...draft.template,
+      context: normalizeTemplateContext(draft.template.context),
+    },
+    groupBuilder: normalizeGroupBuilder(draft.groupBuilder),
+    config: draft.config,
+    upload: draft.upload,
+    mappings: draft.mappings,
+  };
+}
+
+function loadDraft(studyId: number): OnboardingDraftV8 {
   const raw = localStorage.getItem(draftStorageKey(studyId));
   if (!raw) {
-    return migrateDraftV6ToV7(createDefaultDraft(studyId));
+    return createDefaultDraft(studyId);
   }
 
   try {
@@ -500,33 +546,37 @@ function loadDraft(studyId: number): OnboardingDraftV7 {
     if (typeof parsed !== "object" || parsed === null) {
       return migrateDraftV6ToV7(createDefaultDraft(studyId));
     }
-    if ((parsed as { version?: unknown }).version === 7) {
-      const draft = parsed as OnboardingDraftV7;
+    if ((parsed as { version?: unknown }).version === 8) {
+      const draft = parsed as OnboardingDraftV8;
       return {
         ...draft,
         template: {
           ...draft.template,
           context: normalizeTemplateContext(draft.template.context),
         },
+        groupBuilder: normalizeGroupBuilder(draft.groupBuilder),
       };
     }
+    if ((parsed as { version?: unknown }).version === 7) {
+      return migrateDraftV7ToV8(parsed as OnboardingDraftV7);
+    }
     if ((parsed as { version?: unknown }).version === 6) {
-      return migrateDraftV6ToV7(parsed as OnboardingDraftV6);
+      return migrateDraftV7ToV8(migrateDraftV6ToV7(parsed as OnboardingDraftV6));
     }
     if ((parsed as { version?: unknown }).version === 5) {
-      return migrateDraftV6ToV7(migrateDraftV5ToV6(parsed as OnboardingDraftV5));
+      return migrateDraftV7ToV8(migrateDraftV6ToV7(migrateDraftV5ToV6(parsed as OnboardingDraftV5)));
     }
     if ((parsed as { version?: unknown }).version === 4) {
-      return migrateDraftV6ToV7(migrateDraftV5ToV6(migrateDraftV4ToV5(parsed as LegacyOnboardingDraftV4)));
+      return migrateDraftV7ToV8(migrateDraftV6ToV7(migrateDraftV5ToV6(migrateDraftV4ToV5(parsed as LegacyOnboardingDraftV4))));
     }
   } catch {
-    return migrateDraftV6ToV7(createDefaultDraft(studyId));
+    return createDefaultDraft(studyId);
   }
 
-  return migrateDraftV6ToV7(createDefaultDraft(studyId));
+  return createDefaultDraft(studyId);
 }
 
-function saveDraft(draft: OnboardingDraftV7) {
+function saveDraft(draft: OnboardingDraftV8) {
   localStorage.setItem(draftStorageKey(draft.studyId), JSON.stringify(draft));
 }
 
@@ -614,6 +664,91 @@ function areMappingsEqual(
     left.report_faceting_group === right.report_faceting_group &&
     JSON.stringify(left.selected_contrasts) === JSON.stringify(selectedContrasts)
   );
+}
+
+function getGroupBuilderColumns(groupBuilder: StudyOnboardingGroupBuilder): string[] {
+  return [
+    groupBuilder.primary_column,
+    ...groupBuilder.additional_columns,
+  ].filter((value) => value.trim().length > 0);
+}
+
+function normalizeGroupPart(value: unknown): string {
+  return value === null || value === undefined ? "" : String(value).trim().replace(/\s+/g, "_");
+}
+
+function buildDerivedGroupRows(
+  rows: Array<Record<string, unknown>>,
+  groupBuilder: StudyOnboardingGroupBuilder,
+): Array<Record<string, unknown> & { group?: string; __group_context?: string }> {
+  if (!groupBuilder.primary_column) {
+    return rows;
+  }
+
+  return rows.map((row) => {
+    const groupParts = getGroupBuilderColumns(groupBuilder)
+      .map((column) => normalizeGroupPart(row[column]))
+      .filter((value) => value.length > 0);
+    const context = groupBuilder.additional_columns
+      .map((column) => normalizeGroupPart(row[column]))
+      .filter((value) => value.length > 0)
+      .join("_");
+
+    return {
+      ...row,
+      ...(groupParts.length > 0 ? { group: groupParts.join("_") } : {}),
+      ...(context ? { __group_context: context } : {}),
+    };
+  });
+}
+
+function normalizeBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value === 1;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return ["true", "t", "1", "yes", "y"].includes(normalized);
+  }
+  return false;
+}
+
+function suggestContrastsFromRows(rows: Array<Record<string, unknown>>): ContrastPair[] {
+  const controlGroupsByContext = new Map<string, Set<string>>();
+  const allControls = new Set<string>();
+  const experimentalGroups = new Map<string, string>();
+
+  for (const row of rows) {
+    const group = String(row.group ?? "").trim();
+    if (!group) {
+      continue;
+    }
+    const context = String(row.__group_context ?? "").trim();
+    if (normalizeBoolean(row.solvent_control)) {
+      const existing = controlGroupsByContext.get(context) ?? new Set<string>();
+      existing.add(group);
+      controlGroupsByContext.set(context, existing);
+      allControls.add(group);
+      continue;
+    }
+    experimentalGroups.set(`${context}::${group}`, context);
+  }
+
+  const suggestions: ContrastPair[] = [];
+  for (const key of Array.from(experimentalGroups.keys()).sort()) {
+    const [context, group] = key.split("::");
+    const controls = controlGroupsByContext.get(context) ?? allControls;
+    for (const reference of Array.from(controls).sort()) {
+      if (reference === group) {
+        continue;
+      }
+      suggestions.push({ reference_group: reference, comparison_group: group });
+    }
+  }
+  return suggestions;
 }
 
 function lookupValueLabel(value: LookupValue): string {
@@ -862,7 +997,7 @@ export function StudyOnboardingWizard() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [deleteStudyError, setDeleteStudyError] = useState<string | null>(null);
 
-  const [draft, setDraft] = useState<OnboardingDraftV7 | null>(() => {
+  const [draft, setDraft] = useState<OnboardingDraftV8 | null>(() => {
     if (studyId === null) {
       return null;
     }
@@ -900,7 +1035,7 @@ export function StudyOnboardingWizard() {
     queryFn: fetchLookups,
   });
 
-  function updateDraft(updater: (current: OnboardingDraftV7) => OnboardingDraftV7) {
+  function updateDraft(updater: (current: OnboardingDraftV8) => OnboardingDraftV8) {
     setDraft((current) => (current ? updater(current) : current));
   }
 
@@ -933,6 +1068,10 @@ export function StudyOnboardingWizard() {
       Boolean(draft.mappings.batch) ||
       draft.mappings.selected_contrasts.length > 0;
     const hasLocalTemplateContext = !isTemplateContextEmpty(draft.template.context);
+    const hasLocalGroupBuilder =
+      Boolean(draft.groupBuilder.primary_column) ||
+      draft.groupBuilder.additional_columns.length > 0 ||
+      Boolean(draft.groupBuilder.batch_column);
     const hasLocalConfig =
       Boolean((draft.config.common.instrument_model as string | undefined)?.toString().trim()) ||
       Boolean((draft.config.common.sequenced_by as string | undefined)?.toString().trim()) ||
@@ -946,6 +1085,9 @@ export function StudyOnboardingWizard() {
           ? normalizeTemplateContext(current.template.context)
           : normalizeTemplateContext(onboardingStateQuery.data.template_context),
       },
+      groupBuilder: hasLocalGroupBuilder
+        ? normalizeGroupBuilder(current.groupBuilder)
+        : normalizeGroupBuilder(onboardingStateQuery.data.group_builder),
       config: hasLocalConfig ? current.config : onboardingStateQuery.data.config,
       upload: {
         ...current.upload,
@@ -973,6 +1115,7 @@ export function StudyOnboardingWizard() {
       selected_contrasts?: ContrastPair[];
       template_context?: StudyTemplateContext;
       config?: StudyOnboardingConfig;
+      group_builder?: StudyOnboardingGroupBuilder;
     }) => patchStudyOnboardingState(studyId as number, payload),
     onSuccess: async (result) => {
       setOnboardingSaveError(null);
@@ -1162,27 +1305,44 @@ export function StudyOnboardingWizard() {
     draft.upload.metadataColumns.length > 0
       ? draft.upload.metadataColumns
       : onboardingStateQuery.data?.metadata_columns ?? [];
-  const suggestedContrasts =
-    draft.upload.suggestedContrasts.length > 0
-      ? draft.upload.suggestedContrasts
-      : onboardingStateQuery.data?.suggested_contrasts ?? [];
+  const validatedRows = (onboardingStateQuery.data?.validated_rows ?? []) as Array<Record<string, unknown>>;
+  const groupBuilder = normalizeGroupBuilder(draft.groupBuilder);
+  const derivedGroupRows = buildDerivedGroupRows(validatedRows, groupBuilder);
+  const derivedMetadataColumns = normalizeValueList([
+    ...metadataColumns,
+    ...(groupBuilder.primary_column && derivedGroupRows.some((row) => String(row.group ?? "").trim()) ? ["group"] : []),
+  ]);
+  const computedSuggestedContrasts =
+    groupBuilder.primary_column && validatedRows.length > 0
+      ? suggestContrastsFromRows(derivedGroupRows)
+      : (draft.upload.suggestedContrasts.length > 0
+        ? draft.upload.suggestedContrasts
+        : onboardingStateQuery.data?.suggested_contrasts ?? []);
+  const suggestedContrasts = computedSuggestedContrasts;
   const onboardingStatus: StudyOnboardingStatus = onboardingStateQuery.data?.status ?? "draft";
-  const defaultTreatmentMapping =
-    templateContext.treatment_vars[0] && metadataColumns.includes(templateContext.treatment_vars[0])
+  const defaultTreatmentMapping = groupBuilder.primary_column
+    ? "group"
+    : (templateContext.treatment_vars[0] && derivedMetadataColumns.includes(templateContext.treatment_vars[0])
       ? templateContext.treatment_vars[0]
-      : "";
+      : "");
   const defaultBatchMapping =
-    templateContext.batch_vars[0] && metadataColumns.includes(templateContext.batch_vars[0])
-      ? templateContext.batch_vars[0]
-      : "";
+    groupBuilder.batch_column && derivedMetadataColumns.includes(groupBuilder.batch_column)
+      ? groupBuilder.batch_column
+      : (templateContext.batch_vars[0] && derivedMetadataColumns.includes(templateContext.batch_vars[0])
+        ? templateContext.batch_vars[0]
+        : "");
   const effectivePrimaryTreatmentMapping = draft.mappings.treatment_level_1 || defaultTreatmentMapping;
   const effectivePrimaryBatchMapping = draft.mappings.batch || defaultBatchMapping;
-  const additionalTreatmentMappings = [
-    draft.mappings.treatment_level_2,
-    draft.mappings.treatment_level_3,
-    draft.mappings.treatment_level_4,
-    draft.mappings.treatment_level_5,
-  ].filter((value) => value.trim().length > 0);
+  const additionalTreatmentMappings = groupBuilder.additional_columns;
+  const finalizeTemplateContext = normalizeTemplateContext({
+    ...templateContext,
+    treatment_vars: groupBuilder.primary_column ? ["group"] : templateContext.treatment_vars,
+    batch_vars: groupBuilder.batch_column ? [groupBuilder.batch_column] : templateContext.batch_vars,
+    optional_field_keys: normalizeValueList([
+      ...templateContext.optional_field_keys,
+      ...(groupBuilder.primary_column ? ["group"] : []),
+    ]),
+  });
   const designStepBlocked =
     templateContext.study_design_elements.length === 0 ||
     (templateContext.study_design_elements.includes("exposure") &&
@@ -1216,7 +1376,7 @@ export function StudyOnboardingWizard() {
   );
   const uploadStepComplete = metadataColumns.length > 0;
   const uploadStepSaved = uploadStepComplete;
-  const mappingsStepComplete = draft.mappings.treatment_level_1.trim().length > 0;
+  const mappingsStepComplete = effectivePrimaryTreatmentMapping.trim().length > 0;
   const mappingsStepSaved = areMappingsEqual(
     draft.mappings,
     onboardingStateQuery.data?.mappings ?? {
@@ -1271,36 +1431,57 @@ export function StudyOnboardingWizard() {
   const selectedBiospyderKit = draft.config.common.biospyder_kit;
   const reviewWarnings = [
     metadataColumns.length === 0 ? "Upload and validate metadata before generating the handoff bundle." : null,
-    effectivePrimaryTreatmentMapping ? null : "Primary grouping column is not resolved from the uploaded metadata.",
-    templateContext.study_design_elements.includes("batch") && !effectivePrimaryBatchMapping
+    !groupBuilder.primary_column && !metadataColumns.includes("group")
+      ? "Choose at least one grouping variable to generate analysis groups."
+      : null,
+    groupBuilder.primary_column && suggestedContrasts.length === 0
+      ? "No control groups could be identified from solvent_control."
+      : null,
+    finalizeTemplateContext.study_design_elements.includes("batch") && !effectivePrimaryBatchMapping
       ? "Batch was marked as part of the study design, but no batch column is resolved yet."
       : null,
   ].filter((message): message is string => Boolean(message));
 
   useEffect(() => {
-    const nextTreatment = templateContext.treatment_vars[0] ?? "";
-    const nextBatch = templateContext.batch_vars[0] ?? "";
-    const availableColumns = new Set(metadataColumns);
+    const availableColumns = new Set(derivedMetadataColumns);
+    const suggestedPrimary = metadataColumns.includes("group")
+      ? "group"
+      : ["chemical", "dose", "concentration", "timepoint"].find((column) => metadataColumns.includes(column)) ?? "";
+    const nextBatch = groupBuilder.batch_column || (templateContext.batch_vars[0] ?? "");
 
-    if (
-      nextTreatment &&
-      !draft.mappings.treatment_level_1 &&
-      availableColumns.has(nextTreatment)
-    ) {
+    if (!draft.groupBuilder.primary_column && suggestedPrimary) {
+      updateDraft((current) => ({
+        ...current,
+        groupBuilder: {
+          ...current.groupBuilder,
+          primary_column: suggestedPrimary,
+        },
+      }));
+      return;
+    }
+
+    if (!draft.mappings.treatment_level_1 && availableColumns.has("group") && groupBuilder.primary_column) {
       updateDraft((current) => ({
         ...current,
         mappings: {
           ...current.mappings,
-          treatment_level_1: nextTreatment,
+          treatment_level_1: "group",
         },
       }));
     }
 
-    if (
-      nextBatch &&
-      !draft.mappings.batch &&
-      availableColumns.has(nextBatch)
-    ) {
+    if (nextBatch && !draft.groupBuilder.batch_column && metadataColumns.includes(nextBatch)) {
+      updateDraft((current) => ({
+        ...current,
+        groupBuilder: {
+          ...current.groupBuilder,
+          batch_column: nextBatch,
+        },
+      }));
+      return;
+    }
+
+    if (nextBatch && !draft.mappings.batch && availableColumns.has(nextBatch)) {
       updateDraft((current) => ({
         ...current,
         mappings: {
@@ -1310,7 +1491,25 @@ export function StudyOnboardingWizard() {
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [metadataColumns.join("|"), templateContext.treatment_vars.join("|"), templateContext.batch_vars.join("|")]);
+  }, [metadataColumns.join("|"), derivedMetadataColumns.join("|"), templateContext.batch_vars.join("|"), groupBuilder.primary_column, groupBuilder.batch_column]);
+
+  useEffect(() => {
+    const validKeys = new Set(suggestedContrasts.map((item) => `${item.reference_group}::${item.comparison_group}`));
+    const nextSelected = draft.mappings.selected_contrasts.filter((item) =>
+      validKeys.has(`${item.reference_group}::${item.comparison_group}`),
+    );
+    if (nextSelected.length === draft.mappings.selected_contrasts.length) {
+      return;
+    }
+    updateDraft((current) => ({
+      ...current,
+      mappings: {
+        ...current.mappings,
+        selected_contrasts: nextSelected,
+      },
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestedContrasts.map((item) => `${item.reference_group}::${item.comparison_group}`).join("|")]);
 
   async function persistTemplateContext() {
     await saveOnboardingDraftMutation.mutateAsync({
@@ -1336,11 +1535,12 @@ export function StudyOnboardingWizard() {
       await saveOnboardingDraftMutation.mutateAsync({
         mappings: {
           ...mappingsPayload,
-          treatment_level_1: effectivePrimaryTreatmentMapping,
+          treatment_level_1: groupBuilder.primary_column ? "group" : effectivePrimaryTreatmentMapping,
           batch: effectivePrimaryBatchMapping,
         },
         selected_contrasts,
-        template_context: templateContext,
+        group_builder: groupBuilder,
+        template_context: finalizeTemplateContext,
         config: draft.config,
       });
       markStepAttempted(stepKey);
@@ -2331,276 +2531,429 @@ export function StudyOnboardingWizard() {
 
           {activeStep === "finalize" ? (
             <div className="space-y-6">
-              <div className="space-y-4">
-                <div className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm">
-                  <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-                    <div>
-                      <p className="font-medium text-foreground">Summary</p>
-                      <div className="mt-3 grid gap-3 text-muted-foreground sm:grid-cols-2">
-                        {[
-                          ["Title", draft.details.title || "—"],
-                          ["Platform", selectedPlatform || "—"],
-                          ["Sequencing mode", selectedMode || "—"],
-                          ["Instrument model", selectedInstrumentModel || "—"],
-                          ["Sequenced by", selectedSequencedBy || "—"],
-                          ["Biospyder kit", selectedBiospyderKit ? String(selectedBiospyderKit) : "—"],
-                          [
-                            "Study design",
-                            templateContext.study_design_elements.map((item) => getStudyDesignElementLabel(item, templateContext)).join(", ") || "—",
-                          ],
-                          ["Upload", draft.upload.fileName || "—"],
-                          ["Onboarding status", onboardingStatus],
-                        ].map(([label, value]) => (
-                          <div key={label} className="grid gap-1">
-                            <span className="text-xs font-medium uppercase tracking-wide text-foreground">{label}</span>
-                            <span>{value}</span>
-                          </div>
-                        ))}
-                      </div>
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                <div className="space-y-4 rounded-xl border border-border/70 bg-muted/20 p-4 text-sm">
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">Analysis setup</p>
+                    <p className="text-xs text-muted-foreground">
+                      Define how uploaded metadata should be combined into the final analysis `group` column.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="primary-grouping">Primary grouping variable</Label>
+                      <Select
+                        value={groupBuilder.primary_column || "__none__"}
+                        onValueChange={(value) =>
+                          updateDraft((current) => ({
+                            ...current,
+                            groupBuilder: normalizeGroupBuilder({
+                              ...current.groupBuilder,
+                              primary_column: value === "__none__" ? "" : value,
+                            }),
+                          }))
+                        }
+                      >
+                        <SelectTrigger id="primary-grouping" aria-label="Primary grouping variable">
+                          <SelectValue placeholder="Select a metadata column" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Select a metadata column</SelectItem>
+                          {metadataColumns.map((column) => (
+                            <SelectItem key={column} value={column}>
+                              {column}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
-                    <div className="border-t border-border/70 pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-                      <div
-                        className={cn(
-                          "rounded-lg border p-3",
-                          reviewWarnings.length === 0
-                            ? "border-emerald-200 bg-emerald-50/80"
-                            : "border-amber-200 bg-amber-50/80",
-                        )}
+                    <div className="grid gap-2">
+                      <Label htmlFor="batch-column">Batch column</Label>
+                      <Select
+                        value={groupBuilder.batch_column || "__none__"}
+                        onValueChange={(value) =>
+                          updateDraft((current) => ({
+                            ...current,
+                            groupBuilder: normalizeGroupBuilder({
+                              ...current.groupBuilder,
+                              batch_column: value === "__none__" ? "" : value,
+                            }),
+                          }))
+                        }
                       >
-                        <div className="flex items-start gap-3">
-                          <div
-                            className={cn(
-                              "mt-0.5 flex size-8 items-center justify-center rounded-full",
-                              reviewWarnings.length === 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700",
-                            )}
-                          >
-                            {reviewWarnings.length === 0 ? (
-                              <Check aria-hidden="true" className="size-4" />
-                            ) : (
-                              <AlertCircle aria-hidden="true" className="size-4" />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-medium text-foreground">
-                              {reviewWarnings.length === 0 ? "Passing validation" : "Validation needs attention"}
-                            </p>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                              {reviewWarnings.length === 0
-                                ? "The bundle inputs are in place and ready for finalize."
-                                : `${reviewWarnings.length} issue${reviewWarnings.length === 1 ? "" : "s"} should be reviewed before finalizing.`}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 space-y-3 text-muted-foreground">
-                        <div className="grid gap-1">
-                          <span className="text-xs font-medium uppercase tracking-wide text-foreground">Primary analysis column</span>
-                          <span>{effectivePrimaryTreatmentMapping || "—"}</span>
-                        </div>
-                        <div className="grid gap-1">
-                          <span className="text-xs font-medium uppercase tracking-wide text-foreground">Additional grouping columns</span>
-                          <span>{additionalTreatmentMappings.join(", ") || "—"}</span>
-                        </div>
-                        <div className="grid gap-1">
-                          <span className="text-xs font-medium uppercase tracking-wide text-foreground">Batch column</span>
-                          <span>{effectivePrimaryBatchMapping || "—"}</span>
-                        </div>
-                        <div className="grid gap-1">
-                          <span className="text-xs font-medium uppercase tracking-wide text-foreground">Detected metadata columns</span>
-                          <span>{metadataColumns.join(", ") || "—"}</span>
-                        </div>
-                      </div>
-
-                      {reviewWarnings.length > 0 ? (
-                        <div className="mt-4 rounded-lg border border-border/70 bg-background/70 p-3">
-                          <p className="text-xs font-medium uppercase tracking-wide text-foreground">Needs attention</p>
-                          <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
-                            {reviewWarnings.map((message) => (
-                              <li key={message}>{message}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
+                        <SelectTrigger id="batch-column" aria-label="Batch column">
+                          <SelectValue placeholder="Optional batch column" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Optional batch column</SelectItem>
+                          {metadataColumns.map((column) => (
+                            <SelectItem key={column} value={column}>
+                              {column}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={saveOnboardingDraftMutation.isPending}
-                    onClick={() => {
-                      const { selected_contrasts, ...mappingsPayload } = draft.mappings;
-                      setOnboardingSaveError(null);
-                      saveOnboardingDraftMutation.mutate(
-                        {
-                          mappings: {
-                            ...mappingsPayload,
-                            treatment_level_1: effectivePrimaryTreatmentMapping,
-                            batch: effectivePrimaryBatchMapping,
-                          },
-                          selected_contrasts,
-                          template_context: templateContext,
-                          config: draft.config,
-                        },
-                        {
-                          onSuccess: () => {
-                            markStepAttempted("finalize");
-                          },
-                        },
-                      );
-                    }}
-                  >
-                    {saveOnboardingDraftMutation.isPending ? "Saving…" : "Save draft"}
-                  </Button>
-                  <Button
-                    type="button"
-                    disabled={finalizeOnboardingMutation.isPending}
-                    onClick={async () => {
-                      const { selected_contrasts, ...mappingsPayload } = draft.mappings;
-                      setOnboardingFinalizeError(null);
-                      try {
-                        await saveOnboardingDraftMutation.mutateAsync({
-                          mappings: {
-                            ...mappingsPayload,
-                            treatment_level_1: effectivePrimaryTreatmentMapping,
-                            batch: effectivePrimaryBatchMapping,
-                          },
-                          selected_contrasts,
-                          template_context: templateContext,
-                          config: draft.config,
-                        });
-                        markStepAttempted("finalize");
-                        await finalizeOnboardingMutation.mutateAsync();
-                      } catch {
-                        // mutation handlers surface errors
-                      }
-                    }}
-                  >
-                    {finalizeOnboardingMutation.isPending ? "Finalizing…" : "Finalize onboarding"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={onboardingStatus !== "final" || generateOutputsMutation.isPending}
-                    onClick={() => {
-                      setGenerationError(null);
-                      generateOutputsMutation.mutate();
-                    }}
-                  >
-                    {generateOutputsMutation.isPending ? "Generating…" : "Generate outputs"}
-                  </Button>
-                </div>
-                {saveStudyDetailsMutation.isPending || saveOnboardingDraftMutation.isPending ? (
-                  <p className="text-sm text-muted-foreground">Saving changes before moving on…</p>
-                ) : null}
-                {onboardingStatus !== "final" ? (
-                  <p className="text-sm text-muted-foreground">
-                    Finalize onboarding to unlock output generation for this study.
-                  </p>
-                ) : null}
-              </div>
+                  <div className="grid gap-2">
+                    <Label>Additional grouping columns</Label>
+                    <div className="flex flex-wrap gap-3 rounded-lg border border-border/70 bg-background/80 p-3">
+                      {metadataColumns.filter((column) => column !== groupBuilder.primary_column).length === 0 ? (
+                        <span className="text-xs text-muted-foreground">Choose a primary grouping variable first.</span>
+                      ) : null}
+                      {metadataColumns
+                        .filter((column) => column !== groupBuilder.primary_column)
+                        .map((column) => {
+                          const checkboxId = `additional-grouping-${column}`;
+                          return (
+                            <div key={column} className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2">
+                              <Checkbox
+                                id={checkboxId}
+                                checked={groupBuilder.additional_columns.includes(column)}
+                                onCheckedChange={(checked) =>
+                                  updateDraft((current) => ({
+                                    ...current,
+                                    groupBuilder: normalizeGroupBuilder({
+                                      ...current.groupBuilder,
+                                      additional_columns: checked
+                                        ? [...current.groupBuilder.additional_columns, column]
+                                        : current.groupBuilder.additional_columns.filter((value) => value !== column),
+                                    }),
+                                  }))
+                                }
+                              />
+                              <Label htmlFor={checkboxId} className="cursor-pointer text-sm font-normal">
+                                {column}
+                              </Label>
+                            </div>
+                          );
+                        })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {groupBuilder.primary_column
+                        ? `Computed group = ${[groupBuilder.primary_column, ...groupBuilder.additional_columns].join(" + ")}`
+                        : "Choose a primary grouping variable to start building derived analysis groups."}
+                    </p>
+                  </div>
 
-              <div className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm">
-                <p className="font-medium text-foreground">Suggested contrasts</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Derived from uploaded metadata columns `group` and `solvent_control`.
-                </p>
+                  <div className="space-y-3 rounded-lg border border-border/70 bg-background/80 p-3">
+                    <div className="space-y-1">
+                      <p className="font-medium text-foreground">Preview of computed group labels</p>
+                      <p className="text-xs text-muted-foreground">
+                        Previewing the uploaded metadata with the derived `group` values that will feed the workflow.
+                      </p>
+                    </div>
+                    {validatedRows.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Upload and validate metadata to preview computed groups.</p>
+                    ) : (
+                      <div className="overflow-x-auto rounded-lg border border-border/70">
+                        <table className="min-w-full text-left text-xs">
+                          <thead className="bg-muted/40 text-foreground">
+                            <tr>
+                              {["sample_ID", ...getGroupBuilderColumns(groupBuilder), "group"].map((column) => (
+                                <th key={column} className="px-3 py-2 font-medium">
+                                  {column}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {derivedGroupRows.slice(0, 6).map((row, index) => (
+                              <tr key={`${String(row.sample_ID ?? index)}`} className="border-t border-border/60">
+                                {["sample_ID", ...getGroupBuilderColumns(groupBuilder), "group"].map((column) => (
+                                  <td key={`${index}-${column}`} className="px-3 py-2 text-muted-foreground">
+                                    {String(row[column] ?? "—")}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
 
-                {suggestedContrasts.length === 0 ? (
-                  <p className="mt-3 text-muted-foreground">No contrast suggestions available yet.</p>
-                ) : (
-                  <div className="mt-3 space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() =>
-                          updateDraft((current) => ({
-                            ...current,
-                            mappings: { ...current.mappings, selected_contrasts: suggestedContrasts },
-                          }))
-                        }
-                      >
-                        Select all
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          updateDraft((current) => ({
-                            ...current,
-                            mappings: { ...current.mappings, selected_contrasts: [] },
-                          }))
-                        }
-                      >
-                        Clear
-                      </Button>
+                  <div className="space-y-3 rounded-lg border border-border/70 bg-background/80 p-3">
+                    <div className="space-y-1">
+                      <p className="font-medium text-foreground">Experimental groups discovered</p>
+                      <p className="text-xs text-muted-foreground">Unique derived group labels available for contrast selection.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {Array.from(new Set(derivedGroupRows.map((row) => String(row.group ?? "").trim()).filter(Boolean))).length === 0 ? (
+                        <span className="text-sm text-muted-foreground">No derived groups available yet.</span>
+                      ) : (
+                        Array.from(new Set(derivedGroupRows.map((row) => String(row.group ?? "").trim()).filter(Boolean))).map((group) => (
+                          <Badge key={group} variant="outline" className="rounded-full px-3 py-1">
+                            {group}
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 rounded-lg border border-border/70 bg-background/80 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="space-y-1">
+                        <p className="font-medium text-foreground">Suggested contrasts</p>
+                        <p className="text-xs text-muted-foreground">
+                          Derived from computed groups and `solvent_control`.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() =>
+                            updateDraft((current) => ({
+                              ...current,
+                              mappings: { ...current.mappings, selected_contrasts: suggestedContrasts },
+                            }))
+                          }
+                        >
+                          Select all
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            updateDraft((current) => ({
+                              ...current,
+                              mappings: { ...current.mappings, selected_contrasts: [] },
+                            }))
+                          }
+                        >
+                          Clear
+                        </Button>
+                      </div>
                     </div>
 
-                    <ul className="space-y-2">
-                      {suggestedContrasts.map((pair, index) => {
-                        const key = `${pair.reference_group}:${pair.comparison_group}`;
-                        const inputId = `contrast-${index}`;
-                        const checked = draft.mappings.selected_contrasts.some(
-                          (item) =>
-                            item.reference_group === pair.reference_group &&
-                            item.comparison_group === pair.comparison_group,
-                        );
-                        return (
-                          <li key={key} className="flex items-start gap-2">
-                            <Checkbox
-                              id={inputId}
-                              checked={checked}
-                              onCheckedChange={(nextChecked) =>
-                                updateDraft((current) => {
-                                  const currentPairs = current.mappings.selected_contrasts;
-                                  const alreadySelected = currentPairs.some(
-                                    (item) =>
-                                      item.reference_group === pair.reference_group &&
-                                      item.comparison_group === pair.comparison_group,
-                                  );
-                                  if (nextChecked === true) {
+                    {suggestedContrasts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No contrast suggestions available yet.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {suggestedContrasts.map((pair, index) => {
+                          const key = `${pair.reference_group}:${pair.comparison_group}`;
+                          const inputId = `contrast-${index}`;
+                          const checked = draft.mappings.selected_contrasts.some(
+                            (item) =>
+                              item.reference_group === pair.reference_group &&
+                              item.comparison_group === pair.comparison_group,
+                          );
+                          return (
+                            <li key={key} className="flex items-start gap-2">
+                              <Checkbox
+                                id={inputId}
+                                checked={checked}
+                                onCheckedChange={(nextChecked) =>
+                                  updateDraft((current) => {
+                                    const currentPairs = current.mappings.selected_contrasts;
+                                    const alreadySelected = currentPairs.some(
+                                      (item) =>
+                                        item.reference_group === pair.reference_group &&
+                                        item.comparison_group === pair.comparison_group,
+                                    );
                                     return {
                                       ...current,
                                       mappings: {
                                         ...current.mappings,
-                                        selected_contrasts: alreadySelected
-                                          ? currentPairs
-                                          : [...currentPairs, pair],
+                                        selected_contrasts: nextChecked === true
+                                          ? (alreadySelected ? currentPairs : [...currentPairs, pair])
+                                          : currentPairs.filter(
+                                            (item) =>
+                                              !(
+                                                item.reference_group === pair.reference_group &&
+                                                item.comparison_group === pair.comparison_group
+                                              ),
+                                          ),
                                       },
                                     };
-                                  }
-                                  return {
-                                    ...current,
-                                    mappings: {
-                                      ...current.mappings,
-                                      selected_contrasts: currentPairs.filter(
-                                        (item) =>
-                                          !(
-                                            item.reference_group === pair.reference_group &&
-                                            item.comparison_group === pair.comparison_group
-                                          ),
-                                      ),
-                                    },
-                                  };
-                                })
-                              }
-                            />
-                            <Label htmlFor={inputId} className="cursor-pointer text-sm text-foreground">
-                              {pair.reference_group} → {pair.comparison_group}
-                            </Label>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                                  })
+                                }
+                              />
+                              <Label htmlFor={inputId} className="cursor-pointer text-sm text-foreground">
+                                {pair.comparison_group} vs {pair.reference_group}
+                              </Label>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
                   </div>
-                )}
+                </div>
+
+                <div className="space-y-4 rounded-xl border border-border/70 bg-muted/20 p-4 text-sm">
+                  <div
+                    className={cn(
+                      "rounded-lg border p-3",
+                      reviewWarnings.length === 0
+                        ? "border-emerald-200 bg-emerald-50/80"
+                        : "border-amber-200 bg-amber-50/80",
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={cn(
+                          "mt-0.5 flex size-8 items-center justify-center rounded-full",
+                          reviewWarnings.length === 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700",
+                        )}
+                      >
+                        {reviewWarnings.length === 0 ? <Check aria-hidden="true" className="size-4" /> : <AlertCircle aria-hidden="true" className="size-4" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground">
+                          {reviewWarnings.length === 0 ? "Ready for finalize" : "Validation needs attention"}
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {reviewWarnings.length === 0
+                            ? "Computed groups are valid and ready for contrast selection."
+                            : `${reviewWarnings.length} issue${reviewWarnings.length === 1 ? "" : "s"} should be reviewed before finalizing.`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {reviewWarnings.length > 0 ? (
+                    <div className="rounded-lg border border-border/70 bg-background/70 p-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-foreground">Blocking issues</p>
+                      <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                        {reviewWarnings.map((message) => (
+                          <li key={message}>{message}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  <div className="space-y-3 rounded-lg border border-border/70 bg-background/80 p-3 text-muted-foreground">
+                    <p className="font-medium text-foreground">Study summary</p>
+                    {[
+                      ["Title", draft.details.title || "—"],
+                      ["Platform", selectedPlatform || "—"],
+                      ["Sequencing mode", selectedMode || "—"],
+                      ["Instrument model", selectedInstrumentModel || "—"],
+                      ["Sequenced by", selectedSequencedBy || "—"],
+                      ["Biospyder kit", selectedBiospyderKit ? String(selectedBiospyderKit) : "—"],
+                      [
+                        "Study design",
+                        templateContext.study_design_elements.map((item) => getStudyDesignElementLabel(item, templateContext)).join(", ") || "—",
+                      ],
+                      ["Upload", draft.upload.fileName || "—"],
+                      ["Onboarding status", onboardingStatus],
+                    ].map(([label, value]) => (
+                      <div key={label} className="grid gap-1">
+                        <span className="text-xs font-medium uppercase tracking-wide text-foreground">{label}</span>
+                        <span>{value}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-3 rounded-lg border border-border/70 bg-background/80 p-3 text-muted-foreground">
+                    <div className="grid gap-1">
+                      <span className="text-xs font-medium uppercase tracking-wide text-foreground">Detected metadata columns</span>
+                      <span>{metadataColumns.join(", ") || "—"}</span>
+                    </div>
+                    <div className="grid gap-1">
+                      <span className="text-xs font-medium uppercase tracking-wide text-foreground">Primary analysis column</span>
+                      <span>{effectivePrimaryTreatmentMapping || "—"}</span>
+                    </div>
+                    <div className="grid gap-1">
+                      <span className="text-xs font-medium uppercase tracking-wide text-foreground">Additional grouping columns</span>
+                      <span>{additionalTreatmentMappings.join(", ") || "—"}</span>
+                    </div>
+                    <div className="grid gap-1">
+                      <span className="text-xs font-medium uppercase tracking-wide text-foreground">Batch column</span>
+                      <span>{effectivePrimaryBatchMapping || "—"}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 rounded-lg border border-border/70 bg-background/80 p-3">
+                    <p className="font-medium text-foreground">Output readiness</p>
+                    <p className="text-xs text-muted-foreground">
+                      The generated bundle will include `metadata.tsv`, `contrasts.tsv`, and `config.yaml`.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={saveOnboardingDraftMutation.isPending}
+                        onClick={() => {
+                          const { selected_contrasts, ...mappingsPayload } = draft.mappings;
+                          setOnboardingSaveError(null);
+                          saveOnboardingDraftMutation.mutate(
+                            {
+                              mappings: {
+                                ...mappingsPayload,
+                                treatment_level_1: groupBuilder.primary_column ? "group" : effectivePrimaryTreatmentMapping,
+                                batch: effectivePrimaryBatchMapping,
+                              },
+                              selected_contrasts,
+                              group_builder: groupBuilder,
+                              template_context: finalizeTemplateContext,
+                              config: draft.config,
+                            },
+                            {
+                              onSuccess: () => {
+                                markStepAttempted("finalize");
+                              },
+                            },
+                          );
+                        }}
+                      >
+                        {saveOnboardingDraftMutation.isPending ? "Saving…" : "Save draft"}
+                      </Button>
+                      <Button
+                        type="button"
+                        disabled={finalizeOnboardingMutation.isPending}
+                        onClick={async () => {
+                          const { selected_contrasts, ...mappingsPayload } = draft.mappings;
+                          setOnboardingFinalizeError(null);
+                          try {
+                            await saveOnboardingDraftMutation.mutateAsync({
+                              mappings: {
+                                ...mappingsPayload,
+                                treatment_level_1: groupBuilder.primary_column ? "group" : effectivePrimaryTreatmentMapping,
+                                batch: effectivePrimaryBatchMapping,
+                              },
+                              selected_contrasts,
+                              group_builder: groupBuilder,
+                              template_context: finalizeTemplateContext,
+                              config: draft.config,
+                            });
+                            markStepAttempted("finalize");
+                            await finalizeOnboardingMutation.mutateAsync();
+                          } catch {
+                            // mutation handlers surface errors
+                          }
+                        }}
+                      >
+                        {finalizeOnboardingMutation.isPending ? "Finalizing…" : "Finalize onboarding"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={onboardingStatus !== "final" || generateOutputsMutation.isPending}
+                        onClick={() => {
+                          setGenerationError(null);
+                          generateOutputsMutation.mutate();
+                        }}
+                      >
+                        {generateOutputsMutation.isPending ? "Generating…" : "Generate outputs"}
+                      </Button>
+                    </div>
+                    {saveStudyDetailsMutation.isPending || saveOnboardingDraftMutation.isPending ? (
+                      <p className="text-sm text-muted-foreground">Saving changes before moving on…</p>
+                    ) : null}
+                    {onboardingStatus !== "final" ? (
+                      <p className="text-sm text-muted-foreground">
+                        Finalize onboarding to unlock output generation for this study.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}

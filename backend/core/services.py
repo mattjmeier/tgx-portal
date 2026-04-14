@@ -431,6 +431,36 @@ def _build_metadata_tsv(study: Study, samples: list[Sample]) -> str:
     return "\n".join(rows) + "\n"
 
 
+def _build_metadata_tsv_from_rows(study: Study, rows: list[dict[str, Any]], *, group_builder: dict[str, Any]) -> str:
+    from .onboarding import build_group_preview_rows
+
+    preview_rows = build_group_preview_rows(rows, group_builder)
+    columns: list[str] = []
+    for row in preview_rows:
+        for key in row.keys():
+            if key.startswith("__"):
+                continue
+            if key not in columns:
+                columns.append(key)
+
+    if "group" in {key for row in preview_rows for key in row.keys()} and "group" not in columns:
+        columns.append("group")
+
+    lines = ["\t".join(columns)]
+    for row in preview_rows:
+        values: list[str] = []
+        for column in columns:
+            value = row.get(column)
+            if value is None:
+                values.append("")
+            elif isinstance(value, bool):
+                values.append("true" if value else "false")
+            else:
+                values.append(str(value))
+        lines.append("\t".join(values))
+    return "\n".join(lines) + "\n"
+
+
 def _build_contrasts_tsv(study) -> str:
     mapping = getattr(study, "metadata_mapping", None)
     header = ["reference_group", "comparison_group"]
@@ -460,6 +490,8 @@ def _build_contrasts_tsv(study) -> str:
 
 
 def build_project_config_bundle(project: Project) -> ConfigBundle:
+    from .onboarding import normalize_group_builder
+
     studies = list(project.studies.order_by("id"))
     if not studies:
         raise ConfigGenerationError("At least one study is required before generating configuration files.")
@@ -477,7 +509,9 @@ def build_project_config_bundle(project: Project) -> ConfigBundle:
     with ZipFile(file_buffer, "w", compression=ZIP_DEFLATED) as archive:
         for study in studies:
             samples = list(study.samples.order_by("id"))
-            if not samples:
+            onboarding_state = getattr(study, "onboarding_state", None)
+            validated_rows = onboarding_state.validated_rows if onboarding_state and onboarding_state.validated_rows else []
+            if not samples and not validated_rows:
                 raise ConfigGenerationError(f"Study {study.id} requires at least one sample before generating configuration files.")
             assays = [assay for assay in all_assays if assay.sample.study_id == study.id]
             mapping_model = getattr(study, "metadata_mapping", None)
@@ -485,7 +519,15 @@ def build_project_config_bundle(project: Project) -> ConfigBundle:
                 raise ConfigGenerationError(f"Study {study.id} is missing persisted metadata mappings.")
             payload = _build_study_config_payload(project, study, assays, mapping_model.as_dict())
             config_yaml = yaml.safe_dump(payload, sort_keys=False)
-            metadata_tsv = _build_metadata_tsv(study, samples)
+            metadata_tsv = (
+                _build_metadata_tsv_from_rows(
+                    study,
+                    validated_rows,
+                    group_builder=normalize_group_builder(getattr(onboarding_state, "group_builder", {})),
+                )
+                if validated_rows
+                else _build_metadata_tsv(study, samples)
+            )
             contrasts_tsv = _build_contrasts_tsv(study)
 
             study_slug = slugify(study.title).replace("-", "_")
