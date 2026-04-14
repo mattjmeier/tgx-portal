@@ -36,9 +36,10 @@ class StudyOnboardingMappingsSchema(BaseModel):
 
 DEFAULT_MAPPINGS: dict[str, str] = StudyOnboardingMappingsSchema().model_dump()
 
+EXPOSURE_LABEL_MODES = {"dose", "concentration", "both", "custom"}
+
 STUDY_DESIGN_FIELD_MAP: dict[str, list[str]] = {
     "chemical": ["chemical"],
-    "dose": ["dose"],
     "timepoint": ["timepoint"],
     "treatment": [],
     "batch": [],
@@ -61,14 +62,41 @@ class StudyTemplateContextSchema(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     study_design_elements: list[str] = Field(default_factory=list)
+    exposure_label_mode: str | None = None
+    exposure_custom_label: str = ""
     treatment_vars: list[str] = Field(default_factory=list)
     batch_vars: list[str] = Field(default_factory=list)
     optional_field_keys: list[str] = Field(default_factory=list)
     custom_field_keys: list[str] = Field(default_factory=list)
 
-    def normalized(self) -> dict[str, list[str]]:
+    def normalized(self) -> dict[str, Any]:
+        study_design_elements = _normalize_list(self.study_design_elements)
+        exposure_label_mode = (self.exposure_label_mode or "").strip().lower() or None
+        exposure_custom_label = (self.exposure_custom_label or "").strip()
+
+        if "dose" in study_design_elements:
+            study_design_elements = ["exposure" if value == "dose" else value for value in study_design_elements]
+            exposure_label_mode = exposure_label_mode or "dose"
+
+        if "concentration" in study_design_elements:
+            study_design_elements = ["exposure" if value == "concentration" else value for value in study_design_elements]
+            exposure_label_mode = exposure_label_mode or "concentration"
+
+        study_design_elements = _normalize_list(study_design_elements)
+
+        if "exposure" not in study_design_elements:
+            exposure_label_mode = None
+            exposure_custom_label = ""
+        else:
+            if exposure_label_mode not in EXPOSURE_LABEL_MODES:
+                exposure_label_mode = "dose"
+            if exposure_label_mode != "custom":
+                exposure_custom_label = ""
+
         return {
-            "study_design_elements": _normalize_list(self.study_design_elements),
+            "study_design_elements": study_design_elements,
+            "exposure_label_mode": exposure_label_mode,
+            "exposure_custom_label": exposure_custom_label,
             "treatment_vars": _normalize_list(self.treatment_vars),
             "batch_vars": _normalize_list(self.batch_vars),
             "optional_field_keys": _normalize_list(self.optional_field_keys),
@@ -76,7 +104,7 @@ class StudyTemplateContextSchema(BaseModel):
         }
 
 
-DEFAULT_TEMPLATE_CONTEXT: dict[str, list[str]] = StudyTemplateContextSchema().model_dump()
+DEFAULT_TEMPLATE_CONTEXT: dict[str, Any] = StudyTemplateContextSchema().normalized()
 
 
 def normalize_mappings(payload: Any) -> dict[str, str]:
@@ -84,9 +112,26 @@ def normalize_mappings(payload: Any) -> dict[str, str]:
     return schema.normalized()
 
 
-def normalize_template_context(payload: Any) -> dict[str, list[str]]:
+def normalize_template_context(payload: Any) -> dict[str, Any]:
     schema = StudyTemplateContextSchema.model_validate(payload or {})
     return schema.normalized()
+
+
+def get_exposure_field_keys(template_context: dict[str, Any]) -> list[str]:
+    if "exposure" not in template_context.get("study_design_elements", []):
+        return []
+
+    exposure_label_mode = template_context.get("exposure_label_mode")
+    exposure_custom_label = str(template_context.get("exposure_custom_label") or "").strip()
+
+    if exposure_label_mode == "concentration":
+        return ["concentration"]
+    if exposure_label_mode == "both":
+        return ["dose", "concentration"]
+    if exposure_label_mode == "custom" and exposure_custom_label:
+        return [_normalize_list([exposure_custom_label])[0]]
+
+    return ["dose"]
 
 
 def build_compatibility_summary(values: list[str]) -> str | None:
@@ -97,7 +142,7 @@ def build_compatibility_summary(values: list[str]) -> str | None:
 
 
 def get_design_selected_field_keys(
-    template_context: dict[str, list[str]],
+    template_context: dict[str, Any],
     *,
     available_field_keys: set[str] | None = None,
 ) -> tuple[list[str], list[dict[str, str]]]:
@@ -114,6 +159,20 @@ def get_design_selected_field_keys(
             seen.add(key)
             selected.append(key)
             reasons.append({"key": key, "reason": f"{element} study design selected"})
+
+    exposure_label_mode = template_context.get("exposure_label_mode")
+    for key in get_exposure_field_keys(template_context):
+        if (
+            available_field_keys is not None
+            and key not in available_field_keys
+            and exposure_label_mode != "custom"
+        ):
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        selected.append(key)
+        reasons.append({"key": key, "reason": "exposure level selected"})
 
     return selected, reasons
 
@@ -175,12 +234,14 @@ def validate_final_ready(*, metadata_columns: list[str], mappings: dict[str, str
 
 
 def validate_template_context_for_finalize(
-    template_context: dict[str, list[str]],
+    template_context: dict[str, Any],
     *,
     metadata_columns: list[str] | None = None,
 ) -> list[dict[str, str]]:
     errors: list[dict[str, str]] = []
     study_design_elements = template_context.get("study_design_elements", [])
+    exposure_label_mode = template_context.get("exposure_label_mode")
+    exposure_custom_label = str(template_context.get("exposure_custom_label") or "").strip()
     treatment_vars = template_context.get("treatment_vars", [])
     batch_vars = template_context.get("batch_vars", [])
     normalized_columns = {
@@ -210,7 +271,22 @@ def validate_template_context_for_finalize(
                 "message": "Add at least one batch variable before finalizing onboarding.",
             }
         )
+    if "exposure" in study_design_elements and exposure_label_mode == "custom" and not exposure_custom_label:
+        errors.append(
+            {
+                "field": "template_context.exposure_custom_label",
+                "message": "Provide a custom exposure label before finalizing onboarding.",
+            }
+        )
     if normalized_columns:
+        for value in get_exposure_field_keys(template_context):
+            if value not in normalized_columns:
+                errors.append(
+                    {
+                        "field": "template_context.study_design_elements",
+                        "message": f"Exposure field '{value}' is not present in the last uploaded metadata.",
+                    }
+                )
         for value in treatment_vars:
             if value not in normalized_columns:
                 errors.append(

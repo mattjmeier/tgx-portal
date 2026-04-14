@@ -7,13 +7,10 @@ export type Sample = {
   sample_ID: string;
   sample_name: string;
   description: string;
-  group: string;
-  chemical: string;
-  chemical_longname: string;
-  dose: number;
   technical_control: boolean;
   reference_rna: boolean;
   solvent_control: boolean;
+  metadata: Record<string, unknown>;
 };
 
 export type CreateSamplePayload = Omit<Sample, "id">;

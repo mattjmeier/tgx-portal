@@ -34,6 +34,8 @@ export function StudyCreatePage() {
 
   const projects = projectsQuery.data?.results ?? [];
   const hasPinnedCollaboration = Number.isFinite(pathProjectId);
+  const selectedProject = query.data ?? null;
+  const requiresCollaborationSelection = selectedProjectId === null;
 
   function handleProjectChange(projectId: number) {
     setSelectedProjectId(projectId);
@@ -54,67 +56,50 @@ export function StudyCreatePage() {
         </div>
       </div>
 
-      {!hasPinnedCollaboration && !query.data ? (
-        <CollaborationPicker
-          isDisabled={projectsQuery.isLoading}
-          projects={projects}
-          selectedProjectId={selectedProjectId}
-          onProjectChange={handleProjectChange}
-        />
-      ) : null}
-
       {projectsQuery.isError ? <p className="error-text">Unable to load collaborations.</p> : null}
       {query.isLoading && selectedProjectId !== null ? <p>Loading collaboration context...</p> : null}
       {query.isError && selectedProjectId !== null ? <p className="error-text">Unable to load this collaboration.</p> : null}
 
-      {query.data ? (
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-stretch">
-          <div className={cn("grid gap-6", !hasPinnedCollaboration && "lg:grid-rows-2")}>
-            {!hasPinnedCollaboration ? (
-              <CollaborationPicker
-                className="h-full"
-                isDisabled={projectsQuery.isLoading}
-                projects={projects}
-                selectedProjectId={selectedProjectId}
-                onProjectChange={handleProjectChange}
-              />
-            ) : null}
-            <StudyForm className="h-full" projectId={query.data.id} />
-          </div>
-          <Card className="h-full">
-            <CardHeader>
-              <p className="eyebrow">Reference</p>
-              <CardTitle>Definitions</CardTitle>
-              <CardDescription>Enter a title on the left to continue. The rest of your study setup, including metadata import, will take place in the onbarding wizard.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
-                <strong>Collaboration</strong>
-                <p className="text-sm text-muted-foreground">
-                  You are starting a study under <strong>{query.data.title}</strong>.
-                </p>
-              </div>
-              <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
-                <strong>Study</strong>
-                <p className="text-sm text-muted-foreground">
-                  A distinct experiment within the collaboration, usually separated by design, species, or cell system.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-      ) : selectedProjectId === null ? (
-        <section className="workspace-intro-card">
-          <div>
-            <strong>Choose a collaboration first</strong>
-            <p>Select the collaboration record that should own this study before the experiment form appears.</p>
-          </div>
-          <div>
-            <strong>Need a new top-level record?</strong>
-            <p>Start with a collaboration when the PI or intake context does not exist yet, then return to Studies from the breadcrumb above.</p>
-          </div>
-        </section>
-      ) : null}
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-stretch">
+        <div className={cn("grid gap-6", !hasPinnedCollaboration && "lg:grid-rows-2")}>
+          <CollaborationPicker
+            className="h-full"
+            isDisabled={projectsQuery.isLoading || hasPinnedCollaboration}
+            isRequired={requiresCollaborationSelection}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            onProjectChange={handleProjectChange}
+          />
+          <StudyForm className="h-full" isSubmitDisabled={requiresCollaborationSelection} projectId={selectedProject?.id ?? null} />
+        </div>
+        <Card className="h-full">
+          <CardHeader>
+            <p className="eyebrow">Reference</p>
+            <CardTitle>Definitions</CardTitle>
+            <CardDescription>Enter a title on the left to continue. The rest of your study setup, including metadata import, will take place in the onbarding wizard.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
+              <strong>Collaboration</strong>
+              <p className="text-sm text-muted-foreground">
+                {selectedProject ? (
+                  <>
+                    You are starting a study under <strong>{selectedProject.title}</strong>.
+                  </>
+                ) : (
+                  "Choose a collaboration on the left before launching this study."
+                )}
+              </p>
+            </div>
+            <div className="grid gap-1 rounded-lg border border-border/70 bg-muted/30 p-4">
+              <strong>Study</strong>
+              <p className="text-sm text-muted-foreground">
+                A distinct experiment within the collaboration, usually separated by design, species, or cell system.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
     </section>
   );
 }

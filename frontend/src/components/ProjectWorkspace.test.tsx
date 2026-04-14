@@ -129,9 +129,9 @@ describe("ProjectWorkspace", () => {
       "href",
       "/studies/11/onboarding",
     );
-    expect(screen.getByRole("link", { name: /edit study mcf7 recovery window/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /review onboarding for study mcf7 recovery window/i })).toHaveAttribute(
       "href",
-      "/studies/12?tab=collaboration",
+      "/studies/12/onboarding",
     );
     expect(screen.getAllByRole("button", { name: /delete study/i }).length).toBeGreaterThan(0);
   });

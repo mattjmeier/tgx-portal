@@ -19,6 +19,8 @@ export type MetadataFieldDefinition = {
   min_value: number | null;
   max_value: number | null;
   auto_include_keys: string[];
+  wizard_featured: boolean;
+  wizard_featured_order: number;
 };
 
 export type LookupOption = {

@@ -150,13 +150,15 @@ export function SampleUploadPanel({ studyId }: SampleUploadPanelProps) {
       sample_ID: row.sample_ID.trim(),
       sample_name: row.sample_name.trim(),
       description: row.description.trim(),
-      group: row.group.trim(),
-      chemical: row.chemical.trim(),
-      chemical_longname: row.chemical_longname.trim(),
-      dose: Number(row.dose),
       technical_control: normalizeBoolean(row.technical_control),
       reference_rna: normalizeBoolean(row.reference_rna),
       solvent_control: normalizeBoolean(row.solvent_control),
+      metadata: {
+        group: row.group.trim(),
+        chemical: row.chemical.trim(),
+        chemical_longname: row.chemical_longname.trim(),
+        dose: Number(row.dose),
+      },
     }));
 
     mutation.mutate(payload);

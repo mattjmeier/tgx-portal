@@ -12,12 +12,13 @@ import { Label } from "./ui/label";
 
 type StudyFormProps = {
   className?: string;
-  projectId: number;
+  projectId: number | null;
+  isSubmitDisabled?: boolean;
 };
 
 const initialFormState: Omit<CreateStudyPayload, "project"> = { title: "" };
 
-export function StudyForm({ className, projectId }: StudyFormProps) {
+export function StudyForm({ className, projectId, isSubmitDisabled = false }: StudyFormProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [formState, setFormState] = useState<Omit<CreateStudyPayload, "project">>(initialFormState);
@@ -38,6 +39,9 @@ export function StudyForm({ className, projectId }: StudyFormProps) {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (projectId === null || isSubmitDisabled) {
+      return;
+    }
     setErrorMessage(null);
     mutation.mutate({
       project: projectId,
@@ -69,9 +73,9 @@ export function StudyForm({ className, projectId }: StudyFormProps) {
           </div>
           <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
-              The wizard will collect the rest of the study details and metadata-driving fields.
+              {isSubmitDisabled ? "Select a collaboration to enable study creation." : "The wizard will collect the rest of the study details and metadata-driving fields."}
             </p>
-            <Button disabled={mutation.isPending} type="submit">
+            <Button disabled={mutation.isPending || isSubmitDisabled} type="submit">
               {mutation.isPending ? "Starting..." : "Create study"}
             </Button>
           </div>

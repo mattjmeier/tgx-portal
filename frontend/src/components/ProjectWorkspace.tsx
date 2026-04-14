@@ -179,15 +179,16 @@ export function ProjectWorkspace({
                 renderStudyActions={(study) => (
                   <div className="flex items-center gap-2">
                     <Button asChild size="icon" variant="outline">
-                      {study.status === "draft" ? (
-                        <Link aria-label={`Continue onboarding for study ${study.title}`} to={studyOnboardingPath(study.id)}>
-                          <ArrowRight />
-                        </Link>
-                      ) : (
-                        <Link aria-label={`Edit study ${study.title}`} to={`${studyWorkspacePath(study.id)}?tab=collaboration`}>
-                          <Pencil />
-                        </Link>
-                      )}
+                      <Link
+                        aria-label={
+                          study.status === "draft"
+                            ? `Continue onboarding for study ${study.title}`
+                            : `Review onboarding for study ${study.title}`
+                        }
+                        to={studyOnboardingPath(study.id)}
+                      >
+                        {study.status === "draft" ? <ArrowRight /> : <Pencil />}
+                      </Link>
                     </Button>
                     <StudyDeleteDialog
                       isDeleting={deleteStudyMutation.isPending && deleteStudyMutation.variables === study.id}

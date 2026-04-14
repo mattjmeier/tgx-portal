@@ -23,6 +23,8 @@ QUESTIONS - treatment/batch vars
 
 
 
-The minimized structure is too heavy for the continue onboarding banner.
-
 On an existing study: the download template should reflect the shape of the current study in question.
+
+
+Template preview
+

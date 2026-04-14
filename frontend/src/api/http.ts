@@ -20,7 +20,11 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
   const token = getStoredAuthToken();
   const url = input.startsWith("http") ? input : `${apiBaseUrl}${input}`;
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), defaultRequestTimeoutMs);
+  let didTimeout = false;
+  const timeoutId = window.setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, defaultRequestTimeoutMs);
   const abortSignal = init.signal;
   const forwardAbort = () => controller.abort(abortSignal?.reason);
 
@@ -42,6 +46,14 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
       headers,
       signal: controller.signal,
     });
+  } catch (error) {
+    if (didTimeout) {
+      throw new Error("Request timed out. Please try again.");
+    }
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Request was cancelled. Please retry.");
+    }
+    throw error;
   } finally {
     window.clearTimeout(timeoutId);
     abortSignal?.removeEventListener("abort", forwardAbort);

@@ -388,10 +388,12 @@ def _build_study_config_payload(project: Project, study: Study, assays: list[Ass
     payload["deseq2"].update(config.deseq2 or {})
 
     platforms = sorted({assay.platform for assay in assays})
-    if not platforms:
-        raise ConfigGenerationError(f"Study {study.id} requires at least one assay before generating configuration files.")
     if len(platforms) > 1:
         raise ConfigGenerationError(f"Study {study.id} mixes assay platforms and cannot generate a single config.")
+
+    platform_label = assays[0].get_platform_display() if assays else str(payload["common"].get("platform") or "").strip()
+    if not platform_label:
+        raise ConfigGenerationError(f"Study {study.id} is missing a platform selection for config generation.")
 
     payload["common"].update(
         {
@@ -400,7 +402,7 @@ def _build_study_config_payload(project: Project, study: Study, assays: list[Ass
             "researcher_name": project.researcher_name,
             "bioinformatician_name": project.bioinformatician_assigned,
             "project_description": project.description or None,
-            "platform": assays[0].get_platform_display(),
+            "platform": platform_label,
             "batch_var": mapping.get("batch") or None,
             "celltype": study.celltype or "",
         }
@@ -435,8 +437,25 @@ def _build_contrasts_tsv(study) -> str:
     rows = ["\t".join(header)]
     if mapping is None:
         return "\n".join(rows) + "\n"
+
     for item in mapping.selected_contrasts or []:
-        rows.append(f"{item['reference_group']}\t{item['comparison_group']}")
+        if isinstance(item, dict):
+            reference_group = str(item.get("reference_group") or "").strip()
+            comparison_group = str(item.get("comparison_group") or "").strip()
+        elif isinstance(item, (list, tuple)) and len(item) == 2:
+            # Legacy persisted shape: [comparison_group, reference_group]
+            comparison_group = str(item[0] or "").strip()
+            reference_group = str(item[1] or "").strip()
+        else:
+            raise ConfigGenerationError(
+                f"Study {study.id} has invalid selected contrasts data. Re-save the contrasts and retry."
+            )
+
+        if not reference_group or not comparison_group:
+            raise ConfigGenerationError(
+                f"Study {study.id} has incomplete selected contrasts data. Re-save the contrasts and retry."
+            )
+        rows.append(f"{reference_group}\t{comparison_group}")
     return "\n".join(rows) + "\n"
 
 
@@ -451,9 +470,7 @@ def build_project_config_bundle(project: Project) -> ConfigBundle:
         .order_by("id")
     )
     project_platforms = sorted({assay.platform for assay in all_assays})
-    if not all_assays:
-        raise ConfigGenerationError("At least one assay is required before generating configuration files.")
-    if len(project_platforms) > 1:
+    if project_platforms and len(project_platforms) > 1:
         raise ConfigGenerationError("All assays within a project must use the same platform for config generation.")
 
     file_buffer = BytesIO()

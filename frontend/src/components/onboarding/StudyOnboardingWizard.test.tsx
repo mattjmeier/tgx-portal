@@ -6,7 +6,7 @@ import { vi } from "vitest";
 import { StudyOnboardingWizard } from "./StudyOnboardingWizard";
 import { fetchLookups } from "../../api/lookups";
 import { validateMetadataUpload } from "../../api/metadataValidation";
-import { downloadMetadataTemplate } from "../../api/metadataTemplates";
+import { downloadMetadataTemplate, previewMetadataTemplate } from "../../api/metadataTemplates";
 import {
   fetchStudyOnboardingState,
   finalizeStudyOnboardingState,
@@ -46,6 +46,8 @@ let mockOnboardingState = {
   },
   template_context: {
     study_design_elements: [] as string[],
+    exposure_label_mode: null as "dose" | "concentration" | "both" | "custom" | null,
+    exposure_custom_label: "" as string,
     treatment_vars: [] as string[],
     batch_vars: [] as string[],
     optional_field_keys: [] as string[],
@@ -179,6 +181,8 @@ vi.mock("../../api/lookups", async () => {
           min_value: null,
           max_value: null,
           auto_include_keys: [],
+          wizard_featured: false,
+          wizard_featured_order: 0,
         },
         {
           key: "technical_control",
@@ -197,6 +201,8 @@ vi.mock("../../api/lookups", async () => {
           min_value: null,
           max_value: null,
           auto_include_keys: [],
+          wizard_featured: false,
+          wizard_featured_order: 0,
         },
         {
           key: "reference_rna",
@@ -215,6 +221,8 @@ vi.mock("../../api/lookups", async () => {
           min_value: null,
           max_value: null,
           auto_include_keys: [],
+          wizard_featured: false,
+          wizard_featured_order: 0,
         },
         {
           key: "solvent_control",
@@ -233,6 +241,8 @@ vi.mock("../../api/lookups", async () => {
           min_value: null,
           max_value: null,
           auto_include_keys: [],
+          wizard_featured: false,
+          wizard_featured_order: 0,
         },
         {
           key: "sample_name",
@@ -251,6 +261,8 @@ vi.mock("../../api/lookups", async () => {
           min_value: null,
           max_value: null,
           auto_include_keys: [],
+          wizard_featured: false,
+          wizard_featured_order: 0,
         },
         {
           key: "chemical",
@@ -269,6 +281,8 @@ vi.mock("../../api/lookups", async () => {
           min_value: null,
           max_value: null,
           auto_include_keys: ["CASN"],
+          wizard_featured: false,
+          wizard_featured_order: 0,
         },
         {
           key: "CASN",
@@ -287,6 +301,8 @@ vi.mock("../../api/lookups", async () => {
           min_value: null,
           max_value: null,
           auto_include_keys: [],
+          wizard_featured: false,
+          wizard_featured_order: 0,
         },
         {
           key: "group",
@@ -305,6 +321,8 @@ vi.mock("../../api/lookups", async () => {
           min_value: null,
           max_value: null,
           auto_include_keys: [],
+          wizard_featured: false,
+          wizard_featured_order: 0,
         },
         {
           key: "plate",
@@ -323,6 +341,8 @@ vi.mock("../../api/lookups", async () => {
           min_value: null,
           max_value: null,
           auto_include_keys: [],
+          wizard_featured: false,
+          wizard_featured_order: 0,
         },
         {
           key: "dose",
@@ -341,6 +361,28 @@ vi.mock("../../api/lookups", async () => {
           min_value: null,
           max_value: null,
           auto_include_keys: [],
+          wizard_featured: false,
+          wizard_featured_order: 0,
+        },
+        {
+          key: "concentration",
+          label: "Concentration",
+          group: "Toxicology",
+          description: "Select for in vitro experiments.",
+          scope: "sample",
+          system_key: "concentration",
+          data_type: "float",
+          kind: "standard",
+          required: false,
+          is_core: false,
+          allow_null: true,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+          wizard_featured: false,
+          wizard_featured_order: 0,
         },
         {
           key: "i5_index",
@@ -359,6 +401,8 @@ vi.mock("../../api/lookups", async () => {
           min_value: null,
           max_value: null,
           auto_include_keys: [],
+          wizard_featured: false,
+          wizard_featured_order: 0,
         },
         {
           key: "i7_index",
@@ -395,6 +439,68 @@ vi.mock("../../api/lookups", async () => {
           min_value: null,
           max_value: null,
           auto_include_keys: [],
+          wizard_featured: false,
+          wizard_featured_order: 0,
+        },
+        {
+          key: "animal_cohort",
+          label: "Animal Cohort",
+          group: "Custom",
+          description: "Curated custom metadata field.",
+          scope: "sample",
+          system_key: "animal_cohort",
+          data_type: "string",
+          kind: "custom",
+          required: false,
+          is_core: false,
+          allow_null: true,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+          wizard_featured: true,
+          wizard_featured_order: 20,
+        },
+        {
+          key: "chip_batch",
+          label: "Chip Batch",
+          group: "Custom",
+          description: "Curated custom metadata field.",
+          scope: "sample",
+          system_key: "chip_batch",
+          data_type: "string",
+          kind: "custom",
+          required: false,
+          is_core: false,
+          allow_null: true,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+          wizard_featured: true,
+          wizard_featured_order: 10,
+        },
+        {
+          key: "d",
+          label: "d",
+          group: "Custom",
+          description: "Should not be featured.",
+          scope: "sample",
+          system_key: "d",
+          data_type: "string",
+          kind: "custom",
+          required: false,
+          is_core: false,
+          allow_null: true,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+          wizard_featured: false,
+          wizard_featured_order: 0,
         },
       ],
       lookups: {
@@ -449,6 +555,8 @@ vi.mock("../../api/metadataTemplates", async () => {
       custom_field_keys: string[];
       template_context?: {
         study_design_elements?: string[];
+        exposure_label_mode?: "dose" | "concentration" | "both" | "custom" | null;
+        exposure_custom_label?: string;
         treatment_vars?: string[];
         batch_vars?: string[];
       };
@@ -461,6 +569,26 @@ vi.mock("../../api/metadataTemplates", async () => {
       if (designElements.includes("chemical")) {
         columns.push("chemical");
         autoIncluded.push({ key: "chemical", reason: "chemical study design selected" });
+      }
+
+      if (designElements.includes("exposure")) {
+        const exposureMode = payload.template_context?.exposure_label_mode ?? "dose";
+        const customExposureLabel = (payload.template_context?.exposure_custom_label ?? "").trim().replace(/\s+/g, "_");
+        const exposureColumns =
+          exposureMode === "concentration"
+            ? ["concentration"]
+            : exposureMode === "both"
+              ? ["dose", "concentration"]
+              : exposureMode === "custom" && customExposureLabel
+                ? [customExposureLabel]
+                : ["dose"];
+
+        for (const key of exposureColumns) {
+          if (!columns.includes(key)) {
+            columns.push(key);
+            autoIncluded.push({ key, reason: "exposure level selected" });
+          }
+        }
       }
 
       for (const key of templateContext.treatment_vars ?? []) {
@@ -570,6 +698,8 @@ describe("StudyOnboardingWizard", () => {
       },
       template_context: {
         study_design_elements: [],
+        exposure_label_mode: null,
+        exposure_custom_label: "",
         treatment_vars: [],
         batch_vars: [],
         optional_field_keys: [],
@@ -713,6 +843,7 @@ describe("StudyOnboardingWizard", () => {
     renderWizard("/studies/11/onboarding?step=design");
 
     expect(await screen.findByRole("heading", { name: "Template design" })).toBeInTheDocument();
+    expect(screen.queryByText("Label exposure as")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Treatment vars")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Batch vars")).not.toBeInTheDocument();
 
@@ -722,6 +853,49 @@ describe("StudyOnboardingWizard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Batch/i }));
     expect(await screen.findByLabelText("Batch vars")).toBeInTheDocument();
+  });
+
+  it("reveals exposure label choices only when exposure level is selected", async () => {
+    renderWizard("/studies/11/onboarding?step=design");
+
+    expect(await screen.findByRole("heading", { name: "Template design" })).toBeInTheDocument();
+    expect(screen.queryByText("Label exposure as")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Exposure level/i }));
+
+    expect(await screen.findByText("Label exposure as")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Dose" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "Concentration" })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("radio", { name: "Both / mixed study" })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("radio", { name: "Custom" })).toHaveAttribute("aria-checked", "false");
+    expect(screen.queryByLabelText("Custom exposure label")).not.toBeInTheDocument();
+  });
+
+  it("allows switching the exposure label mode and entering a custom label", async () => {
+    renderWizard("/studies/11/onboarding?step=design");
+
+    fireEvent.click(await screen.findByRole("button", { name: /Exposure level/i }));
+    fireEvent.click(screen.getByRole("radio", { name: "Concentration" }));
+    expect(screen.getByRole("radio", { name: "Concentration" })).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+    expect(screen.getByLabelText("Custom exposure label")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Custom exposure label"), { target: { value: "Nominal concentration" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() =>
+      expect(patchStudyOnboardingState).toHaveBeenCalledWith(
+        11,
+        expect.objectContaining({
+          template_context: expect.objectContaining({
+            study_design_elements: expect.arrayContaining(["exposure"]),
+            exposure_label_mode: "custom",
+            exposure_custom_label: "Nominal concentration",
+          }),
+        }),
+      ),
+    );
   });
 
   it("requires treatment naming and supports multiple batch variables before continuing from template design", async () => {
@@ -750,9 +924,26 @@ describe("StudyOnboardingWizard", () => {
     expect(screen.getByText("operator")).toBeInTheDocument();
   });
 
+  it("requires a custom exposure label before continuing when custom mode is selected", async () => {
+    renderWizard("/studies/11/onboarding?step=design");
+
+    const continueButton = await screen.findByRole("button", { name: "Continue" });
+
+    fireEvent.click(screen.getByRole("button", { name: /Exposure level/i }));
+    fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+
+    expect(screen.getByLabelText("Custom exposure label")).toBeInTheDocument();
+    expect(continueButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Custom exposure label"), { target: { value: "Nominal concentration" } });
+    expect(continueButton).toBeEnabled();
+  });
+
   it("keeps sequencing mode out of finalize metadata and labels sequencing fields as identifiers", async () => {
     mockOnboardingState.template_context = {
       study_design_elements: ["chemical"],
+      exposure_label_mode: null,
+      exposure_custom_label: "",
       treatment_vars: ["group"],
       batch_vars: ["plate"],
       optional_field_keys: ["i5_index", "sequencing_mode"],
@@ -766,6 +957,61 @@ describe("StudyOnboardingWizard", () => {
     expect(screen.getByText("i7 index")).toBeInTheDocument();
     expect(screen.getByText("Well ID")).toBeInTheDocument();
     expect(screen.queryByText("Sequencing mode")).not.toBeInTheDocument();
+  });
+
+  it("limits common fields to the curated default set and keeps inline custom field entry", async () => {
+    renderWizard("/studies/11/onboarding?step=metadata");
+
+    expect(await screen.findByRole("heading", { name: "Finalize metadata" })).toBeInTheDocument();
+    expect(screen.getByText("Common fields")).toBeInTheDocument();
+    expect(screen.getByText("Additional fields")).toBeInTheDocument();
+    expect(screen.queryByTestId("template-field-checkbox-CASN")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add custom field/i })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Custom field name")).toBeInTheDocument();
+  });
+
+  it("shows only backend-featured custom chips ordered by featured order", async () => {
+    const lookups = await vi.mocked(fetchLookups).getMockImplementation()?.();
+    if (!lookups) {
+      throw new Error("Missing default lookup mock implementation.");
+    }
+    vi.mocked(fetchLookups).mockResolvedValueOnce(lookups);
+
+    renderWizard("/studies/11/onboarding?step=metadata");
+
+    expect(await screen.findByRole("heading", { name: "Finalize metadata" })).toBeInTheDocument();
+
+    const chipBatch = await screen.findByText("Chip Batch");
+    const animalCohort = await screen.findByText("Animal Cohort");
+
+    expect(chipBatch.compareDocumentPosition(animalCohort) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText("d")).not.toBeInTheDocument();
+  });
+
+  it("adds ad hoc custom fields inline without turning them into featured chips", async () => {
+    renderWizard("/studies/11/onboarding?step=metadata");
+
+    const input = await screen.findByLabelText("Custom field name");
+    fireEvent.change(input, { target: { value: "Dose note" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add field" }));
+
+    expect(await screen.findByText("Dose_note")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Dose note" })).not.toBeInTheDocument();
+  });
+
+  it("keeps showing selected columns when preview refresh fails after selecting an additional field chip", async () => {
+    renderWizard("/studies/11/onboarding?step=metadata");
+
+    expect(await screen.findByRole("heading", { name: "Finalize metadata" })).toBeInTheDocument();
+    expect(await screen.findByText("sample_ID")).toBeInTheDocument();
+
+    vi.mocked(previewMetadataTemplate).mockRejectedValueOnce(new Error("Bad gateway while refreshing preview."));
+
+    fireEvent.click(screen.getByRole("button", { name: "Chip Batch" }));
+
+    expect(await screen.findByText(/bad gateway while refreshing preview/i)).toBeInTheDocument();
+    expect(screen.queryByText("Template preview failed.")).not.toBeInTheDocument();
+    expect(screen.getByText("sample_ID")).toBeInTheDocument();
   });
 
   it("validates uploads against the finalized template without sequencing_mode", async () => {
@@ -809,8 +1055,12 @@ describe("StudyOnboardingWizard", () => {
     renderWizard("/studies/11/onboarding?step=finalize");
 
     expect(await screen.findByRole("heading", { name: "Review & finalize" })).toBeInTheDocument();
-    expect(await screen.findByText("Primary experimental variable: group")).toBeInTheDocument();
-    expect(screen.getByText("Primary batch variable: plate")).toBeInTheDocument();
+    expect(await screen.findByText("Primary analysis column")).toBeInTheDocument();
+    expect(screen.getByText("group")).toBeInTheDocument();
+    expect(screen.getByText("Batch column")).toBeInTheDocument();
+    expect(screen.getByText("plate")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Treatment level 1")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Treatment level 2")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Finalize onboarding/i }));
 

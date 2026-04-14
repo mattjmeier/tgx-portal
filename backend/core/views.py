@@ -222,6 +222,7 @@ class LookupViewSet(viewsets.ViewSet):
             scope=MetadataFieldDefinition.Scope.SAMPLE,
         ).exclude(key__in=EXCLUDED_TEMPLATE_FIELD_KEYS).order_by(
             "-required",
+            "wizard_featured_order",
             "group",
             "key",
             "id",
@@ -244,6 +245,8 @@ class LookupViewSet(viewsets.ViewSet):
                 "min_value": field.min_value,
                 "max_value": field.max_value,
                 "auto_include_keys": field.auto_include_keys,
+                "wizard_featured": field.wizard_featured,
+                "wizard_featured_order": field.wizard_featured_order,
             }
             for field in field_definitions
         ]
@@ -304,7 +307,7 @@ def _normalize_field_key(value: str) -> str:
     return value.strip().replace(" ", "_")
 
 
-def _upsert_study_template(study: Study, template_context: dict[str, list[str]]):
+def _upsert_study_template(study: Study, template_context: dict[str, object]):
     core_order = {
         "sample_ID": 0,
         "technical_control": 1,
@@ -341,7 +344,25 @@ def _upsert_study_template(study: Study, template_context: dict[str, list[str]])
         if reason is not None:
             auto_included.append({"key": key, "reason": reason})
 
+    exposure_custom_label = str(template_context.get("exposure_custom_label") or "").strip()
     for key in derived_optional_keys:
+        if key not in known_defs and exposure_custom_label and key == _normalize_field_key(exposure_custom_label):
+            definition = MetadataFieldDefinition.objects.create(
+                key=key,
+                label=exposure_custom_label,
+                group="Toxicology",
+                description="Exposure metadata field selected during onboarding.",
+                scope=MetadataFieldDefinition.Scope.SAMPLE,
+                system_key=key,
+                data_type=MetadataFieldDefinition.DataType.STRING,
+                kind=MetadataFieldDefinition.Kind.CUSTOM,
+                required=False,
+                is_core=False,
+                allow_null=True,
+                wizard_featured=False,
+                wizard_featured_order=0,
+            )
+            known_defs[key] = definition
         add_key(key)
 
     for raw_key in template_context.get("treatment_vars", []):
@@ -361,6 +382,8 @@ def _upsert_study_template(study: Study, template_context: dict[str, list[str]])
                 required=False,
                 is_core=False,
                 allow_null=True,
+                wizard_featured=False,
+                wizard_featured_order=0,
             )
             known_defs[key] = definition
         add_key(key, reason="primary experimental variable selected")
@@ -382,6 +405,8 @@ def _upsert_study_template(study: Study, template_context: dict[str, list[str]])
                 required=False,
                 is_core=False,
                 allow_null=True,
+                wizard_featured=False,
+                wizard_featured_order=0,
             )
             known_defs[key] = definition
         add_key(key, reason="primary batch variable selected")
@@ -414,6 +439,8 @@ def _upsert_study_template(study: Study, template_context: dict[str, list[str]])
                 required=False,
                 is_core=False,
                 allow_null=True,
+                wizard_featured=False,
+                wizard_featured_order=0,
             )
             known_defs[key] = definition
         add_key(key)

@@ -53,3 +53,14 @@ class ResetSeedDataCommandTests(TestCase):
         self.assertIn("project_title: Aflatoxin Response Study", config_yaml)
         self.assertTrue(metadata_tsv.startswith("sample_ID\tsample_name\tgroup\tdose\tplate\tsolvent_control"))
         self.assertIn("C_2D\t1uM_2D", contrasts_tsv)
+
+    def test_seeded_onboarding_state_includes_current_template_context(self) -> None:
+        call_command("reset_seed_data")
+
+        state = StudyOnboardingState.objects.select_related("study").get(study__title="AFB1 2D dose response")
+
+        self.assertEqual(state.status, StudyOnboardingState.Status.FINAL)
+        self.assertEqual(state.template_context["study_design_elements"], ["exposure", "treatment", "batch"])
+        self.assertEqual(state.template_context["exposure_label_mode"], "dose")
+        self.assertEqual(state.template_context["treatment_vars"], ["group"])
+        self.assertEqual(state.template_context["batch_vars"], ["plate"])

@@ -79,7 +79,9 @@ def test_onboarding_state_persists_template_mappings_and_config_before_finalize(
         f"/api/studies/{study.id}/onboarding-state/",
         {
             "template_context": {
-                "study_design_elements": ["dose", "treatment"],
+                "study_design_elements": ["exposure", "treatment"],
+                "exposure_label_mode": "both",
+                "exposure_custom_label": "",
                 "treatment_vars": ["group"],
                 "batch_vars": ["plate"],
                 "optional_field_keys": ["group"],
@@ -105,8 +107,10 @@ def test_onboarding_state_persists_template_mappings_and_config_before_finalize(
     assert "group" in patch_response.json()["template_columns"]
     assert "plate" in patch_response.json()["template_columns"]
     assert "dose" in patch_response.json()["template_columns"]
+    assert "concentration" in patch_response.json()["template_columns"]
     assert patch_response.json()["mappings"]["treatment_level_1"] == "group"
-    assert patch_response.json()["template_context"]["study_design_elements"] == ["dose", "treatment"]
+    assert patch_response.json()["template_context"]["study_design_elements"] == ["exposure", "treatment"]
+    assert patch_response.json()["template_context"]["exposure_label_mode"] == "both"
     assert patch_response.json()["config"]["common"]["platform"] == "RNA-Seq"
     assert patch_response.json()["config"]["common"]["instrument_model"] == "Illumina NovaSeq 6000"
     assert patch_response.json()["config"]["common"]["sequenced_by"] == "HC Genomics lab"
@@ -124,6 +128,7 @@ def test_onboarding_state_persists_template_mappings_and_config_before_finalize(
                     "solvent_control": True,
                     "group": "control",
                     "dose": 0,
+                    "concentration": 0,
                     "plate": "plate-1",
                 },
             ],
@@ -190,6 +195,60 @@ def test_onboarding_finalize_rejects_missing_required_template_context_choices()
     messages = [item["message"] for item in response.json()["errors"]]
     assert "Add at least one treatment variable before finalizing onboarding." in messages
     assert "Add at least one batch variable before finalizing onboarding." in messages
+
+
+@pytest.mark.django_db
+def test_onboarding_finalize_requires_custom_exposure_label_when_custom_mode_is_selected() -> None:
+    client = APIClient()
+    user = User.objects.create_user(username="admin", password="admin123")
+    user.profile.role = UserProfile.Role.ADMIN
+    user.profile.save()
+    client.force_authenticate(user=user)
+
+    project = Project.objects.create(
+        owner=user,
+        pi_name="Dr. Curie",
+        researcher_name="Researcher A",
+        bioinformatician_assigned="Bioinfo",
+        title="Mercury tox study",
+        description="",
+    )
+    study = Study.objects.create(project=project, title="Study", species=Study.Species.HUMAN, celltype="Hepatocyte")
+
+    client.patch(
+        f"/api/studies/{study.id}/onboarding-state/",
+        {
+            "template_context": {
+                "study_design_elements": ["exposure", "treatment"],
+                "exposure_label_mode": "custom",
+                "exposure_custom_label": "",
+                "treatment_vars": ["group"],
+                "batch_vars": [],
+                "optional_field_keys": [],
+                "custom_field_keys": [],
+            },
+            "mappings": {"treatment_level_1": "group"},
+            "config": {
+                "common": {
+                    "platform": "RNA-Seq",
+                    "instrument_model": "Illumina NovaSeq 6000",
+                    "sequenced_by": "HC Genomics lab",
+                },
+                "pipeline": {"mode": "se", "threads": 8},
+                "qc": {},
+                "deseq2": {"cpus": 4},
+            },
+        },
+        format="json",
+    )
+
+    response = client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
+
+    assert response.status_code == 400
+    assert {
+        "field": "template_context.exposure_custom_label",
+        "message": "Provide a custom exposure label before finalizing onboarding.",
+    } in response.json()["errors"]
 
 
 @pytest.mark.django_db
@@ -287,7 +346,9 @@ def test_generate_config_is_blocked_until_onboarding_is_final() -> None:
         f"/api/studies/{study.id}/onboarding-state/",
         {
             "template_context": {
-                "study_design_elements": ["dose", "treatment", "batch"],
+                "study_design_elements": ["exposure", "treatment", "batch"],
+                "exposure_label_mode": "dose",
+                "exposure_custom_label": "",
                 "treatment_vars": ["group"],
                 "batch_vars": ["plate"],
                 "optional_field_keys": ["group"],

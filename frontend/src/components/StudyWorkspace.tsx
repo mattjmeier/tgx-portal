@@ -43,6 +43,17 @@ function parseTab(value: string | null): StudyWorkspaceTab {
   return "samples";
 }
 
+function getSampleMetadataString(sample: Sample | null, key: string, fallback = "Not provided"): string {
+  if (!sample) {
+    return fallback;
+  }
+  const value = sample.metadata?.[key];
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+  return String(value);
+}
+
 export function StudyWorkspace() {
   const queryClient = useQueryClient();
   const auth = useAuth();
@@ -156,7 +167,7 @@ export function StudyWorkspace() {
     () =>
       selectedSample
         ? [
-            { label: "Long chemical name", value: selectedSample.chemical_longname || "Not provided" },
+            { label: "Long chemical name", value: getSampleMetadataString(selectedSample, "chemical_longname") },
             { label: "Technical control", value: selectedSample.technical_control ? "Yes" : "No" },
             { label: "Reference RNA", value: selectedSample.reference_rna ? "Yes" : "No" },
             { label: "Solvent control", value: selectedSample.solvent_control ? "Yes" : "No" },
@@ -302,13 +313,13 @@ export function StudyWorkspace() {
 
                       <div className="flex flex-wrap gap-2">
                         <Badge className="rounded-full px-3 py-1 text-sm" variant="secondary">
-                          Group: {selectedSample.group}
+                          Group: {getSampleMetadataString(selectedSample, "group", "—")}
                         </Badge>
                         <Badge className="rounded-full px-3 py-1 text-sm" variant="secondary">
-                          Dose: {selectedSample.dose}
+                          Dose: {getSampleMetadataString(selectedSample, "dose", "—")}
                         </Badge>
                         <Badge className="rounded-full px-3 py-1 text-sm" variant="secondary">
-                          Chemical: {selectedSample.chemical || "None"}
+                          Chemical: {getSampleMetadataString(selectedSample, "chemical", "None")}
                         </Badge>
                       </div>
 

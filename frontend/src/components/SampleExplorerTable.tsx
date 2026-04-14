@@ -31,6 +31,14 @@ type SampleExplorerTableProps = {
   onSelectSample: (sample: Sample) => void;
 };
 
+function getMetadataValue(sample: Sample, key: string): string {
+  const value = sample.metadata?.[key];
+  if (value === undefined || value === null || value === "") {
+    return "—";
+  }
+  return String(value);
+}
+
 const columns: ColumnDef<Sample>[] = [
   {
     accessorKey: "sample_ID",
@@ -43,14 +51,14 @@ const columns: ColumnDef<Sample>[] = [
     cell: (info) => info.getValue(),
   },
   {
-    accessorKey: "group",
+    id: "group",
     header: "Group",
-    cell: (info) => info.getValue(),
+    cell: ({ row }) => getMetadataValue(row.original, "group"),
   },
   {
-    accessorKey: "dose",
+    id: "dose",
     header: "Dose",
-    cell: (info) => info.getValue(),
+    cell: ({ row }) => getMetadataValue(row.original, "dose"),
   },
   {
     id: "controls",

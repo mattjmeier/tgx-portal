@@ -776,6 +776,43 @@ def ensure_seed_users() -> dict[str, User]:
     return users
 
 
+def _build_seed_template_context(seed_study: SeedStudy) -> dict[str, object]:
+    metadata_columns = set(seed_study.metadata_columns)
+    study_design_elements: list[str] = []
+
+    if "chemical" in metadata_columns:
+        study_design_elements.append("chemical")
+    if "dose" in metadata_columns or "concentration" in metadata_columns:
+        study_design_elements.append("exposure")
+    if "timepoint" in metadata_columns:
+        study_design_elements.append("timepoint")
+    if seed_study.treatment_var:
+        study_design_elements.append("treatment")
+    if seed_study.batch_var:
+        study_design_elements.append("batch")
+
+    exposure_label_mode: str | None = None
+    if "dose" in metadata_columns and "concentration" in metadata_columns:
+        exposure_label_mode = "both"
+    elif "concentration" in metadata_columns:
+        exposure_label_mode = "concentration"
+    elif "dose" in metadata_columns:
+        exposure_label_mode = "dose"
+
+    treatment_level_1 = seed_study.mappings.get("treatment_level_1", "")
+    batch = seed_study.mappings.get("batch", "")
+
+    return {
+        "study_design_elements": study_design_elements,
+        "exposure_label_mode": exposure_label_mode,
+        "exposure_custom_label": "",
+        "treatment_vars": [treatment_level_1] if treatment_level_1 else ([seed_study.treatment_var] if seed_study.treatment_var else []),
+        "batch_vars": [batch] if batch else ([seed_study.batch_var] if seed_study.batch_var else []),
+        "optional_field_keys": [],
+        "custom_field_keys": [],
+    }
+
+
 @transaction.atomic
 def reset_seed_data() -> dict[str, int]:
     users = ensure_seed_users()
@@ -850,6 +887,7 @@ def reset_seed_data() -> dict[str, int]:
                 status=StudyOnboardingState.Status.FINAL,
                 metadata_columns=seed_study.metadata_columns,
                 mappings=seed_study.mappings,
+                template_context=_build_seed_template_context(seed_study),
                 suggested_contrasts=[
                     {"comparison_group": pair[0], "reference_group": pair[1]}
                     for pair in seed_study.selected_contrasts

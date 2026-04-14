@@ -106,7 +106,7 @@ describe("StudiesPage", () => {
       "href",
       "/studies/11/onboarding",
     );
-    expect(screen.getAllByRole("link", { name: /edit study/i })).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: /review onboarding for study/i })).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: /delete study/i }).length).toBeGreaterThan(0);
   });
 

@@ -65,13 +65,15 @@ export function SampleForm({ studyId }: SampleFormProps) {
       sample_ID: formState.sample_ID,
       sample_name: formState.sample_name,
       description: formState.description,
-      group: formState.group,
-      chemical: formState.chemical,
-      chemical_longname: formState.chemical_longname,
-      dose: doseValue,
       technical_control: formState.technical_control,
       reference_rna: formState.reference_rna,
       solvent_control: formState.solvent_control,
+      metadata: {
+        group: formState.group,
+        chemical: formState.chemical,
+        chemical_longname: formState.chemical_longname,
+        dose: doseValue,
+      },
     });
   }
 

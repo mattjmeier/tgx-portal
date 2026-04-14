@@ -396,9 +396,11 @@ class MetadataFieldDefinition(models.Model):
     max_value = models.FloatField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     auto_include_keys = models.JSONField(default=list, blank=True)
+    wizard_featured = models.BooleanField(default=False)
+    wizard_featured_order = models.PositiveIntegerField(default=0)
 
     class Meta:
-        ordering = ["required", "group", "key", "id"]
+        ordering = ["required", "wizard_featured_order", "group", "key", "id"]
 
     def __str__(self) -> str:
         return self.key

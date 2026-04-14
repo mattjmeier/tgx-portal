@@ -84,10 +84,14 @@ describe("StudyCreatePage", () => {
 
     expect(await screen.findByRole("combobox", { name: /collaboration/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /choose a collaboration first/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /enter the onboarding wizard/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /definitions/i })).toBeInTheDocument();
     expect(screen.getByText(/new study onboarding/i)).toBeInTheDocument();
+    expect(screen.getByText(/select a collaboration to enable study creation/i)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /back to collaborations/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /species/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("textbox", { name: /study title/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /study title/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /create study/i })).toBeDisabled();
   });
 
   it("renders the onboarding entry step immediately when opened from an active collaboration", async () => {
@@ -95,7 +99,7 @@ describe("StudyCreatePage", () => {
 
     expect(await screen.findByText(/enter the onboarding wizard/i)).toBeInTheDocument();
     expect(screen.getByText(/title is the only field needed here/i)).toBeInTheDocument();
-    expect(screen.getByText(/you are starting a study under/i)).toBeInTheDocument();
+    expect(await screen.findByText(/you are starting a study under/i, { selector: "p" })).toBeInTheDocument();
     expect(screen.getAllByText(/mercury tox study/i).length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: /back to collaboration/i })).not.toBeInTheDocument();
     const definitionsHeading = screen.getByRole("heading", { name: /definitions/i });
@@ -108,7 +112,7 @@ describe("StudyCreatePage", () => {
     expect(definitions.queryByText(/^cell type$/i)).not.toBeInTheDocument();
     expect(definitions.queryByText(/^treatment variable$/i)).not.toBeInTheDocument();
     expect(definitions.queryByText(/^batch variable$/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: /collaboration/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /collaboration/i })).toBeDisabled();
     expect(screen.getByRole("textbox", { name: /study title/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /create study/i })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /species/i })).not.toBeInTheDocument();
@@ -119,7 +123,7 @@ describe("StudyCreatePage", () => {
 
     expect(await screen.findByRole("textbox", { name: /study title/i })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /study title/i })).toBeInTheDocument();
-    expect(screen.getByText(/you are starting a study under/i)).toBeInTheDocument();
+    expect(await screen.findByText(/you are starting a study under/i, { selector: "p" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /back to collaborations/i })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /definitions/i })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /species/i })).not.toBeInTheDocument();

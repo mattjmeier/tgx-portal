@@ -9,6 +9,8 @@ export type ContrastPair = {
 
 export type StudyTemplateContext = {
   study_design_elements: string[];
+  exposure_label_mode: "dose" | "concentration" | "both" | "custom" | null;
+  exposure_custom_label: string;
   treatment_vars: string[];
   batch_vars: string[];
   optional_field_keys: string[];

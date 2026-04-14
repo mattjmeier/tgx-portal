@@ -302,6 +302,51 @@ class ConfigGenerationApiTests(TestCase):
             ],
         )
 
+    def test_generate_config_returns_zip_file_without_assays(self) -> None:
+        Assay.objects.all().delete()
+
+        response = self.client.post(f"/api/projects/{self.project.id}/generate-config/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/zip")
+
+        with ZipFile(BytesIO(response.content)) as archive:
+            config_yaml = archive.read("config_generation_study/config.yaml").decode("utf-8")
+            metadata_tsv = archive.read("config_generation_study/metadata.tsv").decode("utf-8")
+            contrasts_tsv = archive.read("config_generation_study/contrasts.tsv").decode("utf-8")
+
+        self.assertIn("platform: RNA-Seq", config_yaml)
+        self.assertIn("sample_ID", metadata_tsv)
+        self.assertIn("reference_group\tcomparison_group", contrasts_tsv)
+
+    def test_generate_config_accepts_legacy_list_selected_contrasts(self) -> None:
+        mapping = self.study.metadata_mapping
+        mapping.selected_contrasts = [["treated", "control"]]
+        mapping.save(update_fields=["selected_contrasts"])
+
+        response = self.client.post(f"/api/projects/{self.project.id}/generate-config/")
+
+        self.assertEqual(response.status_code, 200)
+
+        with ZipFile(BytesIO(response.content)) as archive:
+            contrasts_tsv = archive.read("config_generation_study/contrasts.tsv").decode("utf-8")
+
+        self.assertIn("reference_group\tcomparison_group", contrasts_tsv)
+        self.assertIn("control\ttreated", contrasts_tsv)
+
+    def test_generate_config_rejects_invalid_selected_contrasts_shape(self) -> None:
+        mapping = self.study.metadata_mapping
+        mapping.selected_contrasts = [["treated"]]
+        mapping.save(update_fields=["selected_contrasts"])
+
+        response = self.client.post(f"/api/projects/{self.project.id}/generate-config/")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["detail"],
+            f"Study {self.study.id} has invalid selected contrasts data. Re-save the contrasts and retry.",
+        )
+
     def test_generate_config_rejects_mixed_platforms(self) -> None:
         Assay.objects.create(
             sample=self.sample_control,

@@ -40,11 +40,12 @@ import {
   CardTitle,
 } from "../ui/card";
 import { Checkbox } from "../ui/checkbox";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
+import { cn } from "../../lib/utils";
 import { studiesIndexPath } from "../../lib/routes";
 import { clearDeletedStudyClientState, onboardingDraftStorageKey } from "../../lib/studyDeletion";
 
@@ -136,6 +137,8 @@ type OnboardingDraftV7 = Omit<OnboardingDraftV6, "version"> & {
   version: 7;
 };
 
+type ExposureLabelMode = StudyTemplateContext["exposure_label_mode"];
+
 type ChipSelectOrAddProps = {
   label: string;
   description: string;
@@ -154,9 +157,9 @@ const STUDY_DESIGN_OPTIONS = [
     description: "Include chemical metadata and CAS compatibility columns.",
   },
   {
-    key: "dose",
-    label: "Dose",
-    description: "Include dose metadata for toxicology studies.",
+    key: "exposure",
+    label: "Exposure level",
+    description: "Include exposure metadata and choose whether it should be labeled as dose, concentration, both, or a custom term.",
   },
   {
     key: "timepoint",
@@ -177,7 +180,6 @@ const STUDY_DESIGN_OPTIONS = [
 
 const STUDY_DESIGN_FIELD_MAP: Record<string, string[]> = {
   chemical: ["chemical"],
-  dose: ["dose"],
   timepoint: ["timepoint"],
   treatment: [],
   batch: [],
@@ -185,6 +187,22 @@ const STUDY_DESIGN_FIELD_MAP: Record<string, string[]> = {
 
 const SEQUENCING_FIELD_KEYS = ["i5_index", "i7_index", "well_id"] as const;
 const STANDARD_UI_FIELD_KEYS = new Set<string>(["timepoint"]);
+const COMMON_OPTIONAL_FIELD_KEYS = new Set<string>([
+  "sample_name",
+  "group",
+  "chemical",
+  "dose",
+  "plate",
+]);
+const EXPOSURE_LABEL_OPTIONS: Array<{
+  value: NonNullable<ExposureLabelMode>;
+  label: string;
+}> = [
+  { value: "dose", label: "Dose" },
+  { value: "concentration", label: "Concentration" },
+  { value: "both", label: "Both / mixed study" },
+  { value: "custom", label: "Custom" },
+];
 const FIELD_DESCRIPTION_OVERRIDES: Record<string, string> = {
   concentration: "Select for in vitro experiments.",
   dose: "Select for in vivo experiments.",
@@ -252,6 +270,8 @@ function draftStorageKey(studyId: number) {
 function createEmptyTemplateContext(): StudyTemplateContext {
   return {
     study_design_elements: [],
+    exposure_label_mode: null,
+    exposure_custom_label: "",
     treatment_vars: [],
     batch_vars: [],
     optional_field_keys: [],
@@ -330,6 +350,88 @@ function normalizeValueList(values: string[]): string[] {
   return normalized;
 }
 
+function normalizeExposureCustomLabel(value: string): string {
+  return value.trim();
+}
+
+function normalizeTemplateContext(context: Partial<StudyTemplateContext> | null | undefined): StudyTemplateContext {
+  const base = createEmptyTemplateContext();
+  const rawDesignElements = normalizeValueList(context?.study_design_elements ?? []);
+  const hasLegacyDose = rawDesignElements.includes("dose");
+  const hasLegacyConcentration = rawDesignElements.includes("concentration");
+  let studyDesignElements = rawDesignElements
+    .filter((value) => value !== "dose" && value !== "concentration")
+    .map((value) => value);
+  if (hasLegacyDose || hasLegacyConcentration) {
+    studyDesignElements = normalizeValueList([...studyDesignElements, "exposure"]);
+  }
+  const hasExposure = studyDesignElements.includes("exposure");
+  const requestedMode = context?.exposure_label_mode
+    ?? (hasLegacyDose && hasLegacyConcentration
+      ? "both"
+      : hasLegacyConcentration
+        ? "concentration"
+        : hasLegacyDose
+          ? "dose"
+          : null);
+  const exposureLabelMode: ExposureLabelMode = hasExposure
+    ? requestedMode === "concentration" || requestedMode === "both" || requestedMode === "custom" || requestedMode === "dose"
+      ? requestedMode
+      : "dose"
+    : null;
+  const exposureCustomLabel = hasExposure && exposureLabelMode === "custom"
+    ? normalizeExposureCustomLabel(context?.exposure_custom_label ?? "")
+    : "";
+
+  if (!hasExposure) {
+    studyDesignElements = studyDesignElements.filter((value) => value !== "exposure");
+  }
+
+  return {
+    ...base,
+    ...context,
+    study_design_elements: studyDesignElements,
+    exposure_label_mode: exposureLabelMode,
+    exposure_custom_label: exposureCustomLabel,
+    treatment_vars: normalizeValueList(context?.treatment_vars ?? []),
+    batch_vars: normalizeValueList(context?.batch_vars ?? []),
+    optional_field_keys: normalizeValueList(context?.optional_field_keys ?? []),
+    custom_field_keys: normalizeValueList(context?.custom_field_keys ?? []),
+  };
+}
+
+function getExposureFieldKeys(context: StudyTemplateContext): string[] {
+  if (!context.study_design_elements.includes("exposure")) {
+    return [];
+  }
+  if (context.exposure_label_mode === "concentration") {
+    return ["concentration"];
+  }
+  if (context.exposure_label_mode === "both") {
+    return ["dose", "concentration"];
+  }
+  if (context.exposure_label_mode === "custom" && context.exposure_custom_label) {
+    return [context.exposure_custom_label];
+  }
+  return ["dose"];
+}
+
+function getStudyDesignElementLabel(element: string, context: StudyTemplateContext): string {
+  if (element !== "exposure") {
+    return STUDY_DESIGN_OPTIONS.find((option) => option.key === element)?.label ?? element;
+  }
+  if (context.exposure_label_mode === "concentration") {
+    return "Exposure level (Concentration)";
+  }
+  if (context.exposure_label_mode === "both") {
+    return "Exposure level (Dose + concentration)";
+  }
+  if (context.exposure_label_mode === "custom" && context.exposure_custom_label) {
+    return `Exposure level (${context.exposure_custom_label})`;
+  }
+  return "Exposure level (Dose)";
+}
+
 function migrateDraftV4ToV5(draft: LegacyOnboardingDraftV4): OnboardingDraftV5 {
   const next = createDefaultDraft(draft.studyId);
   return {
@@ -340,13 +442,12 @@ function migrateDraftV4ToV5(draft: LegacyOnboardingDraftV4): OnboardingDraftV5 {
     template: {
       species: draft.template.species,
       celltype: draft.template.celltype,
-      context: {
-        ...createEmptyTemplateContext(),
+      context: normalizeTemplateContext({
         treatment_vars: normalizeValueList(draft.template.treatmentVar ? [draft.template.treatmentVar] : []),
         batch_vars: normalizeValueList(draft.template.batchVar ? [draft.template.batchVar] : []),
         optional_field_keys: normalizeValueList(draft.template.optionalFieldKeys),
         custom_field_keys: normalizeValueList(draft.template.customFieldKeys),
-      },
+      }),
     },
     upload: draft.upload,
     mappings: draft.mappings,
@@ -360,7 +461,10 @@ function migrateDraftV5ToV6(draft: OnboardingDraftV5): OnboardingDraftV6 {
     version: 6,
     updatedAt: draft.updatedAt,
     details: draft.details,
-    template: draft.template,
+    template: {
+      ...draft.template,
+      context: normalizeTemplateContext(draft.template.context),
+    },
     config: next.config,
     upload: draft.upload,
     mappings: draft.mappings,
@@ -375,7 +479,10 @@ function migrateDraftV6ToV7(draft: OnboardingDraftV6): OnboardingDraftV7 {
     updatedAt: draft.updatedAt,
     attempts: draft.attempts,
     details: draft.details,
-    template: draft.template,
+    template: {
+      ...draft.template,
+      context: normalizeTemplateContext(draft.template.context),
+    },
     config: draft.config ?? next.config,
     upload: draft.upload,
     mappings: draft.mappings,
@@ -394,7 +501,14 @@ function loadDraft(studyId: number): OnboardingDraftV7 {
       return migrateDraftV6ToV7(createDefaultDraft(studyId));
     }
     if ((parsed as { version?: unknown }).version === 7) {
-      return parsed as OnboardingDraftV7;
+      const draft = parsed as OnboardingDraftV7;
+      return {
+        ...draft,
+        template: {
+          ...draft.template,
+          context: normalizeTemplateContext(draft.template.context),
+        },
+      };
     }
     if ((parsed as { version?: unknown }).version === 6) {
       return migrateDraftV6ToV7(parsed as OnboardingDraftV6);
@@ -419,6 +533,8 @@ function saveDraft(draft: OnboardingDraftV7) {
 function isTemplateContextEmpty(context: StudyTemplateContext): boolean {
   return (
     context.study_design_elements.length === 0 &&
+    !context.exposure_label_mode &&
+    context.exposure_custom_label.length === 0 &&
     context.treatment_vars.length === 0 &&
     context.batch_vars.length === 0 &&
     context.optional_field_keys.length === 0 &&
@@ -445,6 +561,11 @@ function getDerivedOptionalFieldKeys(
       }
     }
   }
+  for (const key of getExposureFieldKeys(context)) {
+    if (available.has(key) && !derived.includes(key)) {
+      derived.push(key);
+    }
+  }
   for (const key of context.treatment_vars) {
     if (available.has(key) && !derived.includes(key)) {
       derived.push(key);
@@ -465,6 +586,8 @@ function areStringListsEqual(left: string[], right: string[]): boolean {
 function areTemplateContextsEqual(left: StudyTemplateContext, right: StudyTemplateContext): boolean {
   return (
     areStringListsEqual(left.study_design_elements, right.study_design_elements) &&
+    left.exposure_label_mode === right.exposure_label_mode &&
+    left.exposure_custom_label === right.exposure_custom_label &&
     areStringListsEqual(left.treatment_vars, right.treatment_vars) &&
     areStringListsEqual(left.batch_vars, right.batch_vars) &&
     areStringListsEqual(left.optional_field_keys, right.optional_field_keys) &&
@@ -657,43 +780,35 @@ function CustomFieldAdder({ suggestions, existingValues, onAdd }: CustomFieldAdd
   }
 
   return (
-    <Collapsible className="rounded-xl border border-dashed border-border/70 bg-background p-3">
-      <CollapsibleTrigger asChild>
-        <Button type="button" variant="secondary">
+    <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border/70 bg-background p-3">
+      <div className="space-y-2">
+        <Label htmlFor="custom-field-name">Custom field name</Label>
+        <Input
+          id="custom-field-name"
+          list="custom-field-suggestions"
+          value={draftValue}
+          placeholder="Add a study-specific field"
+          onChange={(event) => setDraftValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              handleAdd();
+            }
+          }}
+        />
+        <datalist id="custom-field-suggestions">
+          {suggestions.map((suggestion) => (
+            <option key={suggestion} value={suggestion} />
+          ))}
+        </datalist>
+      </div>
+      <div className="flex justify-start">
+        <Button type="button" onClick={handleAdd}>
           <Plus className="h-4 w-4" />
-          Add custom field
+          Add field
         </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="mt-3 flex flex-col gap-3">
-        <div className="space-y-2">
-          <Label htmlFor="custom-field-name">Custom field name</Label>
-          <Input
-            id="custom-field-name"
-            list="custom-field-suggestions"
-            value={draftValue}
-            placeholder="Add a study-specific field"
-            onChange={(event) => setDraftValue(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                handleAdd();
-              }
-            }}
-          />
-          <datalist id="custom-field-suggestions">
-            {suggestions.map((suggestion) => (
-              <option key={suggestion} value={suggestion} />
-            ))}
-          </datalist>
-        </div>
-        <div className="flex justify-start">
-          <Button type="button" onClick={handleAdd}>
-            <Plus className="h-4 w-4" />
-            Add field
-          </Button>
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+      </div>
+    </div>
   );
 }
 
@@ -827,7 +942,9 @@ export function StudyOnboardingWizard() {
       ...current,
       template: {
         ...current.template,
-        context: hasLocalTemplateContext ? current.template.context : onboardingStateQuery.data.template_context,
+        context: hasLocalTemplateContext
+          ? normalizeTemplateContext(current.template.context)
+          : normalizeTemplateContext(onboardingStateQuery.data.template_context),
       },
       config: hasLocalConfig ? current.config : onboardingStateQuery.data.config,
       upload: {
@@ -983,47 +1100,64 @@ export function StudyOnboardingWizard() {
   const optionalStandardFields = fieldDefinitions.filter(
     (field) => !field.required && (field.kind === "standard" || STANDARD_UI_FIELD_KEYS.has(field.key)),
   );
-  const optionalCustomFields = fieldDefinitions.filter(
-    (field) => !field.required && field.kind === "custom" && !STANDARD_UI_FIELD_KEYS.has(field.key),
-  );
+  const optionalCustomFields = fieldDefinitions
+    .filter(
+      (field) =>
+        !field.required &&
+        field.kind === "custom" &&
+        field.wizard_featured &&
+        !STANDARD_UI_FIELD_KEYS.has(field.key),
+    )
+    .sort(
+      (left, right) =>
+        left.wizard_featured_order - right.wizard_featured_order ||
+        left.label.localeCompare(right.label) ||
+        left.key.localeCompare(right.key),
+    );
   const fieldDefinitionsByKey = new Map(fieldDefinitions.map((field) => [field.key, field]));
   const metadataColumnSuggestions = normalizeValueList([
     ...fieldDefinitions.map((field) => field.key),
     ...draft.upload.metadataColumns,
   ]);
+  const templateContext = normalizeTemplateContext(draft.template.context);
 
-  const derivedOptionalFieldKeys = getDerivedOptionalFieldKeys(draft.template.context, fieldDefinitions);
+  const derivedOptionalFieldKeys = getDerivedOptionalFieldKeys(templateContext, fieldDefinitions);
   const effectiveOptionalFieldKeys = normalizeValueList([
     ...derivedOptionalFieldKeys,
-    ...draft.template.context.optional_field_keys,
+    ...templateContext.optional_field_keys,
   ]);
   const stagedColumnsFallback = normalizeValueList([
     ...requiredFields.map((field) => field.key),
+    ...getExposureFieldKeys(templateContext),
     ...effectiveOptionalFieldKeys,
-    ...draft.template.context.custom_field_keys,
+    ...templateContext.custom_field_keys,
   ]);
 
   const templatePreviewQuery = useQuery({
     queryKey: [
       "metadata-template-preview",
       studyId,
-      draft.template.context.study_design_elements,
-      draft.template.context.treatment_vars,
-      draft.template.context.batch_vars,
-      draft.template.context.optional_field_keys,
-      draft.template.context.custom_field_keys,
+      templateContext.study_design_elements,
+      templateContext.exposure_label_mode,
+      templateContext.exposure_custom_label,
+      templateContext.treatment_vars,
+      templateContext.batch_vars,
+      templateContext.optional_field_keys,
+      templateContext.custom_field_keys,
     ],
     queryFn: () =>
       previewMetadataTemplate({
         study_id: studyId,
-        optional_field_keys: draft.template.context.optional_field_keys,
-        custom_field_keys: draft.template.context.custom_field_keys,
-        template_context: draft.template.context,
+        optional_field_keys: templateContext.optional_field_keys,
+        custom_field_keys: templateContext.custom_field_keys,
+        template_context: templateContext,
       }),
     enabled: studyId !== null && !!lookupsQuery.data,
   });
 
   const stagedColumns = templatePreviewQuery.data?.columns ?? stagedColumnsFallback;
+  const templatePreviewErrorMessage =
+    templatePreviewQuery.error instanceof Error ? templatePreviewQuery.error.message : "Template preview failed.";
   const metadataColumns =
     draft.upload.metadataColumns.length > 0
       ? draft.upload.metadataColumns
@@ -1033,7 +1167,6 @@ export function StudyOnboardingWizard() {
       ? draft.upload.suggestedContrasts
       : onboardingStateQuery.data?.suggested_contrasts ?? [];
   const onboardingStatus: StudyOnboardingStatus = onboardingStateQuery.data?.status ?? "draft";
-  const templateContext = draft.template.context;
   const defaultTreatmentMapping =
     templateContext.treatment_vars[0] && metadataColumns.includes(templateContext.treatment_vars[0])
       ? templateContext.treatment_vars[0]
@@ -1044,9 +1177,17 @@ export function StudyOnboardingWizard() {
       : "";
   const effectivePrimaryTreatmentMapping = draft.mappings.treatment_level_1 || defaultTreatmentMapping;
   const effectivePrimaryBatchMapping = draft.mappings.batch || defaultBatchMapping;
-  const batchSelectValue = effectivePrimaryBatchMapping ? effectivePrimaryBatchMapping : "__none__";
+  const additionalTreatmentMappings = [
+    draft.mappings.treatment_level_2,
+    draft.mappings.treatment_level_3,
+    draft.mappings.treatment_level_4,
+    draft.mappings.treatment_level_5,
+  ].filter((value) => value.trim().length > 0);
   const designStepBlocked =
     templateContext.study_design_elements.length === 0 ||
+    (templateContext.study_design_elements.includes("exposure") &&
+      templateContext.exposure_label_mode === "custom" &&
+      templateContext.exposure_custom_label.length === 0) ||
     (templateContext.study_design_elements.includes("treatment") && templateContext.treatment_vars.length === 0) ||
     (templateContext.study_design_elements.includes("batch") && templateContext.batch_vars.length === 0);
   const canDownloadTemplate =
@@ -1070,8 +1211,8 @@ export function StudyOnboardingWizard() {
     draft.template.celltype.trim() === (studyQuery.data?.celltype ?? "").trim() &&
     JSON.stringify(draft.config) === JSON.stringify(onboardingStateQuery.data?.config ?? createDefaultDraft(studyId).config);
   const templateStepSaved = areTemplateContextsEqual(
-    draft.template.context,
-    onboardingStateQuery.data?.template_context ?? createEmptyTemplateContext(),
+    templateContext,
+    normalizeTemplateContext(onboardingStateQuery.data?.template_context ?? createEmptyTemplateContext()),
   );
   const uploadStepComplete = metadataColumns.length > 0;
   const uploadStepSaved = uploadStepComplete;
@@ -1113,23 +1254,28 @@ export function StudyOnboardingWizard() {
   };
   const sequencingFieldKeySet = new Set<string>(SEQUENCING_FIELD_KEYS);
   const sequencingFields = optionalStandardFields.filter((field) => sequencingFieldKeySet.has(field.key));
-  const additionalStandardFields = optionalStandardFields.filter((field) => !sequencingFieldKeySet.has(field.key));
-  const additionalStandardGroups = additionalStandardFields.reduce<Record<string, MetadataFieldDefinition[]>>(
-    (acc, field) => {
-      const group = field.group || "Other";
-      acc[group] = acc[group] ? [...acc[group], field] : [field];
-      return acc;
-    },
-    {},
+  const commonFieldKeys = new Set<string>([
+    ...Array.from(COMMON_OPTIONAL_FIELD_KEYS),
+    ...derivedOptionalFieldKeys,
+  ]);
+  const commonFields = optionalStandardFields.filter(
+    (field) => !sequencingFieldKeySet.has(field.key) && commonFieldKeys.has(field.key),
   );
-  const selectedCustomFieldKeys = draft.template.context.custom_field_keys;
-  const selectedOptionalFieldKeySet = new Set(draft.template.context.optional_field_keys);
-  const selectedCustomFieldKeySet = new Set(draft.template.context.custom_field_keys);
+  const selectedCustomFieldKeys = templateContext.custom_field_keys;
+  const selectedOptionalFieldKeySet = new Set(templateContext.optional_field_keys);
+  const selectedCustomFieldKeySet = new Set(templateContext.custom_field_keys);
   const selectedPlatform = String(draft.config.common.platform ?? "");
   const selectedMode = String(draft.config.pipeline.mode ?? "");
   const selectedInstrumentModel = String(draft.config.common.instrument_model ?? "");
   const selectedSequencedBy = String(draft.config.common.sequenced_by ?? "");
   const selectedBiospyderKit = draft.config.common.biospyder_kit;
+  const reviewWarnings = [
+    metadataColumns.length === 0 ? "Upload and validate metadata before generating the handoff bundle." : null,
+    effectivePrimaryTreatmentMapping ? null : "Primary grouping column is not resolved from the uploaded metadata.",
+    templateContext.study_design_elements.includes("batch") && !effectivePrimaryBatchMapping
+      ? "Batch was marked as part of the study design, but no batch column is resolved yet."
+      : null,
+  ].filter((message): message is string => Boolean(message));
 
   useEffect(() => {
     const nextTreatment = templateContext.treatment_vars[0] ?? "";
@@ -1168,7 +1314,7 @@ export function StudyOnboardingWizard() {
 
   async function persistTemplateContext() {
     await saveOnboardingDraftMutation.mutateAsync({
-      template_context: draft.template.context,
+      template_context: templateContext,
     });
   }
 
@@ -1194,7 +1340,7 @@ export function StudyOnboardingWizard() {
           batch: effectivePrimaryBatchMapping,
         },
         selected_contrasts,
-        template_context: draft.template.context,
+        template_context: templateContext,
         config: draft.config,
       });
       markStepAttempted(stepKey);
@@ -1271,6 +1417,7 @@ export function StudyOnboardingWizard() {
 
   const topLevelErrorMessage =
     deleteStudyError || onboardingFinalizeError || onboardingSaveError || templateDownloadError || generationError;
+  const stepTransitionPending = saveStudyDetailsMutation.isPending || saveOnboardingDraftMutation.isPending;
 
   return (
     <section className="space-y-5">
@@ -1665,49 +1812,134 @@ export function StudyOnboardingWizard() {
                   {STUDY_DESIGN_OPTIONS.map((option) => {
                     const selected = templateContext.study_design_elements.includes(option.key);
                     return (
-                      <button
+                      <div
                         key={option.key}
-                        type="button"
-                        className={[
-                          "rounded-xl border px-4 py-3 text-left transition-colors",
-                          selected
-                            ? "border-foreground bg-background shadow-sm"
-                            : "border-border bg-background/70 hover:border-foreground/40",
-                        ].join(" ")}
-                        onClick={() =>
-                          updateDraft((current) => ({
-                            ...current,
-                            template: {
-                              ...current.template,
-                              context: {
-                                ...current.template.context,
-                                study_design_elements: toggleValue(
-                                  current.template.context.study_design_elements,
-                                  option.key,
-                                ),
-                              },
-                            },
-                          }))
-                        }
+                        className={cn(
+                          "rounded-xl border bg-background/70 transition-colors",
+                          selected ? "border-foreground bg-background shadow-sm" : "border-border hover:border-foreground/40",
+                        )}
                       >
-                        <div className="flex items-start gap-3">
-                          <span
-                            className={[
-                              "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border",
-                              selected
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "border-border bg-background text-transparent",
-                            ].join(" ")}
-                            aria-hidden="true"
-                          >
-                            <Check className="h-3 w-3" />
-                          </span>
-                          <div className="min-w-0">
-                            <p className="text-base font-medium leading-tight text-foreground">{option.label}</p>
-                            <p className="mt-1 text-sm leading-6 text-muted-foreground">{option.description}</p>
+                        <button
+                          type="button"
+                          className="w-full px-4 py-3 text-left"
+                          onClick={() =>
+                            updateDraft((current) => {
+                              const nextStudyDesignElements = toggleValue(
+                                current.template.context.study_design_elements,
+                                option.key,
+                              );
+                              const exposureSelected = nextStudyDesignElements.includes("exposure");
+                              return {
+                                ...current,
+                                template: {
+                                  ...current.template,
+                                  context: normalizeTemplateContext({
+                                    ...current.template.context,
+                                    study_design_elements: nextStudyDesignElements,
+                                    exposure_label_mode: exposureSelected
+                                      ? current.template.context.exposure_label_mode ?? "dose"
+                                      : null,
+                                    exposure_custom_label: exposureSelected
+                                      ? current.template.context.exposure_custom_label
+                                      : "",
+                                  }),
+                                },
+                              };
+                            })
+                          }
+                        >
+                          <div className="flex items-start gap-3">
+                            <span
+                              className={cn(
+                                "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border",
+                                selected
+                                  ? "border-primary bg-primary text-primary-foreground"
+                                  : "border-border bg-background text-transparent",
+                              )}
+                              aria-hidden="true"
+                            >
+                              <Check className="h-3 w-3" />
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-base font-medium leading-tight text-foreground">{option.label}</p>
+                              <p className="mt-1 text-sm leading-6 text-muted-foreground">{option.description}</p>
+                            </div>
                           </div>
-                        </div>
-                      </button>
+                        </button>
+
+                        {option.key === "exposure" && selected ? (
+                          <div className="border-t border-border/70 px-4 py-4">
+                            <div className="flex flex-col gap-3">
+                              <div className="flex flex-col gap-1">
+                                <Label htmlFor="exposure-label-mode" className="text-sm font-medium text-foreground">
+                                  Label exposure as
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                  Pick the term the template should use. Mixed studies can include both dose and concentration.
+                                </p>
+                              </div>
+
+                              <ToggleGroup
+                                id="exposure-label-mode"
+                                type="single"
+                                variant="outline"
+                                className="flex flex-wrap justify-start gap-2"
+                                value={templateContext.exposure_label_mode ?? "dose"}
+                                onValueChange={(value) => {
+                                  if (!value) {
+                                    return;
+                                  }
+                                  updateDraft((current) => ({
+                                    ...current,
+                                    template: {
+                                      ...current.template,
+                                      context: normalizeTemplateContext({
+                                        ...current.template.context,
+                                        exposure_label_mode: value as NonNullable<ExposureLabelMode>,
+                                        exposure_custom_label:
+                                          value === "custom" ? current.template.context.exposure_custom_label : "",
+                                      }),
+                                    },
+                                  }));
+                                }}
+                              >
+                                {EXPOSURE_LABEL_OPTIONS.map((choice) => (
+                                  <ToggleGroupItem key={choice.value} value={choice.value} className="rounded-full">
+                                    {choice.label}
+                                  </ToggleGroupItem>
+                                ))}
+                              </ToggleGroup>
+
+                              {templateContext.exposure_label_mode === "custom" ? (
+                                <div className="grid gap-2">
+                                  <Label htmlFor="exposure-custom-label">Custom exposure label</Label>
+                                  <Input
+                                    id="exposure-custom-label"
+                                    aria-invalid={templateContext.exposure_custom_label.length === 0}
+                                    value={templateContext.exposure_custom_label}
+                                    placeholder="e.g. Nominal concentration"
+                                    onChange={(event) =>
+                                      updateDraft((current) => ({
+                                        ...current,
+                                        template: {
+                                          ...current.template,
+                                          context: normalizeTemplateContext({
+                                            ...current.template.context,
+                                            exposure_custom_label: event.target.value,
+                                          }),
+                                        },
+                                      }))
+                                    }
+                                  />
+                                  <p className="text-xs text-muted-foreground">
+                                    Saved as <span className="font-mono">{templateContext.exposure_custom_label || "custom_exposure_label"}</span> in the template.
+                                  </p>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
                     );
                   })}
                 </div>
@@ -1791,9 +2023,9 @@ export function StudyOnboardingWizard() {
                           markStepAttempted("metadata");
                           const { blob, filename } = await downloadMetadataTemplate({
                             study_id: studyId,
-                            optional_field_keys: draft.template.context.optional_field_keys,
-                            custom_field_keys: draft.template.context.custom_field_keys,
-                            template_context: draft.template.context,
+                            optional_field_keys: templateContext.optional_field_keys,
+                            custom_field_keys: templateContext.custom_field_keys,
+                            template_context: templateContext,
                           });
                           const url = URL.createObjectURL(blob);
                           const anchor = document.createElement("a");
@@ -1819,12 +2051,15 @@ export function StudyOnboardingWizard() {
                   </div>
 
                   <div className="min-w-0 lg:row-start-2">
-                    {templatePreviewQuery.isLoading ? (
+                    {templatePreviewQuery.isLoading && !templatePreviewQuery.data ? (
                       <p className="text-muted-foreground">Building template preview…</p>
-                    ) : templatePreviewQuery.isError ? (
-                      <p className="text-destructive">Template preview failed.</p>
                     ) : (
                       <div className="flex flex-col gap-3">
+                        {templatePreviewQuery.isError ? (
+                          <p className="text-destructive">
+                            {templatePreviewErrorMessage} Showing your current field selections below.
+                          </p>
+                        ) : null}
                         <div className="flex flex-wrap gap-2">
                           {stagedColumns.map((column) => {
                             const field = fieldDefinitionsByKey.get(column);
@@ -1865,15 +2100,6 @@ export function StudyOnboardingWizard() {
                           })}
                         </div>
 
-                        {templatePreviewQuery.data?.auto_included.length ? (
-                          <div className="flex flex-col gap-1">
-                            {templatePreviewQuery.data.auto_included.map((item) => (
-                              <p key={`${item.key}:${item.reason}`} className="text-xs text-muted-foreground">
-                                Auto-added {item.key}: {item.reason}
-                              </p>
-                            ))}
-                          </div>
-                        ) : null}
                       </div>
                     )}
                   </div>
@@ -1953,13 +2179,11 @@ export function StudyOnboardingWizard() {
                     ) : null}
                   </div>
 
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Additional standard fields</p>
-                      <div className="grid gap-2 md:grid-cols-2">
-                        {Object.values(additionalStandardGroups)
-                          .flat()
-                          .map((field) => (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Common fields</p>
+                        <div className="grid gap-2 md:grid-cols-2">
+                          {commonFields.map((field) => (
                             <TemplateFieldOption
                               key={field.key}
                               field={field}
@@ -1986,79 +2210,78 @@ export function StudyOnboardingWizard() {
                           ))}
                       </div>
                     </div>
-                  </div>
-                </div>
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Additional fields</p>
+                        <p className="text-xs text-muted-foreground">
+                          Use common study-specific fields when they exist, or add your own only when needed.
+                        </p>
+                      </div>
 
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Custom additions</p>
-                    <p className="text-xs text-muted-foreground">
-                      Use common study-specific fields when they exist, or add your own only when needed.
-                    </p>
-                  </div>
+                      {optionalCustomFields.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {optionalCustomFields.map((field) => {
+                            const selected =
+                              templateContext.custom_field_keys.includes(field.key) ||
+                              derivedOptionalFieldKeys.includes(field.key);
+                            const locked = derivedOptionalFieldKeys.includes(field.key);
+                            return (
+                              <button
+                                key={field.key}
+                                type="button"
+                                disabled={locked}
+                                className={[
+                                  "rounded-full border px-3 py-1 text-sm transition-colors",
+                                  selected ? "border-foreground bg-background text-foreground" : "",
+                                  !selected ? "border-border bg-background/70 text-muted-foreground hover:border-foreground/40" : "",
+                                  locked ? "cursor-not-allowed opacity-70" : "",
+                                ].join(" ")}
+                                onClick={() =>
+                                  updateDraft((current) => ({
+                                    ...current,
+                                    template: {
+                                      ...current.template,
+                                      context: {
+                                        ...current.template.context,
+                                        custom_field_keys: selected
+                                          ? current.template.context.custom_field_keys.filter((key) => key !== field.key)
+                                          : normalizeValueList([
+                                              ...current.template.context.custom_field_keys,
+                                              field.key,
+                                            ]),
+                                      },
+                                    },
+                                  }))
+                                }
+                              >
+                                {field.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : null}
 
-                  {optionalCustomFields.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {optionalCustomFields.map((field) => {
-                        const selected =
-                          templateContext.custom_field_keys.includes(field.key) ||
-                          derivedOptionalFieldKeys.includes(field.key);
-                        const locked = derivedOptionalFieldKeys.includes(field.key);
-                        return (
-                          <button
-                            key={field.key}
-                            type="button"
-                            disabled={locked}
-                            className={[
-                              "rounded-full border px-3 py-1 text-sm transition-colors",
-                              selected ? "border-foreground bg-background text-foreground" : "",
-                              !selected ? "border-border bg-background/70 text-muted-foreground hover:border-foreground/40" : "",
-                              locked ? "cursor-not-allowed opacity-70" : "",
-                            ].join(" ")}
-                            onClick={() =>
-                              updateDraft((current) => ({
-                                ...current,
-                                template: {
-                                  ...current.template,
-                                  context: {
-                                    ...current.template.context,
-                                    custom_field_keys: selected
-                                      ? current.template.context.custom_field_keys.filter((key) => key !== field.key)
-                                      : normalizeValueList([
-                                          ...current.template.context.custom_field_keys,
-                                          field.key,
-                                        ]),
-                                  },
-                                },
-                              }))
-                            }
-                          >
-                            {field.label}
-                          </button>
-                        );
-                      })}
+                      <CustomFieldAdder
+                        suggestions={metadataColumnSuggestions}
+                        existingValues={templateContext.custom_field_keys}
+                        onAdd={(value) =>
+                          updateDraft((current) => ({
+                            ...current,
+                            template: {
+                              ...current.template,
+                              context: {
+                                ...current.template.context,
+                                custom_field_keys: normalizeValueList([
+                                  ...current.template.context.custom_field_keys,
+                                  value,
+                                ]),
+                              },
+                            },
+                          }))
+                        }
+                      />
                     </div>
-                  ) : null}
-
-                  <CustomFieldAdder
-                    suggestions={metadataColumnSuggestions}
-                    existingValues={templateContext.custom_field_keys}
-                    onAdd={(value) =>
-                      updateDraft((current) => ({
-                        ...current,
-                        template: {
-                          ...current.template,
-                          context: {
-                            ...current.template.context,
-                            custom_field_keys: normalizeValueList([
-                              ...current.template.context.custom_field_keys,
-                              value,
-                            ]),
-                          },
-                        },
-                      }))
-                    }
-                  />
+                  </div>
                 </div>
               </div>
             </div>
@@ -2107,161 +2330,102 @@ export function StudyOnboardingWizard() {
           ) : null}
 
           {activeStep === "finalize" ? (
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="space-y-6">
               <div className="space-y-4">
-                <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
-                  <p className="text-sm font-medium text-foreground">Template context</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {templateContext.study_design_elements.map((item) => (
-                      <Badge key={item} variant="outline" className="rounded-full px-3 py-1">
-                        {item}
-                      </Badge>
-                    ))}
-                    {templateContext.study_design_elements.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No study design elements saved yet.</p>
-                    ) : null}
+                <div className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm">
+                  <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                    <div>
+                      <p className="font-medium text-foreground">Summary</p>
+                      <div className="mt-3 grid gap-3 text-muted-foreground sm:grid-cols-2">
+                        {[
+                          ["Title", draft.details.title || "—"],
+                          ["Platform", selectedPlatform || "—"],
+                          ["Sequencing mode", selectedMode || "—"],
+                          ["Instrument model", selectedInstrumentModel || "—"],
+                          ["Sequenced by", selectedSequencedBy || "—"],
+                          ["Biospyder kit", selectedBiospyderKit ? String(selectedBiospyderKit) : "—"],
+                          [
+                            "Study design",
+                            templateContext.study_design_elements.map((item) => getStudyDesignElementLabel(item, templateContext)).join(", ") || "—",
+                          ],
+                          ["Upload", draft.upload.fileName || "—"],
+                          ["Onboarding status", onboardingStatus],
+                        ].map(([label, value]) => (
+                          <div key={label} className="grid gap-1">
+                            <span className="text-xs font-medium uppercase tracking-wide text-foreground">{label}</span>
+                            <span>{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="border-t border-border/70 pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+                      <div
+                        className={cn(
+                          "rounded-lg border p-3",
+                          reviewWarnings.length === 0
+                            ? "border-emerald-200 bg-emerald-50/80"
+                            : "border-amber-200 bg-amber-50/80",
+                        )}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={cn(
+                              "mt-0.5 flex size-8 items-center justify-center rounded-full",
+                              reviewWarnings.length === 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700",
+                            )}
+                          >
+                            {reviewWarnings.length === 0 ? (
+                              <Check aria-hidden="true" className="size-4" />
+                            ) : (
+                              <AlertCircle aria-hidden="true" className="size-4" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-foreground">
+                              {reviewWarnings.length === 0 ? "Passing validation" : "Validation needs attention"}
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {reviewWarnings.length === 0
+                                ? "The bundle inputs are in place and ready for finalize."
+                                : `${reviewWarnings.length} issue${reviewWarnings.length === 1 ? "" : "s"} should be reviewed before finalizing.`}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 space-y-3 text-muted-foreground">
+                        <div className="grid gap-1">
+                          <span className="text-xs font-medium uppercase tracking-wide text-foreground">Primary analysis column</span>
+                          <span>{effectivePrimaryTreatmentMapping || "—"}</span>
+                        </div>
+                        <div className="grid gap-1">
+                          <span className="text-xs font-medium uppercase tracking-wide text-foreground">Additional grouping columns</span>
+                          <span>{additionalTreatmentMappings.join(", ") || "—"}</span>
+                        </div>
+                        <div className="grid gap-1">
+                          <span className="text-xs font-medium uppercase tracking-wide text-foreground">Batch column</span>
+                          <span>{effectivePrimaryBatchMapping || "—"}</span>
+                        </div>
+                        <div className="grid gap-1">
+                          <span className="text-xs font-medium uppercase tracking-wide text-foreground">Detected metadata columns</span>
+                          <span>{metadataColumns.join(", ") || "—"}</span>
+                        </div>
+                      </div>
+
+                      {reviewWarnings.length > 0 ? (
+                        <div className="mt-4 rounded-lg border border-border/70 bg-background/70 p-3">
+                          <p className="text-xs font-medium uppercase tracking-wide text-foreground">Needs attention</p>
+                          <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                            {reviewWarnings.map((message) => (
+                              <li key={message}>{message}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
-
-                {metadataColumns.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Upload and validate a metadata file before selecting mapping columns.
-                  </p>
-                ) : (
-                  <div className="grid gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="treatment_level_1">Treatment level 1 (required)</Label>
-                      <Select
-                        value={effectivePrimaryTreatmentMapping || "__none__"}
-                        onValueChange={(value) =>
-                          updateDraft((current) => ({
-                            ...current,
-                            mappings: {
-                              ...current.mappings,
-                              treatment_level_1: value === "__none__" ? "" : value,
-                            },
-                          }))
-                        }
-                      >
-                        <SelectTrigger id="treatment_level_1" aria-label="Treatment level 1">
-                          <SelectValue placeholder="Select a metadata column" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">Select a metadata column</SelectItem>
-                          {metadataColumns.map((column) => (
-                            <SelectItem key={column} value={column}>
-                              {column}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      {(
-                        [
-                          ["treatment_level_2", "Treatment level 2"],
-                          ["treatment_level_3", "Treatment level 3"],
-                          ["treatment_level_4", "Treatment level 4"],
-                          ["treatment_level_5", "Treatment level 5"],
-                        ] as const
-                      ).map(([key, label]) => (
-                        <div key={key} className="space-y-2">
-                          <Label htmlFor={key}>{label}</Label>
-                          <Select
-                            value={draft.mappings[key] ? draft.mappings[key] : "__none__"}
-                            onValueChange={(value) =>
-                              updateDraft((current) => ({
-                                ...current,
-                                mappings: {
-                                  ...current.mappings,
-                                  [key]: value === "__none__" ? "" : value,
-                                },
-                              }))
-                            }
-                          >
-                            <SelectTrigger id={key} aria-label={label}>
-                              <SelectValue placeholder="Optional" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">None</SelectItem>
-                              {metadataColumns.map((column) => (
-                                <SelectItem key={column} value={column}>
-                                  {column}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="batch">Primary batch column</Label>
-                      <Select
-                        value={batchSelectValue}
-                        onValueChange={(value) =>
-                          updateDraft((current) => ({
-                            ...current,
-                            mappings: { ...current.mappings, batch: value === "__none__" ? "" : value },
-                          }))
-                        }
-                      >
-                        <SelectTrigger id="batch" aria-label="Batch">
-                          <SelectValue placeholder="Optional" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">None</SelectItem>
-                          {metadataColumns.map((column) => (
-                            <SelectItem key={column} value={column}>
-                              {column}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      {(
-                        [
-                          ["pca_color", "PCA color"],
-                          ["pca_shape", "PCA shape"],
-                          ["pca_alpha", "PCA alpha"],
-                          ["clustering_group", "Clustering group"],
-                          ["report_faceting_group", "Report faceting group"],
-                        ] as const
-                      ).map(([key, label]) => (
-                        <div key={key} className="space-y-2">
-                          <Label htmlFor={key}>{label}</Label>
-                          <Select
-                            value={draft.mappings[key] ? draft.mappings[key] : "__none__"}
-                            onValueChange={(value) =>
-                              updateDraft((current) => ({
-                                ...current,
-                                mappings: {
-                                  ...current.mappings,
-                                  [key]: value === "__none__" ? "" : value,
-                                },
-                              }))
-                            }
-                          >
-                            <SelectTrigger id={key} aria-label={label}>
-                              <SelectValue placeholder="Optional" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">None</SelectItem>
-                              {metadataColumns.map((column) => (
-                                <SelectItem key={column} value={column}>
-                                  {column}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
@@ -2279,7 +2443,7 @@ export function StudyOnboardingWizard() {
                             batch: effectivePrimaryBatchMapping,
                           },
                           selected_contrasts,
-                          template_context: draft.template.context,
+                          template_context: templateContext,
                           config: draft.config,
                         },
                         {
@@ -2306,7 +2470,7 @@ export function StudyOnboardingWizard() {
                             batch: effectivePrimaryBatchMapping,
                           },
                           selected_contrasts,
-                          template_context: draft.template.context,
+                          template_context: templateContext,
                           config: draft.config,
                         });
                         markStepAttempted("finalize");
@@ -2340,123 +2504,103 @@ export function StudyOnboardingWizard() {
                 ) : null}
               </div>
 
-              <div className="space-y-4">
-                <div className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm">
-                  <p className="font-medium text-foreground">Summary</p>
-                  <ul className="mt-3 space-y-2 text-muted-foreground">
-                    <li>Title: {draft.details.title || "—"}</li>
-                    <li>Platform: {selectedPlatform || "—"}</li>
-                    <li>Sequencing mode: {selectedMode || "—"}</li>
-                    <li>Instrument model: {selectedInstrumentModel || "—"}</li>
-                    <li>Sequenced by: {selectedSequencedBy || "—"}</li>
-                    <li>Biospyder kit: {selectedBiospyderKit ? String(selectedBiospyderKit) : "—"}</li>
-                    <li>Study design: {templateContext.study_design_elements.join(", ") || "—"}</li>
-                    <li>Primary experimental variable: {templateContext.treatment_vars[0] || "—"}</li>
-                    <li>Primary batch variable: {templateContext.batch_vars[0] || "—"}</li>
-                    <li>Template columns: {stagedColumns.join(", ") || "—"}</li>
-                    <li>Upload: {draft.upload.fileName || "—"}</li>
-                    <li>Onboarding status: {onboardingStatus}</li>
-                  </ul>
-                </div>
+              <div className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm">
+                <p className="font-medium text-foreground">Suggested contrasts</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Derived from uploaded metadata columns `group` and `solvent_control`.
+                </p>
 
-                <div className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm">
-                  <p className="font-medium text-foreground">Suggested contrasts</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Derived from uploaded metadata columns `group` and `solvent_control`.
-                  </p>
+                {suggestedContrasts.length === 0 ? (
+                  <p className="mt-3 text-muted-foreground">No contrast suggestions available yet.</p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          updateDraft((current) => ({
+                            ...current,
+                            mappings: { ...current.mappings, selected_contrasts: suggestedContrasts },
+                          }))
+                        }
+                      >
+                        Select all
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          updateDraft((current) => ({
+                            ...current,
+                            mappings: { ...current.mappings, selected_contrasts: [] },
+                          }))
+                        }
+                      >
+                        Clear
+                      </Button>
+                    </div>
 
-                  {suggestedContrasts.length === 0 ? (
-                    <p className="mt-3 text-muted-foreground">No contrast suggestions available yet.</p>
-                  ) : (
-                    <div className="mt-3 space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() =>
-                            updateDraft((current) => ({
-                              ...current,
-                              mappings: { ...current.mappings, selected_contrasts: suggestedContrasts },
-                            }))
-                          }
-                        >
-                          Select all
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            updateDraft((current) => ({
-                              ...current,
-                              mappings: { ...current.mappings, selected_contrasts: [] },
-                            }))
-                          }
-                        >
-                          Clear
-                        </Button>
-                      </div>
-
-                      <ul className="space-y-2">
-                        {suggestedContrasts.map((pair, index) => {
-                          const key = `${pair.reference_group}:${pair.comparison_group}`;
-                          const inputId = `contrast-${index}`;
-                          const checked = draft.mappings.selected_contrasts.some(
-                            (item) =>
-                              item.reference_group === pair.reference_group &&
-                              item.comparison_group === pair.comparison_group,
-                          );
-                          return (
-                            <li key={key} className="flex items-start gap-2">
-                              <Checkbox
-                                id={inputId}
-                                checked={checked}
-                                onCheckedChange={(nextChecked) =>
-                                  updateDraft((current) => {
-                                    const currentPairs = current.mappings.selected_contrasts;
-                                    const alreadySelected = currentPairs.some(
-                                      (item) =>
-                                        item.reference_group === pair.reference_group &&
-                                        item.comparison_group === pair.comparison_group,
-                                    );
-                                    if (nextChecked === true) {
-                                      return {
-                                        ...current,
-                                        mappings: {
-                                          ...current.mappings,
-                                          selected_contrasts: alreadySelected
-                                            ? currentPairs
-                                            : [...currentPairs, pair],
-                                        },
-                                      };
-                                    }
+                    <ul className="space-y-2">
+                      {suggestedContrasts.map((pair, index) => {
+                        const key = `${pair.reference_group}:${pair.comparison_group}`;
+                        const inputId = `contrast-${index}`;
+                        const checked = draft.mappings.selected_contrasts.some(
+                          (item) =>
+                            item.reference_group === pair.reference_group &&
+                            item.comparison_group === pair.comparison_group,
+                        );
+                        return (
+                          <li key={key} className="flex items-start gap-2">
+                            <Checkbox
+                              id={inputId}
+                              checked={checked}
+                              onCheckedChange={(nextChecked) =>
+                                updateDraft((current) => {
+                                  const currentPairs = current.mappings.selected_contrasts;
+                                  const alreadySelected = currentPairs.some(
+                                    (item) =>
+                                      item.reference_group === pair.reference_group &&
+                                      item.comparison_group === pair.comparison_group,
+                                  );
+                                  if (nextChecked === true) {
                                     return {
                                       ...current,
                                       mappings: {
                                         ...current.mappings,
-                                        selected_contrasts: currentPairs.filter(
-                                          (item) =>
-                                            !(
-                                              item.reference_group === pair.reference_group &&
-                                              item.comparison_group === pair.comparison_group
-                                            ),
-                                        ),
+                                        selected_contrasts: alreadySelected
+                                          ? currentPairs
+                                          : [...currentPairs, pair],
                                       },
                                     };
-                                  })
-                                }
-                              />
-                              <Label htmlFor={inputId} className="cursor-pointer text-sm text-foreground">
-                                {pair.reference_group} → {pair.comparison_group}
-                              </Label>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  )}
-                </div>
+                                  }
+                                  return {
+                                    ...current,
+                                    mappings: {
+                                      ...current.mappings,
+                                      selected_contrasts: currentPairs.filter(
+                                        (item) =>
+                                          !(
+                                            item.reference_group === pair.reference_group &&
+                                            item.comparison_group === pair.comparison_group
+                                          ),
+                                      ),
+                                    },
+                                  };
+                                })
+                              }
+                            />
+                            <Label htmlFor={inputId} className="cursor-pointer text-sm text-foreground">
+                              {pair.reference_group} → {pair.comparison_group}
+                            </Label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           ) : null}
@@ -2489,12 +2633,12 @@ export function StudyOnboardingWizard() {
           </div>
           <Button
             type="button"
-            disabled={!nextStep || (activeStep === "design" && designStepBlocked)}
+            disabled={!nextStep || (activeStep === "design" && designStepBlocked) || stepTransitionPending}
             onClick={() => {
               void handleContinue();
             }}
           >
-            Continue
+            {stepTransitionPending ? "Saving…" : "Continue"}
           </Button>
         </CardFooter>
       </Card>
