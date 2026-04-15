@@ -289,6 +289,18 @@ def _build_metadata_upload_row(row: dict[str, Any], *, study_id: int) -> dict[st
     return normalized
 
 
+def _flatten_metadata_upload_row(row: dict[str, Any]) -> dict[str, Any]:
+    metadata = row.get("metadata")
+    flattened = {
+        key: value
+        for key, value in row.items()
+        if key not in {"study", "metadata"}
+    }
+    if isinstance(metadata, dict):
+        flattened.update(metadata)
+    return flattened
+
+
 def _row_errors_to_validation_issues(row_errors: list[dict[str, list[str]]]) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
     for row_index, field_errors in enumerate(row_errors):
@@ -434,7 +446,11 @@ def _build_metadata_tsv(study: Study, samples: list[Sample]) -> str:
 def _build_metadata_tsv_from_rows(study: Study, rows: list[dict[str, Any]], *, group_builder: dict[str, Any]) -> str:
     from .onboarding import build_group_preview_rows
 
-    preview_rows = build_group_preview_rows(rows, group_builder)
+    preview_source_rows = [
+        _flatten_metadata_upload_row(row) if isinstance(row, dict) else row
+        for row in rows
+    ]
+    preview_rows = build_group_preview_rows(preview_source_rows, group_builder)
     columns: list[str] = []
     for row in preview_rows:
         for key in row.keys():

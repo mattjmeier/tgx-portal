@@ -98,7 +98,6 @@ export function MetadataUploadStep({
     setParseError(null);
     setValidationError(null);
     setValidationResult(null);
-    onValidationResultChange?.(null);
     onFileNameChange(file.name);
 
     Papa.parse<Record<string, unknown>>(file, {
@@ -116,6 +115,7 @@ export function MetadataUploadStep({
         setParseError("Unable to parse the selected file.");
         setParsedRows([]);
         setParsedColumns([]);
+        onValidationResultChange?.(null);
       },
     });
   }

@@ -2,6 +2,7 @@ from django.http import HttpResponse, JsonResponse
 import logging
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Count
 from django.utils.text import slugify
 from rest_framework import filters
@@ -42,6 +43,8 @@ from .serializers import (
 from .services import (
     ConfigGenerationError,
     SampleImportValidationError,
+    _build_metadata_upload_row,
+    _flatten_metadata_upload_row,
     build_project_config_bundle,
     create_samples_from_validated_rows,
     validate_metadata_upload,
@@ -588,28 +591,36 @@ class MetadataValidationViewSet(viewsets.ViewSet):
                 if isinstance(key, str) and key.strip()
             }
         )
-        valid, issues = validate_metadata_upload(
+        is_valid, issues = validate_metadata_upload(
             study_id=study.id,
             rows=normalized_rows,
             expected_columns=expected_columns,
         )
 
+        prepared_rows = [
+            _build_metadata_upload_row(row, study_id=study.id)
+            for row in normalized_rows
+        ]
+        preview_rows = [
+            _flatten_metadata_upload_row(row)
+            for row in prepared_rows
+        ]
+
         state = _get_or_create_onboarding_state(study)
-        preview_rows = normalized_rows
-        if state.group_builder:
-            preview_rows = build_group_preview_rows(normalized_rows, state.group_builder)
-        suggested_contrasts = suggest_contrasts_from_rows(preview_rows)
+        derived_preview_rows = build_group_preview_rows(preview_rows, state.group_builder)
+        suggested_contrasts = suggest_contrasts_from_rows(derived_preview_rows)
         state.metadata_columns = columns
-        state.validated_rows = normalized_rows
+        state.validated_rows = preview_rows
         state.suggested_contrasts = suggested_contrasts
         state.updated_at = timezone.now()
         state.save(update_fields=["metadata_columns", "validated_rows", "suggested_contrasts", "updated_at"])
 
         return Response(
             {
-                "valid": valid,
+                "valid": is_valid,
                 "issues": issues,
                 "columns": columns,
+                "validated_rows": preview_rows,
                 "suggested_contrasts": suggested_contrasts,
             }
         )
@@ -813,6 +824,7 @@ class StudyViewSet(viewsets.ModelViewSet):
                     "template_context",
                     "selected_contrasts",
                     "suggested_contrasts",
+                    "validated_rows",
                     "status",
                     "finalized_at",
                     "updated_at",
@@ -874,15 +886,33 @@ class StudyViewSet(viewsets.ModelViewSet):
         if all_errors:
             return Response({"errors": all_errors}, status=status.HTTP_400_BAD_REQUEST)
 
-        state.status = StudyOnboardingState.Status.FINAL
-        now = timezone.now()
-        state.finalized_at = now
-        state.updated_at = now
-        state.save(update_fields=["status", "finalized_at", "updated_at"])
-        study.status = Study.Status.ACTIVE
-        study.treatment_var = build_compatibility_summary(template_context.get("treatment_vars", []))
-        study.batch_var = build_compatibility_summary(template_context.get("batch_vars", []))
-        study.save(update_fields=["status", "treatment_var", "batch_var"])
+        if state.validated_rows and not study.samples.exists():
+            try:
+                validated_rows = validate_sample_import_rows(
+                    [
+                        _build_metadata_upload_row(
+                            _flatten_metadata_upload_row(row) if isinstance(row, dict) else row,
+                            study_id=study.id,
+                        )
+                        for row in state.validated_rows
+                    ]
+                )
+            except SampleImportValidationError as exc:
+                validated_rows = []
+
+            if validated_rows:
+                create_samples_from_validated_rows(validated_rows)
+
+        with transaction.atomic():
+            state.status = StudyOnboardingState.Status.FINAL
+            now = timezone.now()
+            state.finalized_at = now
+            state.updated_at = now
+            state.save(update_fields=["status", "finalized_at", "updated_at"])
+            study.status = Study.Status.ACTIVE
+            study.treatment_var = build_compatibility_summary(template_context.get("treatment_vars", []))
+            study.batch_var = build_compatibility_summary(template_context.get("batch_vars", []))
+            study.save(update_fields=["status", "treatment_var", "batch_var"])
         return Response(
             {
                 "study_id": study.id,

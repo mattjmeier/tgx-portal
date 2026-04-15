@@ -1055,6 +1055,61 @@ describe("StudyOnboardingWizard", () => {
     expect(expectedColumns).not.toContain("sequencing_mode");
   });
 
+  it("keeps derived groups visible on review immediately after upload before onboarding-state refetch completes", async () => {
+    mockOnboardingState.metadata_columns = [];
+    mockOnboardingState.validated_rows = [];
+    vi.mocked(validateMetadataUpload).mockResolvedValueOnce({
+      valid: true,
+      issues: [],
+      columns: ["sample_ID", "sample_name", "group", "plate", "solvent_control"],
+      validated_rows: [
+        {
+          sample_ID: "sample-1",
+          sample_name: "Control",
+          technical_control: false,
+          reference_rna: false,
+          solvent_control: true,
+          metadata: { group: "control", plate: "plate-1" },
+          group: "control",
+          plate: "plate-1",
+        },
+        {
+          sample_ID: "sample-2",
+          sample_name: "Dose",
+          technical_control: false,
+          reference_rna: false,
+          solvent_control: false,
+          metadata: { group: "treated", plate: "plate-1" },
+          group: "treated",
+          plate: "plate-1",
+        },
+      ],
+      suggested_contrasts: [{ reference_group: "control", comparison_group: "treated" }],
+    });
+
+    renderWizard("/studies/11/onboarding?step=upload");
+
+    const input = await screen.findByTestId("metadata-file-input");
+    const file = new File(["sample_ID,sample_name,group,plate,solvent_control\n"], "metadata.csv", { type: "text/csv" });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() =>
+      expect(validateMetadataUpload).toHaveBeenCalledWith(
+        expect.objectContaining({
+          study_id: 11,
+        }),
+      ),
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByRole("heading", { name: "Review & finalize" })).toBeInTheDocument();
+    expect(await screen.findByText("Computed group = group")).toBeInTheDocument();
+    expect(screen.getAllByText("control").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("treated").length).toBeGreaterThan(0);
+    expect(screen.getByText("treated vs control")).toBeInTheDocument();
+  });
+
   it("prefills finalize mappings from the primary variables and finalizes onboarding", async () => {
     mockOnboardingState.template_context = {
       study_design_elements: ["chemical"],
@@ -1158,7 +1213,8 @@ describe("StudyOnboardingWizard", () => {
     fireEvent.click(screen.getByRole("combobox", { name: /primary grouping variable/i }));
     fireEvent.click(await screen.findByRole("option", { name: "dose" }));
 
-    fireEvent.click(await screen.findByLabelText("culture"));
+    fireEvent.click(await screen.findByText("Select additional columns to refine grouping"));
+    fireEvent.click(await screen.findByText("culture"));
 
     expect(await screen.findByText("Computed group = dose + culture")).toBeInTheDocument();
     expect(screen.getAllByText("C_2D").length).toBeGreaterThan(0);

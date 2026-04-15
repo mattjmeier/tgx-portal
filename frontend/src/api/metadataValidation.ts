@@ -19,6 +19,7 @@ export type ValidateMetadataUploadResponse = {
   valid: boolean;
   issues: ValidationIssue[];
   columns: string[];
+  validated_rows: Array<Record<string, unknown>>;
   suggested_contrasts: Array<{
     reference_group: string;
     comparison_group: string;

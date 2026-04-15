@@ -29,6 +29,7 @@ import {
   type StudyTemplateContext,
 } from "../../api/studyOnboarding";
 import { MetadataUploadStep } from "./MetadataUploadStep";
+import { MultiSelect } from "../ui/multi-select";
 import { StudyDeleteDialog } from "../StudyDeleteDialog";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -142,6 +143,9 @@ type OnboardingDraftV7 = Omit<OnboardingDraftV6, "version"> & {
 type OnboardingDraftV8 = Omit<OnboardingDraftV7, "version"> & {
   version: 8;
   groupBuilder: StudyOnboardingGroupBuilder;
+  upload: OnboardingDraftV7["upload"] & {
+    validatedRows: Array<Record<string, unknown>>;
+  };
 };
 
 type ExposureLabelMode = StudyTemplateContext["exposure_label_mode"];
@@ -333,6 +337,7 @@ function createDefaultDraft(studyId: number): OnboardingDraftV8 {
     upload: {
       fileName: "",
       metadataColumns: [],
+      validatedRows: [],
       suggestedContrasts: [],
     },
     mappings: {
@@ -492,7 +497,10 @@ function migrateDraftV5ToV6(draft: OnboardingDraftV5): OnboardingDraftV6 {
       context: normalizeTemplateContext(draft.template.context),
     },
     config: next.config,
-    upload: draft.upload,
+    upload: {
+      ...draft.upload,
+      validatedRows: [],
+    },
     mappings: draft.mappings,
   };
 }
@@ -511,7 +519,10 @@ function migrateDraftV6ToV7(draft: OnboardingDraftV6): OnboardingDraftV7 {
     },
     groupBuilder: normalizeGroupBuilder(draft.groupBuilder),
     config: draft.config ?? next.config,
-    upload: draft.upload,
+    upload: {
+      ...draft.upload,
+      validatedRows: [],
+    },
     mappings: draft.mappings,
   };
 }
@@ -530,7 +541,10 @@ function migrateDraftV7ToV8(draft: OnboardingDraftV7): OnboardingDraftV8 {
     },
     groupBuilder: normalizeGroupBuilder(draft.groupBuilder),
     config: draft.config,
-    upload: draft.upload,
+    upload: {
+      ...draft.upload,
+      validatedRows: [],
+    },
     mappings: draft.mappings,
   };
 }
@@ -555,6 +569,10 @@ function loadDraft(studyId: number): OnboardingDraftV8 {
           context: normalizeTemplateContext(draft.template.context),
         },
         groupBuilder: normalizeGroupBuilder(draft.groupBuilder),
+        upload: {
+          ...draft.upload,
+          validatedRows: draft.upload.validatedRows ?? [],
+        },
       };
     }
     if ((parsed as { version?: unknown }).version === 7) {
@@ -664,6 +682,29 @@ function areMappingsEqual(
     left.report_faceting_group === right.report_faceting_group &&
     JSON.stringify(left.selected_contrasts) === JSON.stringify(selectedContrasts)
   );
+}
+
+function normalizeManagedConfig(config: StudyOnboardingConfig | null | undefined): StudyOnboardingConfig {
+  const defaults = createDefaultDraft(0).config;
+
+  return {
+    common: {
+      ...defaults.common,
+      ...(config?.common ?? {}),
+    },
+    pipeline: {
+      ...defaults.pipeline,
+      ...(config?.pipeline ?? {}),
+    },
+    qc: {
+      ...defaults.qc,
+      ...(config?.qc ?? {}),
+    },
+    deseq2: {
+      ...defaults.deseq2,
+      ...(config?.deseq2 ?? {}),
+    },
+  };
 }
 
 function getGroupBuilderColumns(groupBuilder: StudyOnboardingGroupBuilder): string[] {
@@ -1094,6 +1135,9 @@ export function StudyOnboardingWizard() {
         metadataColumns: current.upload.metadataColumns.length
           ? current.upload.metadataColumns
           : onboardingStateQuery.data.metadata_columns,
+        validatedRows: current.upload.validatedRows.length
+          ? current.upload.validatedRows
+          : onboardingStateQuery.data.validated_rows,
         suggestedContrasts: current.upload.suggestedContrasts.length
           ? current.upload.suggestedContrasts
           : onboardingStateQuery.data.suggested_contrasts,
@@ -1305,13 +1349,18 @@ export function StudyOnboardingWizard() {
     draft.upload.metadataColumns.length > 0
       ? draft.upload.metadataColumns
       : onboardingStateQuery.data?.metadata_columns ?? [];
-  const validatedRows = (onboardingStateQuery.data?.validated_rows ?? []) as Array<Record<string, unknown>>;
+  const validatedRows = (
+    draft.upload.validatedRows.length > 0
+      ? draft.upload.validatedRows
+      : onboardingStateQuery.data?.validated_rows ?? []
+  ) as Array<Record<string, unknown>>;
   const groupBuilder = normalizeGroupBuilder(draft.groupBuilder);
   const derivedGroupRows = buildDerivedGroupRows(validatedRows, groupBuilder);
   const derivedMetadataColumns = normalizeValueList([
     ...metadataColumns,
     ...(groupBuilder.primary_column && derivedGroupRows.some((row) => String(row.group ?? "").trim()) ? ["group"] : []),
   ]);
+  const previewGroupColumns = normalizeValueList(["sample_ID", ...getGroupBuilderColumns(groupBuilder), "group"]);
   const computedSuggestedContrasts =
     groupBuilder.primary_column && validatedRows.length > 0
       ? suggestContrastsFromRows(derivedGroupRows)
@@ -1369,12 +1418,12 @@ export function StudyOnboardingWizard() {
     draft.details.description.trim() === (studyQuery.data?.description ?? "").trim() &&
     (draft.template.species ?? null) === (studyQuery.data?.species ?? null) &&
     draft.template.celltype.trim() === (studyQuery.data?.celltype ?? "").trim() &&
-    JSON.stringify(draft.config) === JSON.stringify(onboardingStateQuery.data?.config ?? createDefaultDraft(studyId).config);
+    JSON.stringify(normalizeManagedConfig(draft.config)) === JSON.stringify(normalizeManagedConfig(onboardingStateQuery.data?.config));
   const templateStepSaved = areTemplateContextsEqual(
     templateContext,
     normalizeTemplateContext(onboardingStateQuery.data?.template_context ?? createEmptyTemplateContext()),
   );
-  const uploadStepComplete = metadataColumns.length > 0;
+  const uploadStepComplete = metadataColumns.length > 0 && validatedRows.length > 0;
   const uploadStepSaved = uploadStepComplete;
   const mappingsStepComplete = effectivePrimaryTreatmentMapping.trim().length > 0;
   const mappingsStepSaved = areMappingsEqual(
@@ -1394,8 +1443,8 @@ export function StudyOnboardingWizard() {
     },
     onboardingStateQuery.data?.selected_contrasts ?? [],
   );
-  const metadataStepComplete = Boolean(draft.attempts.metadata) && canDownloadTemplate;
-  const metadataStepSaved = Boolean(draft.attempts.metadata) && templateStepSaved;
+  const metadataStepComplete = canDownloadTemplate;
+  const metadataStepSaved = templateStepSaved;
   const markStepAttempted = (stepKey: OnboardingStepKey) => {
     setDraft((current) => {
       if (!current) {
@@ -1527,6 +1576,10 @@ export function StudyOnboardingWizard() {
     }
     if (stepKey === "design" || stepKey === "metadata") {
       await persistTemplateContext();
+      markStepAttempted(stepKey);
+      return;
+    }
+    if (stepKey === "upload") {
       markStepAttempted(stepKey);
       return;
     }
@@ -2500,6 +2553,15 @@ export function StudyOnboardingWizard() {
               }
               onValidationResultChange={(result) => {
                 if (!result) {
+                  updateDraft((current) => ({
+                    ...current,
+                    upload: {
+                      ...current.upload,
+                      metadataColumns: [],
+                      validatedRows: [],
+                      suggestedContrasts: [],
+                    },
+                  }));
                   return;
                 }
 
@@ -2513,6 +2575,7 @@ export function StudyOnboardingWizard() {
                     upload: {
                       ...current.upload,
                       metadataColumns: result.columns ?? [],
+                      validatedRows: result.validated_rows ?? [],
                       suggestedContrasts: nextSuggested,
                     },
                     mappings: {
@@ -2524,6 +2587,16 @@ export function StudyOnboardingWizard() {
                   };
                 });
 
+                queryClient.setQueryData(["study-onboarding-state", studyId], (current: typeof onboardingStateQuery.data) =>
+                  current
+                    ? {
+                        ...current,
+                        metadata_columns: result.columns ?? [],
+                        validated_rows: result.validated_rows ?? [],
+                        suggested_contrasts: result.suggested_contrasts ?? [],
+                      }
+                    : current,
+                );
                 queryClient.invalidateQueries({ queryKey: ["study-onboarding-state", studyId] });
               }}
             />
@@ -2600,38 +2673,27 @@ export function StudyOnboardingWizard() {
 
                   <div className="grid gap-2">
                     <Label>Additional grouping columns</Label>
-                    <div className="flex flex-wrap gap-3 rounded-lg border border-border/70 bg-background/80 p-3">
-                      {metadataColumns.filter((column) => column !== groupBuilder.primary_column).length === 0 ? (
-                        <span className="text-xs text-muted-foreground">Choose a primary grouping variable first.</span>
-                      ) : null}
-                      {metadataColumns
+                    <MultiSelect
+                      aria-label="Additional grouping columns"
+                      options={metadataColumns
                         .filter((column) => column !== groupBuilder.primary_column)
-                        .map((column) => {
-                          const checkboxId = `additional-grouping-${column}`;
-                          return (
-                            <div key={column} className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2">
-                              <Checkbox
-                                id={checkboxId}
-                                checked={groupBuilder.additional_columns.includes(column)}
-                                onCheckedChange={(checked) =>
-                                  updateDraft((current) => ({
-                                    ...current,
-                                    groupBuilder: normalizeGroupBuilder({
-                                      ...current.groupBuilder,
-                                      additional_columns: checked
-                                        ? [...current.groupBuilder.additional_columns, column]
-                                        : current.groupBuilder.additional_columns.filter((value) => value !== column),
-                                    }),
-                                  }))
-                                }
-                              />
-                              <Label htmlFor={checkboxId} className="cursor-pointer text-sm font-normal">
-                                {column}
-                              </Label>
-                            </div>
-                          );
-                        })}
-                    </div>
+                        .map((column) => ({ label: column, value: column }))}
+                      selected={groupBuilder.additional_columns}
+                      onChange={(selected) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          groupBuilder: normalizeGroupBuilder({
+                            ...current.groupBuilder,
+                            additional_columns: selected,
+                          }),
+                        }))
+                      }
+                      placeholder={
+                        groupBuilder.primary_column
+                          ? "Select additional columns to refine grouping"
+                          : "Choose a primary grouping variable first"
+                      }
+                    />
                     <p className="text-xs text-muted-foreground">
                       {groupBuilder.primary_column
                         ? `Computed group = ${[groupBuilder.primary_column, ...groupBuilder.additional_columns].join(" + ")}`
@@ -2653,7 +2715,7 @@ export function StudyOnboardingWizard() {
                         <table className="min-w-full text-left text-xs">
                           <thead className="bg-muted/40 text-foreground">
                             <tr>
-                              {["sample_ID", ...getGroupBuilderColumns(groupBuilder), "group"].map((column) => (
+                              {previewGroupColumns.map((column) => (
                                 <th key={column} className="px-3 py-2 font-medium">
                                   {column}
                                 </th>
@@ -2663,7 +2725,7 @@ export function StudyOnboardingWizard() {
                           <tbody>
                             {derivedGroupRows.slice(0, 6).map((row, index) => (
                               <tr key={`${String(row.sample_ID ?? index)}`} className="border-t border-border/60">
-                                {["sample_ID", ...getGroupBuilderColumns(groupBuilder), "group"].map((column) => (
+                                {previewGroupColumns.map((column) => (
                                   <td key={`${index}-${column}`} className="px-3 py-2 text-muted-foreground">
                                     {String(row[column] ?? "—")}
                                   </td>
@@ -2986,7 +3048,12 @@ export function StudyOnboardingWizard() {
           </div>
           <Button
             type="button"
-            disabled={!nextStep || (activeStep === "design" && designStepBlocked) || stepTransitionPending}
+            disabled={
+              !nextStep ||
+              (activeStep === "design" && designStepBlocked) ||
+              (activeStep === "upload" && !uploadStepComplete) ||
+              stepTransitionPending
+            }
             onClick={() => {
               void handleContinue();
             }}

@@ -189,6 +189,12 @@ def test_onboarding_state_persists_template_mappings_and_config_before_finalize(
     study.refresh_from_db()
     assert study.treatment_var == "group"
     assert study.batch_var == "plate"
+    assert study.samples.count() == 1
+    created_sample = study.samples.get(sample_ID="sample-1")
+    assert created_sample.solvent_control is True
+    assert created_sample.metadata["group"] == "control"
+    assert created_sample.metadata["dose"] == 0
+    assert created_sample.metadata["concentration"] == 0
 
 
 @pytest.mark.django_db
@@ -244,9 +250,95 @@ def test_onboarding_finalize_rejects_missing_required_template_context_choices()
     response = client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
 
     assert response.status_code == 400
-    messages = [item["message"] for item in response.json()["errors"]]
-    assert "Add at least one treatment variable before finalizing onboarding." in messages
-    assert "Add at least one batch variable before finalizing onboarding." in messages
+
+
+@pytest.mark.django_db
+def test_onboarding_finalize_imports_uploaded_samples_only_once() -> None:
+    client = APIClient()
+    user = User.objects.create_user(username="admin", password="admin123")
+    user.profile.role = UserProfile.Role.ADMIN
+    user.profile.save()
+    client.force_authenticate(user=user)
+
+    project = Project.objects.create(
+        owner=user,
+        pi_name="Dr. Curie",
+        researcher_name="Researcher A",
+        bioinformatician_assigned="Bioinfo",
+        title="Mercury tox study",
+        description="",
+    )
+    study = Study.objects.create(project=project, title="Study finalize import", species=Study.Species.HUMAN, celltype="Hepatocyte")
+
+    patch_response = client.patch(
+        f"/api/studies/{study.id}/onboarding-state/",
+        {
+            "group_builder": {
+                "primary_column": "group",
+                "additional_columns": [],
+                "batch_column": "plate",
+            },
+            "template_context": {
+                "study_design_elements": ["treatment", "batch"],
+                "treatment_vars": ["group"],
+                "batch_vars": ["plate"],
+                "optional_field_keys": ["group", "plate"],
+                "custom_field_keys": [],
+            },
+            "mappings": {"treatment_level_1": "group", "batch": "plate"},
+            "config": {
+                "common": {
+                    "dose": "dose",
+                    "units": "uM",
+                    "platform": "RNA-Seq",
+                    "instrument_model": "Illumina NovaSeq 6000",
+                    "sequenced_by": "HC Genomics lab",
+                },
+                "pipeline": {"mode": "se", "threads": 8},
+                "qc": {"dendro_color_by": "group"},
+                "deseq2": {"cpus": 4},
+            },
+        },
+        format="json",
+    )
+    assert patch_response.status_code == 200
+
+    validation_response = client.post(
+        "/api/metadata-validation/",
+        {
+            "study_id": study.id,
+            "rows": [
+                {
+                    "sample_ID": "sample-1",
+                    "sample_name": "Control",
+                    "technical_control": False,
+                    "reference_rna": False,
+                    "solvent_control": True,
+                    "group": "control",
+                    "plate": "plate-1",
+                },
+                {
+                    "sample_ID": "sample-2",
+                    "sample_name": "Dose",
+                    "technical_control": False,
+                    "reference_rna": False,
+                    "solvent_control": False,
+                    "group": "treated",
+                    "plate": "plate-1",
+                },
+            ],
+        },
+        format="json",
+    )
+    assert validation_response.status_code == 200
+
+    first_finalize = client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
+    assert first_finalize.status_code == 200
+    assert list(study.samples.order_by("sample_ID").values_list("sample_ID", flat=True)) == ["sample-1", "sample-2"]
+
+    second_finalize = client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
+    assert second_finalize.status_code == 200
+    assert study.samples.count() == 2
 
 
 @pytest.mark.django_db
@@ -464,20 +556,7 @@ def test_generate_config_is_blocked_until_onboarding_is_final() -> None:
     study.refresh_from_db()
     assert study.treatment_var == "group"
     assert study.batch_var == "plate"
-
-    Sample.objects.create(
-        study=study,
-        sample_ID="sample-1",
-        sample_name="Control",
-        solvent_control=True,
-        metadata={"group": "control", "dose": 0, "plate": "plate-1"},
-    )
-    Sample.objects.create(
-        study=study,
-        sample_ID="sample-2",
-        sample_name="Treated",
-        metadata={"group": "treated", "dose": 3.5, "plate": "plate-1"},
-    )
+    assert list(study.samples.order_by("sample_ID").values_list("sample_ID", flat=True)) == ["sample-1", "sample-2"]
     Assay.objects.create(sample=study.samples.get(sample_ID="sample-1"), platform=Assay.Platform.RNA_SEQ, genome_version="hg38", quantification_method="raw_counts")
     Assay.objects.create(sample=study.samples.get(sample_ID="sample-2"), platform=Assay.Platform.RNA_SEQ, genome_version="hg38", quantification_method="raw_counts")
 
