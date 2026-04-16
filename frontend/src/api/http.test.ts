@@ -23,7 +23,7 @@ describe("apiFetch", () => {
     const requestPromise = apiFetch("/api/projects/");
     const expectation = expect(requestPromise).rejects.toThrow("Request timed out. Please try again.");
 
-    await vi.advanceTimersByTimeAsync(8_000);
+    await vi.advanceTimersByTimeAsync(30_000);
 
     await expectation;
     expect(fetchMock).toHaveBeenCalledTimes(1);

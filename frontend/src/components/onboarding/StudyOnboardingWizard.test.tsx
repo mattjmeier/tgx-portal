@@ -13,6 +13,7 @@ import {
   patchStudyOnboardingState,
 } from "../../api/studyOnboarding";
 import { deleteStudy, updateStudy } from "../../api/studies";
+import { onboardingDraftStorageKey } from "../../lib/studyDeletion";
 
 let mockStudy = {
   id: 11,
@@ -666,6 +667,7 @@ function renderWizard(initialEntry: string) {
             )}
           />
           <Route path="/studies" element={<LocationDisplay />} />
+          <Route path="/studies/:studyId" element={<LocationDisplay />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -758,6 +760,86 @@ describe("StudyOnboardingWizard", () => {
     expect(screen.getByRole("button", { name: /Upload metadata/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Review & finalize/i })).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/studies/11/onboarding");
+  });
+
+  it("preserves the details-step completion state when reloading from local draft storage", async () => {
+    localStorage.setItem(
+      onboardingDraftStorageKey(11),
+      JSON.stringify({
+        version: 8,
+        studyId: 11,
+        updatedAt: "2026-04-08T00:00:00.000Z",
+        attempts: {},
+        details: {
+          title: mockStudy.title,
+          piName: "",
+          researcherName: "",
+          description: "",
+        },
+        template: {
+          species: "human",
+          celltype: "hepatocyte",
+          context: {
+            study_design_elements: [],
+            exposure_label_mode: null,
+            exposure_custom_label: "",
+            treatment_vars: [],
+            batch_vars: [],
+            optional_field_keys: [],
+            custom_field_keys: [],
+          },
+        },
+        groupBuilder: {
+          primary_column: "",
+          additional_columns: [],
+          batch_column: "",
+        },
+        config: {
+          common: {
+            platform: "RNA-Seq",
+            instrument_model: "NovaSeq 6000",
+            sequenced_by: "HC Genomics lab",
+            biospyder_kit: null,
+            dose: null,
+            units: "",
+          },
+          pipeline: {
+            mode: "pe",
+            threads: 8,
+          },
+          qc: {},
+          deseq2: {
+            cpus: 4,
+          },
+        },
+        upload: {
+          fileName: "",
+          metadataColumns: [],
+          validatedRows: [],
+          suggestedContrasts: [],
+        },
+        mappings: {
+          treatment_level_1: "",
+          treatment_level_2: "",
+          treatment_level_3: "",
+          treatment_level_4: "",
+          treatment_level_5: "",
+          batch: "",
+          pca_color: "",
+          pca_shape: "",
+          pca_alpha: "",
+          clustering_group: "",
+          report_faceting_group: "",
+          selected_contrasts: [],
+        },
+      }),
+    );
+
+    renderWizard("/studies/11/onboarding");
+
+    expect(await screen.findByRole("heading", { name: "Study details" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Paired-end" })).toHaveClass("bg-primary"));
+    expect(screen.getByRole("button", { name: "Single-end" })).not.toHaveClass("bg-primary");
   });
 
   it("shows sequencing config fields on study details and conditionally reveals Biospyder kit", async () => {
@@ -972,6 +1054,25 @@ describe("StudyOnboardingWizard", () => {
     expect(screen.queryByText("Sequencing mode")).not.toBeInTheDocument();
   });
 
+  it("checks sequencing identifier fields by default on finalize metadata", async () => {
+    mockOnboardingState.template_context = {
+      study_design_elements: ["chemical"],
+      exposure_label_mode: null,
+      exposure_custom_label: "",
+      treatment_vars: ["group"],
+      batch_vars: ["plate"],
+      optional_field_keys: [],
+      custom_field_keys: [],
+    };
+
+    renderWizard("/studies/11/onboarding?step=metadata");
+
+    expect(await screen.findByRole("heading", { name: "Finalize metadata" })).toBeInTheDocument();
+    expect(await screen.findByTestId("template-field-checkbox-i5_index")).toHaveAttribute("data-state", "checked");
+    expect(await screen.findByTestId("template-field-checkbox-i7_index")).toHaveAttribute("data-state", "checked");
+    expect(await screen.findByTestId("template-field-checkbox-well_id")).toHaveAttribute("data-state", "checked");
+  });
+
   it("limits common fields to the curated default set and keeps inline custom field entry", async () => {
     renderWizard("/studies/11/onboarding?step=metadata");
 
@@ -1126,6 +1227,9 @@ describe("StudyOnboardingWizard", () => {
     expect(await screen.findByText("Primary grouping variable")).toBeInTheDocument();
     expect(await screen.findByText("Computed group = group")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Batch column" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Save draft/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Generate outputs/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Finalize onboarding/i }));
 
@@ -1151,6 +1255,7 @@ describe("StudyOnboardingWizard", () => {
         title: "Hepatocyte mercury dose response",
       }),
     );
+    expect(await screen.findByTestId("location")).toHaveTextContent("/studies/11");
   });
 
   it("recomputes derived group previews and suggested contrasts from selected grouping columns", async () => {

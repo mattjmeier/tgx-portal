@@ -10,7 +10,6 @@ import {
   type MetadataFieldDefinition,
 } from "../../api/lookups";
 import { downloadMetadataTemplate, previewMetadataTemplate } from "../../api/metadataTemplates";
-import { downloadProjectConfig } from "../../api/projects";
 import {
   deleteStudy,
   fetchStudy,
@@ -48,7 +47,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "../ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 import { cn } from "../../lib/utils";
-import { studiesIndexPath } from "../../lib/routes";
+import { studiesIndexPath, studyWorkspacePath } from "../../lib/routes";
 import { clearDeletedStudyClientState, onboardingDraftStorageKey } from "../../lib/studyDeletion";
 
 type OnboardingStepKey = "details" | "design" | "metadata" | "upload" | "finalize";
@@ -142,6 +141,7 @@ type OnboardingDraftV7 = Omit<OnboardingDraftV6, "version"> & {
 
 type OnboardingDraftV8 = Omit<OnboardingDraftV7, "version"> & {
   version: 8;
+  metadataDefaultsInitialized: boolean;
   groupBuilder: StudyOnboardingGroupBuilder;
   upload: OnboardingDraftV7["upload"] & {
     validatedRows: Array<Record<string, unknown>>;
@@ -304,6 +304,7 @@ function createDefaultDraft(studyId: number): OnboardingDraftV8 {
     studyId,
     updatedAt: new Date().toISOString(),
     attempts: {},
+    metadataDefaultsInitialized: false,
     details: {
       title: "",
       piName: "",
@@ -369,6 +370,10 @@ function normalizeValueList(values: string[]): string[] {
     normalized.push(candidate);
   }
   return normalized;
+}
+
+function getDefaultOptionalFieldKeys(): string[] {
+  return [...SEQUENCING_FIELD_KEYS];
 }
 
 function normalizeExposureCustomLabel(value: string): string {
@@ -534,6 +539,8 @@ function migrateDraftV7ToV8(draft: OnboardingDraftV7): OnboardingDraftV8 {
     version: 8,
     updatedAt: draft.updatedAt,
     attempts: draft.attempts,
+    metadataDefaultsInitialized:
+      draft.template.context.optional_field_keys.length > 0,
     details: draft.details,
     template: {
       ...draft.template,
@@ -564,6 +571,8 @@ function loadDraft(studyId: number): OnboardingDraftV8 {
       const draft = parsed as OnboardingDraftV8;
       return {
         ...draft,
+        metadataDefaultsInitialized:
+          draft.metadataDefaultsInitialized ?? draft.template.context.optional_field_keys.length > 0,
         template: {
           ...draft.template,
           context: normalizeTemplateContext(draft.template.context),
@@ -1035,7 +1044,6 @@ export function StudyOnboardingWizard() {
   const [templateDownloadError, setTemplateDownloadError] = useState<string | null>(null);
   const [onboardingSaveError, setOnboardingSaveError] = useState<string | null>(null);
   const [onboardingFinalizeError, setOnboardingFinalizeError] = useState<string | null>(null);
-  const [generationError, setGenerationError] = useState<string | null>(null);
   const [deleteStudyError, setDeleteStudyError] = useState<string | null>(null);
 
   const [draft, setDraft] = useState<OnboardingDraftV8 | null>(() => {
@@ -1114,42 +1122,54 @@ export function StudyOnboardingWizard() {
       draft.groupBuilder.additional_columns.length > 0 ||
       Boolean(draft.groupBuilder.batch_column);
     const hasLocalConfig =
-      Boolean((draft.config.common.instrument_model as string | undefined)?.toString().trim()) ||
-      Boolean((draft.config.common.sequenced_by as string | undefined)?.toString().trim()) ||
-      Boolean(draft.config.common.biospyder_kit);
+      JSON.stringify(normalizeManagedConfig(draft.config)) !==
+      JSON.stringify(normalizeManagedConfig(onboardingStateQuery.data.config));
 
-    updateDraft((current) => ({
-      ...current,
-      template: {
-        ...current.template,
-        context: hasLocalTemplateContext
-          ? normalizeTemplateContext(current.template.context)
-          : normalizeTemplateContext(onboardingStateQuery.data.template_context),
-      },
-      groupBuilder: hasLocalGroupBuilder
-        ? normalizeGroupBuilder(current.groupBuilder)
-        : normalizeGroupBuilder(onboardingStateQuery.data.group_builder),
-      config: hasLocalConfig ? current.config : onboardingStateQuery.data.config,
-      upload: {
-        ...current.upload,
-        metadataColumns: current.upload.metadataColumns.length
-          ? current.upload.metadataColumns
-          : onboardingStateQuery.data.metadata_columns,
-        validatedRows: current.upload.validatedRows.length
-          ? current.upload.validatedRows
-          : onboardingStateQuery.data.validated_rows,
-        suggestedContrasts: current.upload.suggestedContrasts.length
-          ? current.upload.suggestedContrasts
-          : onboardingStateQuery.data.suggested_contrasts,
-      },
-      mappings: hasLocalMappings
-        ? current.mappings
-        : {
-            ...current.mappings,
-            ...onboardingStateQuery.data.mappings,
-            selected_contrasts: onboardingStateQuery.data.selected_contrasts ?? [],
-          },
-    }));
+    updateDraft((current) => {
+      const resolvedTemplateContext = hasLocalTemplateContext
+        ? normalizeTemplateContext(current.template.context)
+        : normalizeTemplateContext(onboardingStateQuery.data.template_context);
+      const templateContextWithDefaultOptionals =
+        !current.metadataDefaultsInitialized && resolvedTemplateContext.optional_field_keys.length === 0
+          ? {
+              ...resolvedTemplateContext,
+              optional_field_keys: getDefaultOptionalFieldKeys(),
+            }
+          : resolvedTemplateContext;
+
+      return {
+        ...current,
+        metadataDefaultsInitialized:
+          current.metadataDefaultsInitialized || templateContextWithDefaultOptionals.optional_field_keys.length > 0,
+        template: {
+          ...current.template,
+          context: templateContextWithDefaultOptionals,
+        },
+        groupBuilder: hasLocalGroupBuilder
+          ? normalizeGroupBuilder(current.groupBuilder)
+          : normalizeGroupBuilder(onboardingStateQuery.data.group_builder),
+        config: hasLocalConfig ? current.config : onboardingStateQuery.data.config,
+        upload: {
+          ...current.upload,
+          metadataColumns: current.upload.metadataColumns.length
+            ? current.upload.metadataColumns
+            : onboardingStateQuery.data.metadata_columns,
+          validatedRows: current.upload.validatedRows.length
+            ? current.upload.validatedRows
+            : onboardingStateQuery.data.validated_rows,
+          suggestedContrasts: current.upload.suggestedContrasts.length
+            ? current.upload.suggestedContrasts
+            : onboardingStateQuery.data.suggested_contrasts,
+        },
+        mappings: hasLocalMappings
+          ? current.mappings
+          : {
+              ...current.mappings,
+              ...onboardingStateQuery.data.mappings,
+              selected_contrasts: onboardingStateQuery.data.selected_contrasts ?? [],
+            },
+      };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardingStateQuery.data?.updated_at]);
 
@@ -1202,28 +1222,6 @@ export function StudyOnboardingWizard() {
       setOnboardingFinalizeError(
         error instanceof Error ? error.message : "Unable to finalize onboarding mappings.",
       );
-    },
-  });
-
-  const generateOutputsMutation = useMutation({
-    mutationFn: async () => {
-      const projectId = studyQuery.data?.project;
-      if (!projectId) {
-        throw new Error("Study project is unavailable.");
-      }
-      return downloadProjectConfig(projectId);
-    },
-    onSuccess: (blob) => {
-      setGenerationError(null);
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = "config_bundle.zip";
-      anchor.click();
-      URL.revokeObjectURL(url);
-    },
-    onError: (error) => {
-      setGenerationError(error instanceof Error ? error.message : "Unable to generate outputs.");
     },
   });
 
@@ -1668,9 +1666,89 @@ export function StudyOnboardingWizard() {
     }
   }
 
+  async function handleFinalizeOnboarding() {
+    const { selected_contrasts, ...mappingsPayload } = draft.mappings;
+    setOnboardingFinalizeError(null);
+
+    try {
+      await saveOnboardingDraftMutation.mutateAsync({
+        mappings: {
+          ...mappingsPayload,
+          treatment_level_1: groupBuilder.primary_column ? "group" : effectivePrimaryTreatmentMapping,
+          batch: effectivePrimaryBatchMapping,
+        },
+        selected_contrasts,
+        group_builder: groupBuilder,
+        template_context: finalizeTemplateContext,
+        config: draft.config,
+      });
+      markStepAttempted("finalize");
+      await finalizeOnboardingMutation.mutateAsync();
+      navigate(studyWorkspacePath(studyId), {
+        replace: true,
+        state: {
+          flash: {
+            variant: "success",
+            title: "Onboarding finalized",
+            description: "Samples are now available in the study workspace. Config outputs can be downloaded later from study actions.",
+          },
+        },
+      });
+    } catch {
+      // mutation handlers surface errors
+    }
+  }
+
   const topLevelErrorMessage =
-    deleteStudyError || onboardingFinalizeError || onboardingSaveError || templateDownloadError || generationError;
+    deleteStudyError || onboardingFinalizeError || onboardingSaveError || templateDownloadError;
   const stepTransitionPending = saveStudyDetailsMutation.isPending || saveOnboardingDraftMutation.isPending;
+  const finalizePending = stepTransitionPending || finalizeOnboardingMutation.isPending;
+
+  useEffect(() => {
+    if (activeStep !== "finalize" || onboardingStatus === "final" || finalizePending) {
+      return;
+    }
+
+    const configSaved =
+      JSON.stringify(normalizeManagedConfig(draft.config)) === JSON.stringify(normalizeManagedConfig(onboardingStateQuery.data?.config));
+    if (mappingsStepSaved && templateStepSaved && configSaved) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const { selected_contrasts, ...mappingsPayload } = draft.mappings;
+      setOnboardingSaveError(null);
+      saveOnboardingDraftMutation.mutate({
+        mappings: {
+          ...mappingsPayload,
+          treatment_level_1: groupBuilder.primary_column ? "group" : effectivePrimaryTreatmentMapping,
+          batch: effectivePrimaryBatchMapping,
+        },
+        selected_contrasts,
+        group_builder: groupBuilder,
+        template_context: finalizeTemplateContext,
+        config: draft.config,
+      });
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    activeStep,
+    draft.config,
+    draft.mappings,
+    effectivePrimaryBatchMapping,
+    effectivePrimaryTreatmentMapping,
+    finalizePending,
+    finalizeTemplateContext,
+    groupBuilder,
+    mappingsStepSaved,
+    onboardingStatus,
+    onboardingStateQuery.data?.config,
+    saveOnboardingDraftMutation,
+    templateStepSaved,
+  ]);
 
   return (
     <section className="space-y-5">
@@ -2933,87 +3011,48 @@ export function StudyOnboardingWizard() {
                   </div>
 
                   <div className="space-y-3 rounded-lg border border-border/70 bg-background/80 p-3">
-                    <p className="font-medium text-foreground">Output readiness</p>
-                    <p className="text-xs text-muted-foreground">
-                      The generated bundle will include `metadata.tsv`, `contrasts.tsv`, and `config.yaml`.
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-foreground">Output readiness</p>
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              reviewWarnings.length === 0
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border-amber-200 bg-amber-50 text-amber-700",
+                            )}
+                          >
+                            {reviewWarnings.length === 0 ? "Ready to finalize" : "Needs attention"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          The generated bundle will include `metadata.tsv`, `contrasts.tsv`, and `config.yaml`.
+                        </p>
+                      </div>
                       <Button
                         type="button"
-                        variant="outline"
-                        disabled={saveOnboardingDraftMutation.isPending}
+                        className="sm:self-start"
+                        disabled={reviewWarnings.length > 0 || finalizePending}
                         onClick={() => {
-                          const { selected_contrasts, ...mappingsPayload } = draft.mappings;
-                          setOnboardingSaveError(null);
-                          saveOnboardingDraftMutation.mutate(
-                            {
-                              mappings: {
-                                ...mappingsPayload,
-                                treatment_level_1: groupBuilder.primary_column ? "group" : effectivePrimaryTreatmentMapping,
-                                batch: effectivePrimaryBatchMapping,
-                              },
-                              selected_contrasts,
-                              group_builder: groupBuilder,
-                              template_context: finalizeTemplateContext,
-                              config: draft.config,
-                            },
-                            {
-                              onSuccess: () => {
-                                markStepAttempted("finalize");
-                              },
-                            },
-                          );
-                        }}
-                      >
-                        {saveOnboardingDraftMutation.isPending ? "Saving…" : "Save draft"}
-                      </Button>
-                      <Button
-                        type="button"
-                        disabled={finalizeOnboardingMutation.isPending}
-                        onClick={async () => {
-                          const { selected_contrasts, ...mappingsPayload } = draft.mappings;
-                          setOnboardingFinalizeError(null);
-                          try {
-                            await saveOnboardingDraftMutation.mutateAsync({
-                              mappings: {
-                                ...mappingsPayload,
-                                treatment_level_1: groupBuilder.primary_column ? "group" : effectivePrimaryTreatmentMapping,
-                                batch: effectivePrimaryBatchMapping,
-                              },
-                              selected_contrasts,
-                              group_builder: groupBuilder,
-                              template_context: finalizeTemplateContext,
-                              config: draft.config,
-                            });
-                            markStepAttempted("finalize");
-                            await finalizeOnboardingMutation.mutateAsync();
-                          } catch {
-                            // mutation handlers surface errors
-                          }
+                          void handleFinalizeOnboarding();
                         }}
                       >
                         {finalizeOnboardingMutation.isPending ? "Finalizing…" : "Finalize onboarding"}
                       </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        disabled={onboardingStatus !== "final" || generateOutputsMutation.isPending}
-                        onClick={() => {
-                          setGenerationError(null);
-                          generateOutputsMutation.mutate();
-                        }}
-                      >
-                        {generateOutputsMutation.isPending ? "Generating…" : "Generate outputs"}
-                      </Button>
                     </div>
                     {saveStudyDetailsMutation.isPending || saveOnboardingDraftMutation.isPending ? (
-                      <p className="text-sm text-muted-foreground">Saving changes before moving on…</p>
+                      <p className="text-sm text-muted-foreground">Saving your review changes automatically…</p>
                     ) : null}
                     {onboardingStatus !== "final" ? (
                       <p className="text-sm text-muted-foreground">
-                        Finalize onboarding to unlock output generation for this study.
+                        Finalize onboarding to move into the study workspace and unlock downstream outputs.
                       </p>
-                    ) : null}
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        This study is finalized. Outputs remain available from study actions.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -3046,20 +3085,22 @@ export function StudyOnboardingWizard() {
               </Button>
             ) : null}
           </div>
-          <Button
-            type="button"
-            disabled={
-              !nextStep ||
-              (activeStep === "design" && designStepBlocked) ||
-              (activeStep === "upload" && !uploadStepComplete) ||
-              stepTransitionPending
-            }
-            onClick={() => {
-              void handleContinue();
-            }}
-          >
-            {stepTransitionPending ? "Saving…" : "Continue"}
-          </Button>
+          {activeStep !== "finalize" ? (
+            <Button
+              type="button"
+              disabled={
+                !nextStep ||
+                (activeStep === "design" && designStepBlocked) ||
+                (activeStep === "upload" && !uploadStepComplete) ||
+                stepTransitionPending
+              }
+              onClick={() => {
+                void handleContinue();
+              }}
+            >
+              {stepTransitionPending ? "Saving…" : "Continue"}
+            </Button>
+          ) : null}
         </CardFooter>
       </Card>
     </section>

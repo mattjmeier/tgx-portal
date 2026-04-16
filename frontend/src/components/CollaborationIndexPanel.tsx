@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   flexRender,
   getCoreRowModel,
@@ -8,11 +8,12 @@ import {
   type PaginationState,
   type SortingState,
 } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { fetchProjects, type Project } from "../api/projects";
+import { deleteProject, fetchProjects, type Project } from "../api/projects";
 import { collaborationCreatePath, collaborationPath } from "../lib/routes";
+import { ProjectDeleteDialog } from "./ProjectDeleteDialog";
 import { WorkspaceSectionCard } from "./WorkspaceSectionCard";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -43,6 +44,7 @@ function SortIndicator({ state }: { state: false | "asc" | "desc" }) {
 }
 
 export function CollaborationIndexPanel() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -65,6 +67,19 @@ export function CollaborationIndexPanel() {
   const firstRow = totalCount === 0 ? 0 : pagination.pageIndex * pagination.pageSize + 1;
   const lastRow = Math.min(totalCount, (pagination.pageIndex + 1) * pagination.pageSize);
 
+  const deleteProjectMutation = useMutation<void, Error, number>({
+    mutationFn: deleteProject,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["projects"] }),
+        queryClient.invalidateQueries({ queryKey: ["project"] }),
+        queryClient.invalidateQueries({ queryKey: ["studies"] }),
+        queryClient.invalidateQueries({ queryKey: ["studies-index"] }),
+        queryClient.invalidateQueries({ queryKey: ["study"] }),
+      ]);
+    },
+  });
+
   const columns = useMemo<ColumnDef<Project>[]>(
     () => [
       {
@@ -77,7 +92,9 @@ export function CollaborationIndexPanel() {
               <Link className="truncate font-medium text-primary hover:underline" to={collaborationPath(project.id)}>
                 {project.title}
               </Link>
-              <span className="truncate text-sm text-muted-foreground">{project.description || "No description yet."}</span>
+              <span className="max-w-xl whitespace-normal break-words text-sm text-muted-foreground">
+                {project.description || "No description yet."}
+              </span>
             </div>
           );
         },
@@ -107,13 +124,25 @@ export function CollaborationIndexPanel() {
         header: "Actions",
         enableSorting: false,
         cell: ({ row }) => (
-          <Button asChild size="sm" variant="outline">
-            <Link to={collaborationPath(row.original.id)}>Open</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link to={collaborationPath(row.original.id)}>Open</Link>
+            </Button>
+            <ProjectDeleteDialog
+              isDeleting={deleteProjectMutation.isPending && deleteProjectMutation.variables === row.original.id}
+              projectId={row.original.id}
+              projectTitle={row.original.title}
+              onConfirmDelete={deleteProjectMutation.mutate}
+            >
+              <Button aria-label={`Delete collaboration ${row.original.title}`} size="icon" type="button" variant="destructive">
+                <Trash2 />
+              </Button>
+            </ProjectDeleteDialog>
+          </div>
         ),
       },
     ],
-    [],
+    [deleteProjectMutation.isPending, deleteProjectMutation.mutate, deleteProjectMutation.variables],
   );
 
   const table = useReactTable({
@@ -297,6 +326,7 @@ export function CollaborationIndexPanel() {
           </Button>
         </div>
       </div>
+      {deleteProjectMutation.isError ? <p className="text-sm text-destructive">{deleteProjectMutation.error.message}</p> : null}
     </WorkspaceSectionCard>
   );
 }

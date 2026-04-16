@@ -377,29 +377,21 @@ export function StudyWorkspace() {
           </TabsContent>
 
           <TabsContent value="collaboration">
-            <section className="rounded-lg border border-border bg-background p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-foreground">Collaboration context</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Keep collaboration ownership and high-level context close while working in the study workspace.
+            <div className="rounded-md border border-border bg-muted/20 p-4">
+              <p className="text-sm font-semibold text-foreground">{projectQuery.data?.title ?? study.project_title}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                PI {projectQuery.data?.pi_name ?? "Unknown"}
+                {projectQuery.data?.owner ? ` · Owner: ${projectQuery.data.owner}` : ""}
               </p>
-              <div className="mt-5 grid gap-3">
-                <div className="rounded-md border border-border bg-muted/20 p-4">
-                  <p className="text-sm font-semibold text-foreground">{projectQuery.data?.title ?? study.project_title}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    PI {projectQuery.data?.pi_name ?? "Unknown"}
-                    {projectQuery.data?.owner ? ` · Owner: ${projectQuery.data.owner}` : ""}
-                  </p>
-                  {projectQuery.data?.description ? (
-                    <p className="mt-2 text-sm text-muted-foreground">{projectQuery.data.description}</p>
-                  ) : null}
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <Button asChild size="sm" variant="outline">
-                      <Link to={collaborationPath(study.project)}>Open collaboration</Link>
-                    </Button>
-                  </div>
-                </div>
+              {projectQuery.data?.description ? (
+                <p className="mt-2 text-sm text-muted-foreground">{projectQuery.data.description}</p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button asChild size="sm" variant="outline">
+                  <Link to={collaborationPath(study.project)}>Open collaboration</Link>
+                </Button>
               </div>
-            </section>
+            </div>
           </TabsContent>
         </Tabs>
       ) : null}

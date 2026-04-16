@@ -191,7 +191,8 @@ describe("StudyWorkspacePage", () => {
     expect(screen.getByText(/contrasts for this study/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: /collaboration info/i }));
-    expect(await screen.findByText(/collaboration context/i)).toBeInTheDocument();
+    expect(await screen.findByText(/study collaboration description/i)).toBeInTheDocument();
+    expect(screen.queryByText(/collaboration context/i)).not.toBeInTheDocument();
   });
 
   it("opens the intake tools from add samples and switches tabs from add contrasts", async () => {

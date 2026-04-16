@@ -1,6 +1,20 @@
 const authTokenStorageKey = "tgx_portal_auth_token";
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
-const defaultRequestTimeoutMs = 8_000;
+const defaultRequestTimeoutMs = 30_000;
+
+function getRequestTimeoutMs(): number {
+  const configuredTimeout = import.meta.env.VITE_API_REQUEST_TIMEOUT_MS;
+  if (!configuredTimeout) {
+    return defaultRequestTimeoutMs;
+  }
+
+  const parsedTimeout = Number(configuredTimeout);
+  if (!Number.isFinite(parsedTimeout) || parsedTimeout <= 0) {
+    return defaultRequestTimeoutMs;
+  }
+
+  return parsedTimeout;
+}
 
 export function getStoredAuthToken(): string | null {
   return window.localStorage.getItem(authTokenStorageKey);
@@ -24,7 +38,7 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
   const timeoutId = window.setTimeout(() => {
     didTimeout = true;
     controller.abort();
-  }, defaultRequestTimeoutMs);
+  }, getRequestTimeoutMs());
   const abortSignal = init.signal;
   const forwardAbort = () => controller.abort(abortSignal?.reason);
 
