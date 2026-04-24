@@ -31,6 +31,9 @@ from .onboarding_options import (
 )
 
 User = get_user_model()
+DEFAULT_SEED_INSTRUMENT_MODEL = "Illumina NovaSeq 6000"
+DEFAULT_SEED_SEQUENCED_BY = "HC Genomics lab"
+SEED_REPLICATE_SUFFIXES = ("a", "b", "c")
 
 
 @dataclass(frozen=True)
@@ -62,6 +65,9 @@ class SeedStudy:
     platform: str
     genome_version: str
     quantification_method: str
+    instrument_model: str = DEFAULT_SEED_INSTRUMENT_MODEL
+    sequenced_by: str = DEFAULT_SEED_SEQUENCED_BY
+    onboarding_status: str = StudyOnboardingState.Status.FINAL
 
 
 @dataclass(frozen=True)
@@ -185,6 +191,7 @@ SEED_PROJECTS: list[SeedProject] = [
                 platform=Assay.Platform.RNA_SEQ,
                 genome_version="mm10",
                 quantification_method="raw_counts",
+                onboarding_status=StudyOnboardingState.Status.DRAFT,
                 samples=[
                     SeedSample(
                         sample_id="19_2D_Cont",
@@ -732,6 +739,8 @@ def _seed_study_config(study: Study, seed_study: SeedStudy) -> None:
     config_payload["common"].update(
         {
             "platform": "RNA-Seq" if seed_study.platform == Assay.Platform.RNA_SEQ else "TempO-Seq",
+            "instrument_model": seed_study.instrument_model,
+            "sequenced_by": seed_study.sequenced_by,
             "celltype": seed_study.celltype,
             "dose": "dose" if "dose" in seed_study.metadata_columns else None,
             "batch_var": seed_study.batch_var or None,
@@ -742,6 +751,7 @@ def _seed_study_config(study: Study, seed_study: SeedStudy) -> None:
             "genome_filename": f"{seed_study.genome_version}.fa",
             "annotation_filename": f"{seed_study.genome_version}.gtf",
             "genome_name": seed_study.genome_version,
+            "mode": "se",
         }
     )
     config_payload["qc"].update(
@@ -819,6 +829,69 @@ def _build_seed_template_context(seed_study: SeedStudy) -> dict[str, object]:
         "optional_field_keys": [],
         "custom_field_keys": [],
     }
+
+
+def _replace_terminal_suffix(value: str, *, lower_suffix: str, upper_suffix: str) -> str:
+    for existing in SEED_REPLICATE_SUFFIXES:
+        if value.lower().endswith(f"_{existing}"):
+            return f"{value[:-2]}_{lower_suffix}"
+        if value.endswith(f" {existing.upper()}"):
+            return f"{value[:-2]} {upper_suffix}"
+    return f"{value}_{lower_suffix}" if "_" in value else f"{value} {upper_suffix}"
+
+
+def _seed_batch_value(column: str, replicate_number: int) -> str:
+    special_values = {
+        "plate": f"P{replicate_number}",
+        "chip_batch": f"chip-{replicate_number}",
+        "animal_cohort": f"cohort-{replicate_number}",
+        "operator": f"operator-{replicate_number}",
+        "run_day": f"day-{replicate_number}",
+        "exposure_chamber": f"chamber-{replicate_number}",
+        "insert_batch": f"insert-{replicate_number}",
+        "harvest_day": f"harvest-{replicate_number}",
+        "donor_batch": f"donor-{replicate_number}",
+        "prep_batch": f"prep-{replicate_number}",
+    }
+    return special_values.get(column, f"{column}-{replicate_number}")
+
+
+def _expand_seed_samples(seed_study: SeedStudy) -> list[SeedSample]:
+    expanded: list[SeedSample] = []
+    for template_sample in seed_study.samples:
+        for replicate_number, replicate_suffix in enumerate(SEED_REPLICATE_SUFFIXES, start=1):
+            metadata = dict(template_sample.metadata)
+            if (
+                seed_study.batch_var
+                and seed_study.batch_var in seed_study.metadata_columns
+                and seed_study.batch_var not in metadata
+            ):
+                metadata[seed_study.batch_var] = _seed_batch_value(seed_study.batch_var, replicate_number)
+
+            expanded.append(
+                SeedSample(
+                    sample_id=_replace_terminal_suffix(
+                        template_sample.sample_id,
+                        lower_suffix=replicate_suffix,
+                        upper_suffix=replicate_suffix.upper(),
+                    ),
+                    sample_name=_replace_terminal_suffix(
+                        template_sample.sample_name,
+                        lower_suffix=replicate_suffix,
+                        upper_suffix=replicate_suffix.upper(),
+                    ),
+                    group=template_sample.group,
+                    dose=template_sample.dose,
+                    chemical=template_sample.chemical,
+                    chemical_longname=template_sample.chemical_longname,
+                    description=f"{template_sample.description} Replicate {replicate_suffix.upper()}.",
+                    solvent_control=template_sample.solvent_control,
+                    technical_control=template_sample.technical_control,
+                    reference_rna=template_sample.reference_rna,
+                    metadata=metadata,
+                )
+            )
+    return expanded
 
 
 def _seed_warehouse_demo(study: Study) -> None:
@@ -970,7 +1043,7 @@ def reset_seed_data() -> dict[str, int]:
 
             StudyOnboardingState.objects.create(
                 study=study,
-                status=StudyOnboardingState.Status.FINAL,
+                status=seed_study.onboarding_status,
                 metadata_columns=seed_study.metadata_columns,
                 mappings=seed_study.mappings,
                 template_context=_build_seed_template_context(seed_study),
@@ -984,7 +1057,7 @@ def reset_seed_data() -> dict[str, int]:
                 ],
             )
 
-            for seed_sample in seed_study.samples:
+            for seed_sample in _expand_seed_samples(seed_study):
                 sample_metadata = {
                     "group": seed_sample.group,
                     "chemical": seed_sample.chemical,

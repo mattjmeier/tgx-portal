@@ -128,6 +128,7 @@ type OnboardingDraftV6 = {
   upload: {
     fileName: string;
     metadataColumns: string[];
+    validatedRows: Array<Record<string, unknown>>;
     suggestedContrasts: ContrastPair[];
   };
   mappings: StudyOnboardingMappings & {
@@ -565,7 +566,7 @@ function loadDraft(studyId: number): OnboardingDraftV8 {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (typeof parsed !== "object" || parsed === null) {
-      return migrateDraftV6ToV7(createDefaultDraft(studyId));
+      return createDefaultDraft(studyId);
     }
     if ((parsed as { version?: unknown }).version === 8) {
       const draft = parsed as OnboardingDraftV8;
@@ -1541,6 +1542,9 @@ export function StudyOnboardingWizard() {
   }, [metadataColumns.join("|"), derivedMetadataColumns.join("|"), templateContext.batch_vars.join("|"), groupBuilder.primary_column, groupBuilder.batch_column]);
 
   useEffect(() => {
+    if (!draft) {
+      return;
+    }
     const validKeys = new Set(suggestedContrasts.map((item) => `${item.reference_group}::${item.comparison_group}`));
     const nextSelected = draft.mappings.selected_contrasts.filter((item) =>
       validKeys.has(`${item.reference_group}::${item.comparison_group}`),
@@ -1565,10 +1569,14 @@ export function StudyOnboardingWizard() {
   }
 
   async function persistCurrentStep(stepKey: OnboardingStepKey) {
+    const currentDraft = draft;
+    if (!currentDraft) {
+      return;
+    }
     setOnboardingSaveError(null);
     if (stepKey === "details") {
       await saveStudyDetailsMutation.mutateAsync();
-      await saveOnboardingDraftMutation.mutateAsync({ config: draft.config });
+      await saveOnboardingDraftMutation.mutateAsync({ config: currentDraft.config });
       markStepAttempted(stepKey);
       return;
     }
@@ -1582,7 +1590,7 @@ export function StudyOnboardingWizard() {
       return;
     }
     if (stepKey === "finalize") {
-      const { selected_contrasts, ...mappingsPayload } = draft.mappings;
+      const { selected_contrasts, ...mappingsPayload } = currentDraft.mappings;
       await saveOnboardingDraftMutation.mutateAsync({
         mappings: {
           ...mappingsPayload,
@@ -1592,7 +1600,7 @@ export function StudyOnboardingWizard() {
         selected_contrasts,
         group_builder: groupBuilder,
         template_context: finalizeTemplateContext,
-        config: draft.config,
+        config: currentDraft.config,
       });
       markStepAttempted(stepKey);
     }
@@ -1667,7 +1675,11 @@ export function StudyOnboardingWizard() {
   }
 
   async function handleFinalizeOnboarding() {
-    const { selected_contrasts, ...mappingsPayload } = draft.mappings;
+    const currentDraft = draft;
+    if (!currentDraft) {
+      return;
+    }
+    const { selected_contrasts, ...mappingsPayload } = currentDraft.mappings;
     setOnboardingFinalizeError(null);
 
     try {
@@ -1680,11 +1692,11 @@ export function StudyOnboardingWizard() {
         selected_contrasts,
         group_builder: groupBuilder,
         template_context: finalizeTemplateContext,
-        config: draft.config,
+        config: currentDraft.config,
       });
       markStepAttempted("finalize");
       await finalizeOnboardingMutation.mutateAsync();
-      navigate(studyWorkspacePath(studyId), {
+      navigate(studyWorkspacePath(studyId as number), {
         replace: true,
         state: {
           flash: {
@@ -1871,7 +1883,7 @@ export function StudyOnboardingWizard() {
                   }
                 />
                 <datalist id={`piNameSuggestions-${studyId}`}>
-                  {(lookupsQuery.data?.lookups.soft.pi_name.values ?? []).map((value) => (
+                  {lookupStringValues(lookupsQuery.data?.lookups.soft.pi_name.values ?? []).map((value) => (
                     <option key={value} value={value} />
                   ))}
                 </datalist>
@@ -1891,7 +1903,7 @@ export function StudyOnboardingWizard() {
                   }
                 />
                 <datalist id={`researcherNameSuggestions-${studyId}`}>
-                  {(lookupsQuery.data?.lookups.soft.researcher_name.values ?? []).map((value) => (
+                  {lookupStringValues(lookupsQuery.data?.lookups.soft.researcher_name.values ?? []).map((value) => (
                     <option key={value} value={value} />
                   ))}
                 </datalist>

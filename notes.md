@@ -1,5 +1,16 @@
 # UI notes
 
+- contrasts - order them? buttons to shortcut ordering 
+- free form notes for bioinformatician input
+- fix landing page
+- clean up "add assay" flow?
+- modify seed data
+
+- SET UP PLANE SIDECAR
+
+- IMPORT DATA IN ADMIN
+- admin panel - missing completely
+
 - review & finalize page: 
     - "blocking issues" should be more apparent
     - "Additional grouping columns" - it's too busy to show all of them; we need a way to limit, like using a dropdown menu and adding chips of additional columns. 
@@ -17,7 +28,7 @@ Main landing page / home link
     - Chemical management page
     - 
 
-
+- Alias table for genes/probes?
 
 
 

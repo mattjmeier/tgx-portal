@@ -165,6 +165,94 @@ class StudyApiTests(TestCase):
         self.assertTrue(hasattr(study, "metadata_mapping"))
         self.assertTrue(hasattr(study, "config"))
 
+    def test_explorer_summary_returns_operational_readiness(self) -> None:
+        study = Study.objects.create(
+            project=self.project_alpha,
+            title="Mercury dose response",
+            species=Study.Species.HUMAN,
+            celltype="Hepatocyte",
+        )
+        add_template_fields(study, "sample_ID", "technical_control", "reference_rna", "solvent_control", "group", "dose", "chemical")
+        config = default_study_config()
+        config["common"]["platform"] = "RNA-Seq"
+        config["common"]["sequenced_by"] = "HC Genomics lab"
+        config["common"]["instrument_model"] = "NextSeq 2000"
+        config["common"]["dose"] = "dose"
+        config["pipeline"]["mode"] = "se"
+        StudyConfig.objects.create(study=study, **config)
+        StudyMetadataMapping.objects.create(
+            study=study,
+            treatment_level_1="group",
+            batch="plate",
+            selected_contrasts=[{"reference_group": "control", "comparison_group": "treated"}],
+        )
+        StudyOnboardingState.objects.create(
+            study=study,
+            status=StudyOnboardingState.Status.FINAL,
+            metadata_columns=["sample_ID", "group", "dose", "chemical", "plate"],
+            suggested_contrasts=[{"reference_group": "control", "comparison_group": "treated"}],
+            selected_contrasts=[{"reference_group": "control", "comparison_group": "treated"}],
+        )
+        control = Sample.objects.create(
+            study=study,
+            sample_ID="S-001",
+            sample_name="Control",
+            solvent_control=True,
+            metadata={"group": "control", "dose": 0, "chemical": "vehicle", "plate": "P1"},
+        )
+        treated = Sample.objects.create(
+            study=study,
+            sample_ID="S-002",
+            sample_name="Treated",
+            metadata={"group": "treated", "dose": 3.5, "chemical": "mercury", "plate": "P1"},
+        )
+        Sample.objects.create(
+            study=study,
+            sample_ID="S-003",
+            sample_name="Missing assay",
+            metadata={"group": "treated", "dose": 10, "chemical": "mercury", "plate": "P2"},
+        )
+        Assay.objects.create(sample=control, platform=Assay.Platform.RNA_SEQ, genome_version="hg38", quantification_method="raw_counts")
+        Assay.objects.create(sample=treated, platform=Assay.Platform.RNA_SEQ, genome_version="hg38", quantification_method="raw_counts")
+
+        response = self.client.get(f"/api/studies/{study.id}/explorer-summary/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["study_id"], study.id)
+        self.assertEqual(payload["readiness"]["status"], "warning")
+        self.assertEqual(payload["sample_summary"]["total"], 3)
+        self.assertEqual(payload["sample_summary"]["solvent_controls"], 1)
+        self.assertEqual(payload["assay_summary"]["samples_with_assays"], 2)
+        self.assertEqual(payload["assay_summary"]["samples_missing_assays"], 1)
+        self.assertEqual(payload["design_summary"]["groups"][0], {"value": "treated", "count": 2})
+        self.assertIn("dose", payload["design_summary"]["metadata_columns"])
+        self.assertEqual(payload["contrast_summary"]["selected_count"], 1)
+        self.assertEqual(payload["config_summary"]["platform"], "RNA-Seq")
+        self.assertTrue(any(issue["code"] == "missing_assays" for issue in payload["blocking_issues"]))
+
+    def test_client_cannot_read_other_project_explorer_summary(self) -> None:
+        owner = User.objects.create_user(username="owner", password="client123")
+        owner.profile.role = UserProfile.Role.CLIENT
+        owner.profile.save()
+        other_client = User.objects.create_user(username="other", password="client123")
+        other_client.profile.role = UserProfile.Role.CLIENT
+        other_client.profile.save()
+        project = Project.objects.create(
+            owner=owner,
+            pi_name="PI",
+            researcher_name="Researcher",
+            bioinformatician_assigned="Bioinfo",
+            title="Owned Project",
+            description="Client-owned",
+        )
+        study = Study.objects.create(project=project, title="Private client study")
+
+        self.client.force_authenticate(user=other_client)
+        response = self.client.get(f"/api/studies/{study.id}/explorer-summary/")
+
+        self.assertEqual(response.status_code, 404)
+
 
 class SampleApiTests(TestCase):
     def setUp(self) -> None:
@@ -251,6 +339,44 @@ class SampleApiTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(Sample.objects.count(), 0)
+
+    def test_list_samples_supports_study_explorer_filters(self) -> None:
+        control = Sample.objects.create(
+            study=self.study,
+            sample_ID="control-1",
+            sample_name="Control 1",
+            solvent_control=True,
+            metadata={"group": "control", "dose": 0, "chemical": "vehicle"},
+        )
+        treated = Sample.objects.create(
+            study=self.study,
+            sample_ID="treated-1",
+            sample_name="Treated 1",
+            metadata={"group": "treated", "dose": 2.5, "chemical": "mercury"},
+        )
+        Sample.objects.create(
+            study=self.study,
+            sample_ID="treated-2",
+            sample_name="Treated 2",
+            metadata={"group": "treated", "chemical": "mercury"},
+        )
+        Assay.objects.create(sample=control, platform=Assay.Platform.RNA_SEQ, genome_version="hg38", quantification_method="raw_counts")
+
+        treated_response = self.client.get(f"/api/samples/?study_id={self.study.id}&group=treated&page_size=100")
+        self.assertEqual(treated_response.status_code, 200)
+        self.assertEqual([item["sample_ID"] for item in treated_response.json()["results"]], ["treated-1", "treated-2"])
+
+        missing_assay_response = self.client.get(f"/api/samples/?study_id={self.study.id}&assay_status=missing&page_size=100")
+        self.assertEqual(missing_assay_response.status_code, 200)
+        self.assertEqual([item["sample_ID"] for item in missing_assay_response.json()["results"]], ["treated-1", "treated-2"])
+
+        control_response = self.client.get(f"/api/samples/?study_id={self.study.id}&control_flag=solvent_control&page_size=100")
+        self.assertEqual(control_response.status_code, 200)
+        self.assertEqual([item["sample_ID"] for item in control_response.json()["results"]], ["control-1"])
+
+        missing_metadata_response = self.client.get(f"/api/samples/?study_id={self.study.id}&missing_metadata=dose&page_size=100")
+        self.assertEqual(missing_metadata_response.status_code, 200)
+        self.assertEqual([item["sample_ID"] for item in missing_metadata_response.json()["results"]], ["treated-2"])
 
 
 class ConfigGenerationApiTests(TestCase):

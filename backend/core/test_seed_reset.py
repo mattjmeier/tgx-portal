@@ -3,13 +3,17 @@ from __future__ import annotations
 from io import BytesIO
 from zipfile import ZipFile
 
+from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
+from rest_framework.test import APIClient
 
 from chemicals.models import ChemicalSample
 from core.models import Assay, Project, Sample, Study, StudyConfig, StudyMetadataFieldSelection, StudyMetadataMapping, StudyOnboardingState
 from core.services import build_project_config_bundle
 from profiling.models import HTTrSeriesWell, HTTrWell, Metric, Pod, ProfilingPlatform, Series, StudyWarehouseMetadata
+
+User = get_user_model()
 
 
 class ResetSeedDataCommandTests(TestCase):
@@ -29,8 +33,8 @@ class ResetSeedDataCommandTests(TestCase):
 
         self.assertEqual(Project.objects.count(), 4)
         self.assertEqual(Study.objects.count(), 12)
-        self.assertEqual(Sample.objects.count(), 36)
-        self.assertEqual(Assay.objects.count(), 36)
+        self.assertEqual(Sample.objects.count(), 108)
+        self.assertEqual(Assay.objects.count(), 108)
         self.assertEqual(StudyOnboardingState.objects.count(), 12)
         self.assertEqual(StudyConfig.objects.count(), 12)
         self.assertEqual(StudyMetadataMapping.objects.count(), 12)
@@ -84,3 +88,76 @@ class ResetSeedDataCommandTests(TestCase):
         self.assertEqual(state.template_context["exposure_label_mode"], "dose")
         self.assertEqual(state.template_context["treatment_vars"], ["group"])
         self.assertEqual(state.template_context["batch_vars"], ["plate"])
+
+    def test_seeded_ready_studies_include_required_config_fields(self) -> None:
+        call_command("reset_seed_data")
+
+        configs = StudyConfig.objects.select_related("study").exclude(study__title="AFB1 format comparison bridge").order_by("study__title")
+
+        self.assertEqual(configs.count(), 11)
+        for config in configs:
+            self.assertTrue(config.common["instrument_model"])
+            self.assertTrue(config.common["sequenced_by"])
+            self.assertEqual(config.common["platform"], "RNA-Seq")
+            self.assertEqual(config.pipeline["mode"], "se")
+
+    def test_seeded_study_groups_have_three_samples_each(self) -> None:
+        call_command("reset_seed_data")
+
+        for study in Study.objects.order_by("title"):
+            group_counts: dict[str, int] = {}
+            for sample in study.samples.all():
+                group = str((sample.metadata or {}).get("group") or "")
+                self.assertTrue(group, msg=f"Study {study.title} has a sample without a group.")
+                group_counts[group] = group_counts.get(group, 0) + 1
+
+            self.assertTrue(group_counts, msg=f"Study {study.title} has no seeded groups.")
+            self.assertTrue(all(count == 3 for count in group_counts.values()), msg=f"Study {study.title} group counts were {group_counts}.")
+
+    def test_seeded_ready_study_explorer_summary_is_not_blocked(self) -> None:
+        admin = User.objects.create_user(username="seed-admin", password="admin123")
+        admin.profile.role = "admin"
+        admin.profile.save()
+        client = APIClient()
+        client.force_authenticate(user=admin)
+
+        call_command("reset_seed_data")
+
+        study = Study.objects.get(title="MCF-7 estrogen pulse")
+        response = client.get(f"/api/studies/{study.id}/explorer-summary/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["readiness"]["status"], "ready")
+        self.assertEqual(payload["readiness"]["label"], "Ready")
+        self.assertEqual(payload["sample_summary"]["total"], 9)
+        self.assertEqual(payload["sample_summary"]["solvent_controls"], 3)
+        self.assertEqual(payload["assay_summary"]["samples_with_assays"], 9)
+        self.assertEqual(payload["assay_summary"]["samples_missing_assays"], 0)
+        self.assertEqual(payload["config_summary"]["instrument_model"], "Illumina NovaSeq 6000")
+        self.assertEqual(payload["config_summary"]["sequenced_by"], "HC Genomics lab")
+
+    def test_seeded_edge_case_study_is_warning_not_invalid_blocked(self) -> None:
+        admin = User.objects.create_user(username="seed-admin", password="admin123")
+        admin.profile.role = "admin"
+        admin.profile.save()
+        client = APIClient()
+        client.force_authenticate(user=admin)
+
+        call_command("reset_seed_data")
+
+        study = Study.objects.get(title="AFB1 format comparison bridge")
+        state = StudyOnboardingState.objects.get(study=study)
+        config = StudyConfig.objects.get(study=study)
+        response = client.get(f"/api/studies/{study.id}/explorer-summary/")
+
+        self.assertEqual(state.status, StudyOnboardingState.Status.DRAFT)
+        self.assertTrue(config.common["instrument_model"])
+        self.assertTrue(config.common["sequenced_by"])
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["readiness"]["status"], "warning")
+        self.assertEqual(payload["readiness"]["label"], "Needs attention")
+        self.assertTrue(any(issue["code"] == "onboarding_draft" for issue in payload["blocking_issues"]))
+        self.assertFalse(any(issue["code"] == "config.common.instrument_model" for issue in payload["blocking_issues"]))
+        self.assertFalse(any(issue["code"] == "config.common.sequenced_by" for issue in payload["blocking_issues"]))

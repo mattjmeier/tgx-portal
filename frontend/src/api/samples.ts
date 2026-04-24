@@ -19,6 +19,12 @@ export type SampleQueryParams = {
   pageSize?: number;
   search?: string;
   ordering?: string;
+  group?: string;
+  dose?: string;
+  chemical?: string;
+  controlFlag?: "technical_control" | "reference_rna" | "solvent_control" | "any";
+  assayStatus?: "present" | "missing";
+  missingMetadata?: string;
 };
 
 export type BulkSampleRowError = {
@@ -57,6 +63,24 @@ export async function fetchSamples(
   }
   if (params.ordering) {
     searchParams.set("ordering", params.ordering);
+  }
+  if (params.group) {
+    searchParams.set("group", params.group);
+  }
+  if (params.dose) {
+    searchParams.set("dose", params.dose);
+  }
+  if (params.chemical) {
+    searchParams.set("chemical", params.chemical);
+  }
+  if (params.controlFlag) {
+    searchParams.set("control_flag", params.controlFlag);
+  }
+  if (params.assayStatus) {
+    searchParams.set("assay_status", params.assayStatus);
+  }
+  if (params.missingMetadata) {
+    searchParams.set("missing_metadata", params.missingMetadata);
   }
 
   const response = await apiFetch(`${apiBaseUrl}/api/samples/?${searchParams.toString()}`);

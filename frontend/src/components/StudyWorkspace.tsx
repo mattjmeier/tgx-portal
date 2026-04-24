@@ -1,32 +1,40 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PaginationState, SortingState } from "@tanstack/react-table";
+import { AlertTriangle, CheckCircle2, CircleDashed, Download, FileSpreadsheet, FlaskConical, Settings2 } from "lucide-react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { fetchAssays, type Assay } from "../api/assays";
 import { downloadProjectConfig, fetchProject } from "../api/projects";
 import { fetchSamples, type Sample } from "../api/samples";
+import { fetchStudyExplorerSummary, type StudyExplorerIssue, type SummaryBucket } from "../api/studyExplorer";
 import { deleteStudy, fetchStudy } from "../api/studies";
 import { fetchStudyOnboardingState } from "../api/studyOnboarding";
 import { useAuth } from "../auth/AuthProvider";
+import { cn } from "../lib/utils";
 import { collaborationPath, studiesIndexPath, studyOnboardingPath } from "../lib/routes";
 import { clearDeletedStudyClientState } from "../lib/studyDeletion";
 import { AssayForm } from "./AssayForm";
 import { SampleForm } from "./SampleForm";
 import { StudyActionsMenu } from "./StudyActionsMenu";
-import { SampleExplorerTable } from "./SampleExplorerTable";
+import { SampleExplorerTable, type SampleExplorerFilters } from "./SampleExplorerTable";
 import { SampleUploadPanel } from "./SampleUploadPanel";
 import { WorkspaceDetailFieldList } from "./WorkspaceDetailFieldList";
 import { WorkspaceSectionCard } from "./WorkspaceSectionCard";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { CardDescription } from "./ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Separator } from "./ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./ui/sheet";
 
-type StudyWorkspaceTab = "samples" | "contrasts" | "collaboration";
+type StudyWorkspaceView = "overview" | "samples" | "contrasts" | "collaboration";
 
-const allowedTabs: StudyWorkspaceTab[] = ["samples", "contrasts", "collaboration"];
+const workspaceViews: Array<{ key: StudyWorkspaceView; label: string }> = [
+  { key: "overview", label: "Overview" },
+  { key: "samples", label: "Samples" },
+  { key: "contrasts", label: "Contrasts" },
+  { key: "collaboration", label: "Collaboration" },
+];
 
 function parseStudyId(value: string | undefined): number | null {
   if (!value) {
@@ -36,11 +44,11 @@ function parseStudyId(value: string | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function parseTab(value: string | null): StudyWorkspaceTab {
-  if (value && (allowedTabs as string[]).includes(value)) {
-    return value as StudyWorkspaceTab;
+function parseWorkspaceView(value: string | null): StudyWorkspaceView {
+  if (value === "samples" || value === "contrasts" || value === "collaboration") {
+    return value;
   }
-  return "samples";
+  return "overview";
 }
 
 function getSampleMetadataString(sample: Sample | null, key: string, fallback = "Not provided"): string {
@@ -54,6 +62,199 @@ function getSampleMetadataString(sample: Sample | null, key: string, fallback = 
   return String(value);
 }
 
+function parseSampleFilters(searchParams: URLSearchParams): SampleExplorerFilters {
+  const assayStatus = searchParams.get("assay_status");
+  const controlFlag = searchParams.get("control_flag");
+  return {
+    group: searchParams.get("group") ?? undefined,
+    dose: searchParams.get("dose") ?? undefined,
+    chemical: searchParams.get("chemical") ?? undefined,
+    assayStatus: assayStatus === "present" || assayStatus === "missing" ? assayStatus : undefined,
+    controlFlag:
+      controlFlag === "technical_control" ||
+      controlFlag === "reference_rna" ||
+      controlFlag === "solvent_control" ||
+      controlFlag === "any"
+        ? controlFlag
+        : undefined,
+    missingMetadata: searchParams.get("missing_metadata") ?? undefined,
+  };
+}
+
+function applySampleFiltersToParams(params: URLSearchParams, filters: SampleExplorerFilters) {
+  const mapping: Array<[keyof SampleExplorerFilters, string]> = [
+    ["group", "group"],
+    ["dose", "dose"],
+    ["chemical", "chemical"],
+    ["controlFlag", "control_flag"],
+    ["assayStatus", "assay_status"],
+    ["missingMetadata", "missing_metadata"],
+  ];
+  for (const [filterKey, paramKey] of mapping) {
+    const value = filters[filterKey];
+    if (value) {
+      params.set(paramKey, value);
+    } else {
+      params.delete(paramKey);
+    }
+  }
+}
+
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) {
+    return "Not finalized";
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function SummaryTile({
+  label,
+  value,
+  helper,
+  status = "neutral",
+}: {
+  label: string;
+  value: string | number;
+  helper?: string;
+  status?: "ready" | "warning" | "error" | "neutral";
+}) {
+  return (
+    <Card className={cn(status === "error" ? "border-destructive/50" : "", status === "warning" ? "border-amber-300" : "")}>
+      <CardHeader className="pb-2">
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className="text-2xl">{value}</CardTitle>
+      </CardHeader>
+      {helper ? <CardContent className="pt-0 text-sm text-muted-foreground">{helper}</CardContent> : null}
+    </Card>
+  );
+}
+
+function BucketList({ buckets, emptyLabel }: { buckets: SummaryBucket[]; emptyLabel: string }) {
+  const maxCount = Math.max(...buckets.map((bucket) => bucket.count), 1);
+  if (buckets.length === 0) {
+    return <p className="text-sm text-muted-foreground">{emptyLabel}</p>;
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {buckets.map((bucket) => (
+        <div className="flex flex-col gap-1" key={bucket.value}>
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="truncate font-medium text-foreground">{bucket.value}</span>
+            <span className="text-muted-foreground">{bucket.count}</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-primary/70" style={{ width: `${Math.max(8, (bucket.count / maxCount) * 100)}%` }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function IssueIcon({ severity }: { severity: StudyExplorerIssue["severity"] }) {
+  return severity === "error" ? <AlertTriangle data-icon="inline-start" /> : <CircleDashed data-icon="inline-start" />;
+}
+
+function SampleDetailPanel({
+  assays,
+  isAdmin,
+  sample,
+  studyId,
+}: {
+  assays: Assay[];
+  isAdmin: boolean;
+  sample: Sample | null;
+  studyId: number;
+}) {
+  const selectedSampleFields = useMemo(
+    () =>
+      sample
+        ? [
+            { label: "Long chemical name", value: getSampleMetadataString(sample, "chemical_longname") },
+            { label: "Technical control", value: sample.technical_control ? "Yes" : "No" },
+            { label: "Reference RNA", value: sample.reference_rna ? "Yes" : "No" },
+            { label: "Solvent control", value: sample.solvent_control ? "Yes" : "No" },
+          ]
+        : [],
+    [sample],
+  );
+
+  if (!sample) {
+    return (
+      <WorkspaceSectionCard
+        className="h-full"
+        contentClassName="flex h-full flex-col gap-3"
+        description="Select a row in the explorer to review metadata and assay coverage."
+        eyebrow="Detail panel"
+        title="No sample selected"
+      >
+        <p className="text-sm text-muted-foreground">Pick a sample from the table to populate this panel.</p>
+      </WorkspaceSectionCard>
+    );
+  }
+
+  return (
+    <WorkspaceSectionCard
+      className="h-full"
+      contentClassName="flex h-full flex-col gap-5"
+      description="Review the currently selected sample without leaving the explorer."
+      eyebrow="Detail panel"
+      title="Selected sample"
+    >
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground">{sample.sample_ID}</p>
+        <div className="flex flex-col gap-1">
+          <h3 className="text-xl font-semibold text-foreground">{sample.sample_name}</h3>
+          <CardDescription className="text-sm leading-6">{sample.description || "No description yet."}</CardDescription>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Badge className="rounded-full px-3 py-1 text-sm" variant="secondary">
+          Group: {getSampleMetadataString(sample, "group", "—")}
+        </Badge>
+        <Badge className="rounded-full px-3 py-1 text-sm" variant="secondary">
+          Dose: {getSampleMetadataString(sample, "dose", "—")}
+        </Badge>
+        <Badge className="rounded-full px-3 py-1 text-sm" variant="secondary">
+          Chemical: {getSampleMetadataString(sample, "chemical", "None")}
+        </Badge>
+      </div>
+
+      <WorkspaceDetailFieldList fields={selectedSampleFields} />
+
+      <Separator />
+
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <h4 className="text-sm font-semibold text-foreground">Assays</h4>
+          <p className="text-sm text-muted-foreground">Recorded assay coverage for the selected sample.</p>
+        </div>
+        {assays.length ? (
+          <div className="grid gap-3">
+            {assays.map((assay) => (
+              <article className="flex items-start justify-between gap-4 rounded-lg border bg-muted/20 p-4" key={assay.id}>
+                <div className="flex flex-col gap-1">
+                  <strong>{assay.platform === "rna_seq" ? "RNA-Seq" : "TempO-Seq"}</strong>
+                  <p className="text-sm text-muted-foreground">
+                    {assay.genome_version} / {assay.quantification_method}
+                  </p>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No assays yet for this sample.</p>
+        )}
+        {isAdmin ? <AssayForm sampleId={sample.id} studyId={studyId} /> : null}
+      </div>
+    </WorkspaceSectionCard>
+  );
+}
+
 export function StudyWorkspace() {
   const queryClient = useQueryClient();
   const auth = useAuth();
@@ -61,15 +262,16 @@ export function StudyWorkspace() {
   const params = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const studyId = parseStudyId(params.studyId);
-
-  const activeTab = useMemo(() => parseTab(searchParams.get("tab")), [searchParams]);
-  const intakeParam = searchParams.get("intake");
-  const intakeOpen = intakeParam === "open";
+  const activeView = parseWorkspaceView(searchParams.get("view"));
+  const intakeOpen = searchParams.get("intake") === "open";
+  const sampleFilters = useMemo(() => parseSampleFilters(searchParams), [searchParams]);
 
   const [sampleSearch, setSampleSearch] = useState("");
   const [samplePagination, setSamplePagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [sampleSorting, setSampleSorting] = useState<SortingState>([]);
   const [selectedSampleId, setSelectedSampleId] = useState<number | null>(null);
+  const [selectedSampleIds, setSelectedSampleIds] = useState<Set<number>>(() => new Set());
+  const [inspectorOpen, setInspectorOpen] = useState(false);
 
   const studyQuery = useQuery({
     queryKey: ["study", studyId],
@@ -83,16 +285,28 @@ export function StudyWorkspace() {
     enabled: Boolean(studyQuery.data?.project),
   });
 
+  const explorerSummaryQuery = useQuery({
+    queryKey: ["study-explorer-summary", studyId],
+    queryFn: () => fetchStudyExplorerSummary(studyId as number),
+    enabled: studyId !== null,
+  });
+
   const samplesQuery = useQuery({
-    queryKey: ["samples", studyId, samplePagination.pageIndex, samplePagination.pageSize, sampleSearch, sampleSorting],
+    queryKey: ["samples", studyId, samplePagination.pageIndex, samplePagination.pageSize, sampleSearch, sampleSorting, sampleFilters],
     queryFn: () =>
       fetchSamples(studyId as number, {
         page: samplePagination.pageIndex + 1,
         pageSize: samplePagination.pageSize,
         search: sampleSearch.trim() ? sampleSearch.trim() : undefined,
         ordering: sampleSorting[0] ? `${sampleSorting[0].desc ? "-" : ""}${sampleSorting[0].id}` : undefined,
+        group: sampleFilters.group,
+        dose: sampleFilters.dose,
+        chemical: sampleFilters.chemical,
+        controlFlag: sampleFilters.controlFlag,
+        assayStatus: sampleFilters.assayStatus,
+        missingMetadata: sampleFilters.missingMetadata,
       }),
-    enabled: studyId !== null && activeTab === "samples",
+    enabled: studyId !== null && activeView === "samples",
   });
 
   const onboardingStateQuery = useQuery({
@@ -104,7 +318,7 @@ export function StudyWorkspace() {
   const assaysQuery = useQuery({
     queryKey: ["assays", studyId],
     queryFn: () => fetchAssays(studyId as number),
-    enabled: studyId !== null && activeTab === "samples",
+    enabled: studyId !== null && activeView === "samples",
   });
 
   const configMutation = useMutation({
@@ -139,7 +353,7 @@ export function StudyWorkspace() {
 
   useEffect(() => {
     setSamplePagination((current) => ({ ...current, pageIndex: 0 }));
-  }, [sampleSearch, sampleSorting, studyId]);
+  }, [sampleSearch, sampleSorting, sampleFilters, studyId]);
 
   useEffect(() => {
     const currentSamples = samplesQuery.data?.results ?? [];
@@ -163,237 +377,419 @@ export function StudyWorkspace() {
   const selectedSample = useMemo(() => {
     return (samplesQuery.data?.results ?? []).find((sample) => sample.id === selectedSampleId) ?? null;
   }, [samplesQuery.data, selectedSampleId]);
-  const selectedSampleFields = useMemo(
-    () =>
-      selectedSample
-        ? [
-            { label: "Long chemical name", value: getSampleMetadataString(selectedSample, "chemical_longname") },
-            { label: "Technical control", value: selectedSample.technical_control ? "Yes" : "No" },
-            { label: "Reference RNA", value: selectedSample.reference_rna ? "Yes" : "No" },
-            { label: "Solvent control", value: selectedSample.solvent_control ? "Yes" : "No" },
-          ]
-        : [],
-    [selectedSample],
-  );
-
-  function setTab(next: StudyWorkspaceTab) {
-    const nextParams = new URLSearchParams(searchParams);
-    if (next === "samples") {
-      nextParams.delete("tab");
-    } else {
-      nextParams.set("tab", next);
-    }
-    setSearchParams(nextParams, { replace: true });
-  }
 
   function setIntake(nextOpen: boolean) {
     const nextParams = new URLSearchParams(searchParams);
     if (nextOpen) {
+      nextParams.set("view", "samples");
       nextParams.set("intake", "open");
-      if (activeTab !== "samples") {
-        nextParams.delete("tab");
-      }
     } else {
       nextParams.delete("intake");
     }
     setSearchParams(nextParams, { replace: true });
   }
 
+  function setSampleFilters(nextFilters: SampleExplorerFilters) {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("view", "samples");
+    applySampleFiltersToParams(nextParams, nextFilters);
+    setSearchParams(nextParams, { replace: true });
+  }
+
+  function clearSampleFilters() {
+    setSampleFilters({});
+  }
+
+  function applyIssueFilter(issue: StudyExplorerIssue) {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("view", "samples");
+    applySampleFiltersToParams(nextParams, {
+      ...sampleFilters,
+      assayStatus: issue.filter.assay_status === "missing" || issue.filter.assay_status === "present" ? issue.filter.assay_status : sampleFilters.assayStatus,
+      controlFlag:
+        issue.filter.control_flag === "technical_control" ||
+        issue.filter.control_flag === "reference_rna" ||
+        issue.filter.control_flag === "solvent_control" ||
+        issue.filter.control_flag === "any"
+          ? issue.filter.control_flag
+          : sampleFilters.controlFlag,
+      missingMetadata: issue.filter.missing_metadata ?? sampleFilters.missingMetadata,
+    });
+    setSearchParams(nextParams, { replace: true });
+  }
+
   const study = studyQuery.data;
+  const summary = explorerSummaryQuery.data;
+  const isAdmin = auth.user?.profile.role === "admin";
+  const onboardingPath = study ? studyOnboardingPath(study.id) : "#";
+  const finalizePath = study ? `${studyOnboardingPath(study.id)}?step=finalize` : "#";
+  const metadataColumns =
+    summary?.design_summary.metadata_columns ??
+    onboardingStateQuery.data?.metadata_columns ??
+    [];
+
+  function viewHref(view: StudyWorkspaceView): string {
+    const nextParams = new URLSearchParams(searchParams);
+    if (view === "overview") {
+      nextParams.delete("view");
+      nextParams.delete("intake");
+    } else {
+      nextParams.set("view", view);
+      if (view !== "samples") {
+        nextParams.delete("intake");
+      }
+    }
+    const query = nextParams.toString();
+    return query ? `?${query}` : ".";
+  }
 
   return (
     <section className="workspace-route">
-      <div className="min-w-0">
-        <p className="eyebrow">Study workspace</p>
-        <h2 className="truncate">{study?.title ?? "Study"}</h2>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <p className="eyebrow">Study workspace</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="truncate">{study?.title ?? "Study"}</h2>
+            {study ? <Badge size="sm" variant={study.status === "active" ? "default" : "secondary"}>{study.status}</Badge> : null}
+            {summary ? (
+              <Badge
+                size="sm"
+                className={summary.readiness.status === "error" ? "border-destructive/40 text-destructive" : undefined}
+                variant={summary.readiness.status === "error" ? "outline" : summary.readiness.status === "warning" ? "secondary" : "default"}
+              >
+                {summary.readiness.status === "ready" ? <CheckCircle2 data-icon="inline-start" /> : <AlertTriangle data-icon="inline-start" />}
+                {summary.readiness.label}
+              </Badge>
+            ) : null}
+          </div>
+          {study ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              <span>
+                {study.species && study.celltype ? `${study.species} · ${study.celltype}` : "Draft metadata pending"}
+              </span>
+              <span className="mx-2">·</span>
+              <Link className="text-primary hover:underline" to={collaborationPath(study.project)}>
+                {study.project_title}
+              </Link>
+              {summary?.config_summary.platform ? <span className="ml-2">· {summary.config_summary.platform}</span> : null}
+              {summary?.readiness.updated_at ? <span className="ml-2">· Updated {formatDateTime(summary.readiness.updated_at)}</span> : null}
+            </p>
+          ) : null}
+        </div>
+
         {study ? (
-          <p className="mt-1 text-sm text-muted-foreground">
-            <span>
-              {study.species && study.celltype ? `${study.species} · ${study.celltype}` : "Draft metadata pending"}
-            </span>
-            <span className="mx-2">·</span>
-            <Link className="text-primary hover:underline" to={collaborationPath(study.project)}>
-              {study.project_title}
-            </Link>
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" onClick={() => setIntake(!intakeOpen)}>
+              {intakeOpen ? "Hide sample tools" : "Add samples"}
+            </Button>
+            {summary?.readiness.status !== "ready" ? (
+              <Button asChild type="button" variant="outline">
+                <Link to={onboardingPath}>
+                  <FileSpreadsheet data-icon="inline-start" />
+                  Continue onboarding
+                </Link>
+              </Button>
+            ) : null}
+            <StudyActionsMenu
+              collaborationId={study.project}
+              isDeletingStudy={deleteStudyMutation.isPending}
+              onDeleteStudy={deleteStudyMutation.mutate}
+              onDownloadConfig={isAdmin ? () => configMutation.mutate(study.project) : undefined}
+              showOpenStudy={false}
+              studyId={study.id}
+              studyTitle={study.title}
+              triggerClassName="shrink-0"
+              triggerLabel="More study actions"
+              triggerVariant="outline"
+            />
+          </div>
         ) : null}
       </div>
 
       {studyQuery.isLoading ? <p>Loading study workspace...</p> : null}
       {studyQuery.isError ? <p className="error-text">Unable to load this study.</p> : null}
+      {explorerSummaryQuery.isError ? <p className="error-text">Unable to load study explorer summary.</p> : null}
 
       {study ? (
-        <Tabs className="mt-4" value={activeTab} onValueChange={(value) => setTab(parseTab(value))}>
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <TabsList>
-              <TabsTrigger value="samples">Samples</TabsTrigger>
-              <TabsTrigger value="contrasts">Contrasts</TabsTrigger>
-              <TabsTrigger value="collaboration">Collaboration info</TabsTrigger>
-            </TabsList>
+        <div className="mt-5 flex flex-col gap-6">
+          <nav className="flex flex-wrap gap-2 rounded-lg border bg-background p-2 text-sm shadow-sm" aria-label="Study workspace views">
+            {workspaceViews.map((view) => (
+              <Link
+                className={cn(
+                  "rounded-md px-3 py-2 transition-colors",
+                  activeView === view.key
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+                to={viewHref(view.key)}
+                key={view.key}
+              >
+                {view.label}
+              </Link>
+            ))}
+          </nav>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => setIntake(!intakeOpen)}>
-                {intakeOpen ? "Hide sample tools" : "Add samples"}
-              </Button>
-              <Button type="button" onClick={() => setTab("contrasts")}>
-                Add contrasts
-              </Button>
-              <StudyActionsMenu
-                collaborationId={study.project}
-                isDeletingStudy={deleteStudyMutation.isPending}
-                onDeleteStudy={deleteStudyMutation.mutate}
-                onDownloadConfig={auth.user?.profile.role === "admin" ? () => configMutation.mutate(study.project) : undefined}
-                showOpenStudy={false}
-                studyId={study.id}
-                studyTitle={study.title}
-                triggerClassName="shrink-0"
-                triggerLabel="More study actions"
-                triggerVariant="outline"
-              />
-            </div>
-          </div>
+          {activeView === "overview" ? (
+            <>
+              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <SummaryTile
+                  label="Readiness"
+                  value={summary?.readiness.status === "ready" ? "Ready" : summary?.readiness.status === "error" ? "Blocked" : summary ? "Review" : "Loading"}
+                  helper={summary?.readiness.finalized_at ? `Finalized ${formatDateTime(summary.readiness.finalized_at)}` : "Operational handoff state"}
+                  status={summary?.readiness.status ?? "neutral"}
+                />
+                <SummaryTile label="Samples" value={summary?.sample_summary.total ?? "—"} helper="Biological metadata rows" />
+                <SummaryTile
+                  label="Assay coverage"
+                  value={summary ? `${summary.assay_summary.samples_with_assays}/${summary.sample_summary.total}` : "—"}
+                  helper={`${summary?.assay_summary.samples_missing_assays ?? 0} missing assay metadata`}
+                  status={summary && summary.assay_summary.samples_missing_assays > 0 ? "warning" : "ready"}
+                />
+                <SummaryTile label="Contrasts" value={summary?.contrast_summary.selected_count ?? "—"} helper={`${summary?.contrast_summary.suggested_count ?? 0} suggested`} />
+                <SummaryTile label="Config" value={summary?.config_summary.can_download_config ? "Ready" : "Review"} helper={summary?.config_summary.sequencing_mode || "Mode pending"} />
+              </section>
 
-          <TabsContent value="samples">
-            <div className="mt-4 flex flex-col gap-6">
-              {deleteStudyMutation.isError ? <p className="error-text">{deleteStudyMutation.error.message}</p> : null}
-              {intakeOpen ? (
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
                 <WorkspaceSectionCard
-                  action={
-                    <Button type="button" variant="ghost" onClick={() => setIntake(false)}>
-                      Close
-                    </Button>
-                  }
-                  contentClassName="grid gap-6 lg:grid-cols-2"
-                  description="Add samples one-by-one or upload a sheet for bulk intake. These panels are hidden by default to keep the workspace focused on the samples table."
-                  eyebrow="Onboarding"
-                  title="Sample metadata onboarding"
+                  contentClassName="grid gap-6 md:grid-cols-3"
+                  description="A compact view of the experimental structure that will drive grouping, contrasts, and generated R-ODAF configuration."
+                  eyebrow="Design"
+                  title="Study design overview"
                 >
-                  <div className="contents">
-                    <SampleForm studyId={study.id} />
-                    <SampleUploadPanel studyId={study.id} />
+                  <div className="flex flex-col gap-3">
+                    <h3 className="text-sm font-semibold text-foreground">Groups</h3>
+                    <BucketList buckets={summary?.design_summary.groups ?? []} emptyLabel="No groups found." />
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <h3 className="text-sm font-semibold text-foreground">Doses</h3>
+                    <BucketList buckets={summary?.design_summary.doses ?? []} emptyLabel="No dose values found." />
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <h3 className="text-sm font-semibold text-foreground">Chemicals</h3>
+                    <BucketList buckets={summary?.design_summary.chemicals ?? []} emptyLabel="No chemical values found." />
                   </div>
                 </WorkspaceSectionCard>
-              ) : null}
 
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-                <SampleExplorerTable
-                  samples={samplesQuery.data?.results ?? []}
-                  totalCount={samplesQuery.data?.count ?? 0}
-                  isLoading={samplesQuery.isLoading}
-                  pagination={samplePagination}
-                  sorting={sampleSorting}
-                  search={sampleSearch}
-                  selectedSampleId={selectedSampleId}
-                  onPaginationChange={setSamplePagination}
-                  onSortingChange={setSampleSorting}
-                  onSearchChange={setSampleSearch}
-                  onSelectSample={(sample) => setSelectedSampleId(sample.id)}
-                />
-
-                <aside className="grid gap-4">
-                  {samplesQuery.isError ? <p className="error-text">Unable to load samples.</p> : null}
-                  {assaysQuery.isError ? <p className="error-text">Unable to load assays.</p> : null}
-                  {selectedSample ? (
-                    <WorkspaceSectionCard
-                      className="h-full"
-                      contentClassName="flex h-full flex-col gap-5"
-                      description="Review the currently selected sample without leaving the explorer."
-                      eyebrow="Detail panel"
-                      title="Selected sample"
-                    >
-                      <div className="flex flex-col gap-2">
-                        <p className="text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground">{selectedSample.sample_ID}</p>
-                        <div className="flex flex-col gap-1">
-                          <h3 className="text-xl font-semibold text-foreground">{selectedSample.sample_name}</h3>
-                          <CardDescription className="text-sm leading-6">
-                            {selectedSample.description || "No description yet."}
-                          </CardDescription>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <Badge className="rounded-full px-3 py-1 text-sm" variant="secondary">
-                          Group: {getSampleMetadataString(selectedSample, "group", "—")}
-                        </Badge>
-                        <Badge className="rounded-full px-3 py-1 text-sm" variant="secondary">
-                          Dose: {getSampleMetadataString(selectedSample, "dose", "—")}
-                        </Badge>
-                        <Badge className="rounded-full px-3 py-1 text-sm" variant="secondary">
-                          Chemical: {getSampleMetadataString(selectedSample, "chemical", "None")}
-                        </Badge>
-                      </div>
-
-                      <WorkspaceDetailFieldList fields={selectedSampleFields} />
-
-                      <Separator />
-
-                      <div className="flex flex-col gap-4">
-                        <div className="flex flex-col gap-1">
-                          <h4 className="text-sm font-semibold text-foreground">Assays</h4>
-                          <p className="text-sm text-muted-foreground">Recorded assay coverage for the selected sample.</p>
-                        </div>
-                        {assaysBySample[selectedSample.id]?.length ? (
-                          <div className="grid gap-3">
-                            {assaysBySample[selectedSample.id].map((assay) => (
-                              <article className="flex items-start justify-between gap-4 rounded-lg border bg-muted/20 p-4" key={assay.id}>
-                                <div className="flex flex-col gap-1">
-                                  <strong>{assay.platform === "rna_seq" ? "RNA-Seq" : "TempO-Seq"}</strong>
-                                  <p className="text-sm text-muted-foreground">
-                                    {assay.genome_version} / {assay.quantification_method}
-                                  </p>
-                                </div>
-                              </article>
-                            ))}
+                <WorkspaceSectionCard
+                  contentClassName="flex flex-col gap-3"
+                  description="Issues that can change whether the generated handoff is complete."
+                  eyebrow="Review"
+                  title="Attention queue"
+                >
+                  {summary?.blocking_issues.length ? (
+                    summary.blocking_issues.map((issue) => (
+                      <article className="flex items-start justify-between gap-3 rounded-lg border bg-muted/20 p-3" key={`${issue.code}-${issue.message}`}>
+                        <div className="flex min-w-0 gap-2">
+                          <span className={issue.severity === "error" ? "text-destructive" : "text-muted-foreground"}>
+                            <IssueIcon severity={issue.severity} />
+                          </span>
+                          <div className="flex min-w-0 flex-col gap-1">
+                            <p className="text-sm font-medium text-foreground">{issue.message}</p>
+                            <p className="text-xs text-muted-foreground">{issue.severity === "error" ? "Blocking" : "Warning"}</p>
                           </div>
+                        </div>
+                        {Object.keys(issue.filter).length > 0 ? (
+                          <Button size="sm" type="button" variant="outline" onClick={() => applyIssueFilter(issue)}>
+                            {issue.action_label}
+                          </Button>
                         ) : (
-                          <p className="text-sm text-muted-foreground">No assays yet for this sample.</p>
+                          <Button asChild size="sm" variant="outline">
+                            <Link to={finalizePath}>{issue.action_label}</Link>
+                          </Button>
                         )}
-                        {auth.user?.profile.role === "admin" ? <AssayForm sampleId={selectedSample.id} studyId={study.id} /> : null}
-                      </div>
-                    </WorkspaceSectionCard>
+                      </article>
+                    ))
                   ) : (
-                    <WorkspaceSectionCard
-                      className="h-full"
-                      contentClassName="flex h-full flex-col gap-3"
-                      description="Select a row in the explorer to review metadata and assay coverage."
-                      eyebrow="Detail panel"
-                      title="No sample selected"
-                    >
-                      <p className="text-sm text-muted-foreground">Pick a sample from the table to populate this panel.</p>
-                    </WorkspaceSectionCard>
+                    <p className="text-sm text-muted-foreground">No operational issues found.</p>
                   )}
-                </aside>
+                </WorkspaceSectionCard>
               </div>
-            </div>
-          </TabsContent>
+            </>
+          ) : null}
 
-          <TabsContent value="contrasts">
-            <section className="rounded-lg border border-border bg-background p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-foreground">Contrasts for this study</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Contrast configuration will live here once metadata onboarding (template + upload + mapping) is implemented. For now, use the sample table to confirm intake.
-              </p>
+          {deleteStudyMutation.isError ? <p className="error-text">{deleteStudyMutation.error.message}</p> : null}
+          {activeView === "samples" && intakeOpen ? (
+            <WorkspaceSectionCard
+              action={
+                <Button type="button" variant="ghost" onClick={() => setIntake(false)}>
+                  Close
+                </Button>
+              }
+              contentClassName="grid gap-6 lg:grid-cols-2"
+              description="Add samples one-by-one or upload a sheet for bulk intake. These tools stay inline so scientists can compare new rows against the explorer."
+              eyebrow="Onboarding"
+              title="Sample metadata onboarding"
+            >
+              <div className="contents">
+                <SampleForm studyId={study.id} />
+                <SampleUploadPanel studyId={study.id} />
+              </div>
+            </WorkspaceSectionCard>
+          ) : null}
+
+          {activeView === "samples" ? (
+            <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+              <SampleExplorerTable
+              samples={samplesQuery.data?.results ?? []}
+              totalCount={samplesQuery.data?.count ?? 0}
+              isLoading={samplesQuery.isLoading}
+              pagination={samplePagination}
+              sorting={sampleSorting}
+              search={sampleSearch}
+              selectedSampleId={selectedSampleId}
+              selectedSampleIds={selectedSampleIds}
+              filters={sampleFilters}
+              metadataColumns={metadataColumns}
+              onPaginationChange={setSamplePagination}
+              onSortingChange={setSampleSorting}
+              onSearchChange={setSampleSearch}
+              onFilterChange={setSampleFilters}
+              onClearFilters={clearSampleFilters}
+              onSelectSample={(sample) => {
+                setSelectedSampleId(sample.id);
+                setInspectorOpen(true);
+              }}
+              onToggleSampleSelection={(sampleId, selected) =>
+                setSelectedSampleIds((current) => {
+                  const next = new Set(current);
+                  if (selected) {
+                    next.add(sampleId);
+                  } else {
+                    next.delete(sampleId);
+                  }
+                  return next;
+                })
+              }
+              onTogglePageSelection={(selected, sampleIds) =>
+                setSelectedSampleIds((current) => {
+                  const next = new Set(current);
+                  for (const sampleId of sampleIds) {
+                    if (selected) {
+                      next.add(sampleId);
+                    } else {
+                      next.delete(sampleId);
+                    }
+                  }
+                  return next;
+                })
+              }
+              />
+
+              <aside className="grid gap-4">
+                {samplesQuery.isError ? <p className="error-text">Unable to load samples.</p> : null}
+                {assaysQuery.isError ? <p className="error-text">Unable to load assays.</p> : null}
+                <SampleDetailPanel
+                  assays={selectedSample ? assaysBySample[selectedSample.id] ?? [] : []}
+                  isAdmin={Boolean(isAdmin)}
+                  sample={selectedSample}
+                  studyId={study.id}
+                />
+              </aside>
             </section>
-          </TabsContent>
+          ) : null}
 
-          <TabsContent value="collaboration">
-            <div className="rounded-md border border-border bg-muted/20 p-4">
+          {activeView === "contrasts" ? (
+            <WorkspaceSectionCard
+            action={
+              <div className="flex flex-wrap items-center gap-2">
+                <Button asChild type="button" variant="outline">
+                  <Link to={finalizePath}>
+                    <Settings2 data-icon="inline-start" />
+                    Review contrasts
+                  </Link>
+                </Button>
+                {isAdmin ? (
+                  <Button
+                    disabled={!summary?.config_summary.can_download_config || configMutation.isPending}
+                    type="button"
+                    onClick={() => configMutation.mutate(study.project)}
+                  >
+                    <Download data-icon="inline-start" />
+                    Download config
+                  </Button>
+                ) : null}
+              </div>
+            }
+            contentClassName="grid gap-6 lg:grid-cols-2"
+            description="Selected contrasts and config essentials that will become the handoff bundle."
+            eyebrow="Handoff"
+            title="Contrasts and config handoff"
+            className="scroll-mt-4"
+            >
+            <div className="flex flex-col gap-3">
+              <h3 className="text-sm font-semibold text-foreground">Selected contrasts</h3>
+              {summary?.contrast_summary.selected.length ? (
+                <div className="flex flex-col gap-2">
+                  {summary.contrast_summary.selected.map((pair) => (
+                    <Badge className="w-fit" key={`${pair.reference_group}:${pair.comparison_group}`} variant="secondary">
+                      {pair.comparison_group} vs {pair.reference_group}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No contrasts selected yet.</p>
+              )}
+              <p className="text-sm text-muted-foreground">{summary?.contrast_summary.suggested_count ?? 0} suggested contrast(s) available from onboarding.</p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <h3 className="text-sm font-semibold text-foreground">Config essentials</h3>
+              <WorkspaceDetailFieldList
+                fields={[
+                  ["Platform", summary?.config_summary.platform ?? "—"],
+                  ["Sequencing mode", summary?.config_summary.sequencing_mode ?? "—"],
+                  ["Instrument model", summary?.config_summary.instrument_model || "—"],
+                  ["Sequenced by", summary?.config_summary.sequenced_by || "—"],
+                  ["Biospyder kit", summary?.config_summary.biospyder_kit || "—"],
+                ].map(([label, value]) => ({ label, value }))}
+              />
+            </div>
+            </WorkspaceSectionCard>
+          ) : null}
+
+          {activeView === "collaboration" ? (
+            <WorkspaceSectionCard
+            action={
+              <Button asChild size="sm" variant="outline">
+                <Link to={collaborationPath(study.project)}>
+                  <FlaskConical data-icon="inline-start" />
+                  Open collaboration
+                </Link>
+              </Button>
+            }
+            contentClassName="flex flex-col gap-3"
+            description="Parent collaboration details for ownership and routing."
+            eyebrow="Context"
+            title="Collaboration context"
+            className="scroll-mt-4"
+            >
+            <div>
               <p className="text-sm font-semibold text-foreground">{projectQuery.data?.title ?? study.project_title}</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 PI {projectQuery.data?.pi_name ?? "Unknown"}
                 {projectQuery.data?.owner ? ` · Owner: ${projectQuery.data.owner}` : ""}
               </p>
-              {projectQuery.data?.description ? (
-                <p className="mt-2 text-sm text-muted-foreground">{projectQuery.data.description}</p>
-              ) : null}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button asChild size="sm" variant="outline">
-                  <Link to={collaborationPath(study.project)}>Open collaboration</Link>
-                </Button>
-              </div>
+              {projectQuery.data?.description ? <p className="mt-2 text-sm text-muted-foreground">{projectQuery.data.description}</p> : null}
             </div>
-          </TabsContent>
-        </Tabs>
+            </WorkspaceSectionCard>
+          ) : null}
+
+          <Sheet open={inspectorOpen} onOpenChange={setInspectorOpen}>
+            <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+              <SheetHeader>
+                <SheetTitle>Sample inspector</SheetTitle>
+                <SheetDescription>Full metadata and assay coverage for the selected sample.</SheetDescription>
+              </SheetHeader>
+              <div className="mt-6">
+                <SampleDetailPanel
+                  assays={selectedSample ? assaysBySample[selectedSample.id] ?? [] : []}
+                  isAdmin={Boolean(isAdmin)}
+                  sample={selectedSample}
+                  studyId={study.id}
+                />
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
       ) : null}
     </section>
   );

@@ -10,7 +10,13 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
 allowed_hosts = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 ALLOWED_HOSTS = [host.strip() for host in allowed_hosts.split(",") if host.strip()]
 
+csrf_trusted_origins = os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "")
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip() for origin in csrf_trusted_origins.split(",") if origin.strip()
+]
+
 INSTALLED_APPS = [
+    "unfold",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -103,6 +109,15 @@ cors_allowed_origins = os.environ.get(
 CORS_ALLOWED_ORIGINS = [
     origin.strip() for origin in cors_allowed_origins.split(",") if origin.strip()
 ]
+
+UNFOLD = {
+    "SITE_TITLE": "R-ODAF Portal Admin",
+    "SITE_HEADER": "R-ODAF Portal",
+    "SITE_SUBHEADER": "Internal metadata and warehouse administration",
+    "SITE_SYMBOL": "dataset",
+    "SHOW_HISTORY": True,
+    "SHOW_VIEW_ON_SITE": False,
+}
 
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
 CELERY_RESULT_BACKEND = os.environ.get(

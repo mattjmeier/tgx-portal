@@ -3,7 +3,7 @@ import logging
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Exists, OuterRef, Q
 from django.utils.text import slugify
 from rest_framework import filters
 from rest_framework.authtoken.models import Token
@@ -209,6 +209,59 @@ def _study_finalize_errors(study: Study) -> list[dict[str, str]]:
         for message in messages:
             flattened.append({"field": field, "message": message})
     return flattened
+
+
+def _stringify_bucket_value(value) -> str:
+    if value is None or value == "":
+        return "None"
+    return str(value)
+
+
+def _top_metadata_buckets(samples, key: str, limit: int = 8) -> list[dict[str, object]]:
+    buckets: dict[str, int] = {}
+    for sample in samples:
+        value = _stringify_bucket_value((sample.metadata or {}).get(key))
+        buckets[value] = buckets.get(value, 0) + 1
+    return [
+        {"value": value, "count": count}
+        for value, count in sorted(buckets.items(), key=lambda item: (-item[1], item[0]))[:limit]
+    ]
+
+
+def _metadata_filter_values(raw_value: str) -> list[object]:
+    value = raw_value.strip()
+    values: list[object] = [value]
+    if value.lower() in {"true", "false"}:
+        values.append(value.lower() == "true")
+    try:
+        int_value = int(value)
+    except ValueError:
+        int_value = None
+    if int_value is not None:
+        values.append(int_value)
+    try:
+        float_value = float(value)
+    except ValueError:
+        float_value = None
+    if float_value is not None and float_value not in values:
+        values.append(float_value)
+    return values
+
+
+def _metadata_exact_query(key: str, raw_value: str) -> Q:
+    query = Q()
+    for value in _metadata_filter_values(raw_value):
+        query |= Q(**{f"metadata__{key}": value})
+    return query
+
+
+def _missing_metadata_query(key: str) -> Q:
+    normalized = key.strip()
+    return (
+        Q(**{f"metadata__{normalized}__isnull": True})
+        | Q(**{f"metadata__{normalized}": ""})
+        | Q(**{f"metadata__{normalized}": None})
+    )
 
 
 class LookupViewSet(viewsets.ViewSet):
@@ -753,6 +806,195 @@ class StudyViewSet(viewsets.ModelViewSet):
         _get_or_create_study_config(study)
         _get_or_create_metadata_mapping(study)
 
+    @action(detail=True, methods=["get"], url_path="explorer-summary")
+    def explorer_summary(self, request, pk=None):
+        study = self.get_object()
+        _require_study_access(request.user, study)
+        samples = list(study.samples.prefetch_related("assays").all())
+        total_samples = len(samples)
+        assay_total = sum(sample.assays.count() for sample in samples)
+        samples_with_assays = sum(1 for sample in samples if sample.assays.count() > 0)
+        samples_missing_assays = max(total_samples - samples_with_assays, 0)
+        platform_counts: dict[str, int] = {}
+        for sample in samples:
+            for assay in sample.assays.all():
+                platform_counts[assay.platform] = platform_counts.get(assay.platform, 0) + 1
+
+        try:
+            state = study.onboarding_state
+        except StudyOnboardingState.DoesNotExist:
+            state = None
+        try:
+            mapping_model = study.metadata_mapping
+        except StudyMetadataMapping.DoesNotExist:
+            mapping_model = None
+        try:
+            config = study.config
+        except StudyConfig.DoesNotExist:
+            config = None
+
+        selected_contrasts = mapping_model.selected_contrasts if mapping_model is not None else []
+        suggested_contrasts = state.suggested_contrasts if state is not None else []
+        metadata_columns = state.metadata_columns if state is not None else get_study_template_columns(study)
+        template_context = normalize_template_context(state.template_context) if state is not None else DEFAULT_TEMPLATE_CONTEXT
+        group_builder = normalize_group_builder(state.group_builder) if state is not None else DEFAULT_GROUP_BUILDER
+        common_config = config.common if config is not None else {}
+        pipeline_config = config.pipeline if config is not None else {}
+
+        issues: list[dict[str, object]] = []
+        if total_samples == 0:
+            issues.append(
+                {
+                    "code": "no_samples",
+                    "severity": "error",
+                    "message": "No samples have been added to this study.",
+                    "action_label": "Add samples",
+                    "filter": {},
+                }
+            )
+        if samples_missing_assays > 0:
+            noun = "sample is" if samples_missing_assays == 1 else "samples are"
+            issues.append(
+                {
+                    "code": "missing_assays",
+                    "severity": "warning",
+                    "message": f"{samples_missing_assays} {noun} missing assay metadata.",
+                    "action_label": "Filter missing assays",
+                    "filter": {"assay_status": "missing"},
+                }
+            )
+        if total_samples > 0 and not any(sample.solvent_control for sample in samples):
+            issues.append(
+                {
+                    "code": "no_solvent_controls",
+                    "severity": "warning",
+                    "message": "No solvent control samples are flagged.",
+                    "action_label": "Filter controls",
+                    "filter": {"control_flag": "solvent_control"},
+                }
+            )
+        if state is None:
+            issues.append(
+                {
+                    "code": "onboarding_missing",
+                    "severity": "error",
+                    "message": "Onboarding state has not been created for this study.",
+                    "action_label": "Continue onboarding",
+                    "filter": {},
+                }
+            )
+        elif state.status != StudyOnboardingState.Status.FINAL:
+            issues.append(
+                {
+                    "code": "onboarding_draft",
+                    "severity": "warning",
+                    "message": "Onboarding mappings are still in draft.",
+                    "action_label": "Continue onboarding",
+                    "filter": {},
+                }
+            )
+        if total_samples > 0 and len(selected_contrasts) == 0:
+            issues.append(
+                {
+                    "code": "no_selected_contrasts",
+                    "severity": "warning",
+                    "message": "No contrasts are selected for config handoff.",
+                    "action_label": "Review contrasts",
+                    "filter": {},
+                }
+            )
+
+        for error in _study_finalize_errors(study):
+            issues.append(
+                {
+                    "code": error["field"],
+                    "severity": "error",
+                    "message": error["message"],
+                    "action_label": "Review config",
+                    "filter": {},
+                }
+            )
+
+        if state is not None and mapping_model is not None:
+            effective_metadata_columns = get_effective_metadata_columns(
+                state.metadata_columns,
+                group_builder=group_builder,
+                validated_rows=state.validated_rows,
+            )
+            mappings = {**DEFAULT_MAPPINGS, **mapping_model.as_dict()}
+            for error in validate_final_ready(metadata_columns=effective_metadata_columns, mappings=mappings):
+                issues.append(
+                    {
+                        "code": error["field"],
+                        "severity": "error",
+                        "message": error["message"],
+                        "action_label": "Review mappings",
+                        "filter": {},
+                    }
+                )
+
+        readiness_status = "ready"
+        readiness_label = "Ready"
+        if any(issue["severity"] == "error" for issue in issues):
+            readiness_status = "error"
+            readiness_label = "Blocked"
+        elif issues:
+            readiness_status = "warning"
+            readiness_label = "Needs attention"
+
+        return Response(
+            {
+                "study_id": study.id,
+                "readiness": {
+                    "status": readiness_status,
+                    "label": readiness_label,
+                    "updated_at": state.updated_at.isoformat() if state and state.updated_at else None,
+                    "finalized_at": state.finalized_at.isoformat() if state and state.finalized_at else None,
+                },
+                "sample_summary": {
+                    "total": total_samples,
+                    "technical_controls": sum(1 for sample in samples if sample.technical_control),
+                    "reference_rna_controls": sum(1 for sample in samples if sample.reference_rna),
+                    "solvent_controls": sum(1 for sample in samples if sample.solvent_control),
+                },
+                "assay_summary": {
+                    "total": assay_total,
+                    "samples_with_assays": samples_with_assays,
+                    "samples_missing_assays": samples_missing_assays,
+                    "platforms": [
+                        {"value": value, "count": count}
+                        for value, count in sorted(platform_counts.items(), key=lambda item: (-item[1], item[0]))
+                    ],
+                },
+                "design_summary": {
+                    "groups": _top_metadata_buckets(samples, "group"),
+                    "doses": _top_metadata_buckets(samples, "dose"),
+                    "chemicals": _top_metadata_buckets(samples, "chemical"),
+                    "metadata_columns": metadata_columns,
+                    "treatment_vars": template_context.get("treatment_vars", []),
+                    "batch_vars": template_context.get("batch_vars", []),
+                },
+                "contrast_summary": {
+                    "selected_count": len(selected_contrasts),
+                    "suggested_count": len(suggested_contrasts),
+                    "selected": selected_contrasts,
+                    "suggested": suggested_contrasts,
+                },
+                "config_summary": {
+                    "platform": common_config.get("platform") or "Not selected",
+                    "sequencing_mode": pipeline_config.get("mode") or "",
+                    "instrument_model": common_config.get("instrument_model") or "",
+                    "sequenced_by": common_config.get("sequenced_by") or "",
+                    "biospyder_kit": common_config.get("biospyder_kit"),
+                    "can_download_config": _get_user_role(request.user) == UserProfile.Role.ADMIN
+                    and state is not None
+                    and state.status == StudyOnboardingState.Status.FINAL
+                    and not any(issue["severity"] == "error" for issue in issues),
+                },
+                "blocking_issues": issues,
+            }
+        )
+
     @action(detail=True, methods=["get", "patch"], url_path="onboarding-state")
     def onboarding_state(self, request, pk=None):
         study = self.get_object()
@@ -946,6 +1188,31 @@ class SampleViewSet(viewsets.ModelViewSet):
         study_id = self.request.query_params.get("study_id")
         if study_id:
             queryset = queryset.filter(study_id=study_id)
+        for metadata_key in ("group", "dose", "chemical"):
+            raw_value = self.request.query_params.get(metadata_key)
+            if raw_value:
+                queryset = queryset.filter(_metadata_exact_query(metadata_key, raw_value))
+        control_flag = self.request.query_params.get("control_flag")
+        if control_flag in {"technical_control", "reference_rna", "solvent_control"}:
+            queryset = queryset.filter(**{control_flag: True})
+        elif control_flag == "any":
+            queryset = queryset.filter(
+                Q(technical_control=True)
+                | Q(reference_rna=True)
+                | Q(solvent_control=True)
+            )
+        assay_status = self.request.query_params.get("assay_status")
+        if assay_status in {"present", "missing"}:
+            assay_exists = Assay.objects.filter(sample_id=OuterRef("pk"))
+            queryset = queryset.annotate(has_assay=Exists(assay_exists))
+            queryset = queryset.filter(has_assay=assay_status == "present")
+        missing_metadata = self.request.query_params.get("missing_metadata")
+        if missing_metadata:
+            missing_query = Q()
+            for key in [item.strip() for item in missing_metadata.split(",") if item.strip()]:
+                missing_query |= _missing_metadata_query(key)
+            if missing_query:
+                queryset = queryset.filter(missing_query)
         return queryset
 
     def create(self, request, *args, **kwargs):

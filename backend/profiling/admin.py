@@ -1,4 +1,5 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import HTTrSeriesWell, HTTrWell, Metric, Pod, ProfilingPlatform, Series, StudyWarehouseMetadata
 
@@ -28,7 +29,7 @@ class HTTrSeriesWellInline(admin.TabularInline):
 
 
 @admin.register(ProfilingPlatform)
-class ProfilingPlatformAdmin(admin.ModelAdmin):
+class ProfilingPlatformAdmin(ModelAdmin):
     list_display = ("platform_name", "technology_type", "study_type", "species", "version")
     search_fields = ("platform_name", "title", "technology_type", "species")
     list_filter = ("technology_type", "study_type", "species")
@@ -36,7 +37,7 @@ class ProfilingPlatformAdmin(admin.ModelAdmin):
 
 
 @admin.register(StudyWarehouseMetadata)
-class StudyWarehouseMetadataAdmin(admin.ModelAdmin):
+class StudyWarehouseMetadataAdmin(ModelAdmin):
     list_display = ("study_name", "study", "source", "study_type", "in_vitro", "platform")
     search_fields = ("study_name", "study__title", "source")
     list_filter = ("study_type", "in_vitro", "platform")
@@ -47,7 +48,7 @@ class StudyWarehouseMetadataAdmin(admin.ModelAdmin):
 
 
 @admin.register(Series)
-class SeriesAdmin(admin.ModelAdmin):
+class SeriesAdmin(ModelAdmin):
     list_display = (
         "id",
         "study_metadata",
@@ -65,14 +66,14 @@ class SeriesAdmin(admin.ModelAdmin):
 
 
 @admin.register(Metric)
-class MetricAdmin(admin.ModelAdmin):
+class MetricAdmin(ModelAdmin):
     list_display = ("metric_name", "title", "software_name", "software_version")
     search_fields = ("metric_name", "title", "software_name")
     readonly_fields = ("created_at", "updated_at")
 
 
 @admin.register(Pod)
-class PodAdmin(admin.ModelAdmin):
+class PodAdmin(ModelAdmin):
     list_display = ("series", "metric", "pod", "active")
     search_fields = ("series__study_metadata__study_name", "metric__metric_name")
     list_filter = ("active", "metric")
@@ -81,7 +82,7 @@ class PodAdmin(admin.ModelAdmin):
 
 
 @admin.register(HTTrWell)
-class HTTrWellAdmin(admin.ModelAdmin):
+class HTTrWellAdmin(ModelAdmin):
     list_display = (
         "study_metadata",
         "plate_id",
@@ -104,7 +105,7 @@ class HTTrWellAdmin(admin.ModelAdmin):
 
 
 @admin.register(HTTrSeriesWell)
-class HTTrSeriesWellAdmin(admin.ModelAdmin):
+class HTTrSeriesWellAdmin(ModelAdmin):
     list_display = ("series", "well", "is_control", "dose_level")
     search_fields = ("series__study_metadata__study_name", "well__plate_id", "well__biosample_name")
     list_filter = ("is_control",)

@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi } from "vitest";
 
 import { StudyWorkspacePage } from "./StudyWorkspacePage";
+import { fetchStudyExplorerSummary } from "../api/studyExplorer";
 import { deleteStudy } from "../api/studies";
 
 class ResizeObserverMock {
@@ -53,7 +54,8 @@ vi.mock("../api/studyOnboarding", async () => {
     fetchStudyOnboardingState: vi.fn(async () => ({
       study_id: 11,
       status: "draft" as const,
-      metadata_columns: [],
+      metadata_columns: ["sample_ID", "group", "dose", "chemical"],
+      validated_rows: [],
       mappings: {
         treatment_level_1: "",
         treatment_level_2: "",
@@ -67,10 +69,90 @@ vi.mock("../api/studyOnboarding", async () => {
         clustering_group: "",
         report_faceting_group: "",
       },
+      group_builder: {
+        primary_column: "group",
+        additional_columns: [],
+        batch_column: "",
+      },
+      template_context: {
+        study_design_elements: ["chemical", "exposure"],
+        exposure_label_mode: "dose",
+        exposure_custom_label: "",
+        treatment_vars: ["group"],
+        batch_vars: [],
+        optional_field_keys: ["chemical", "dose"],
+        custom_field_keys: [],
+      },
+      template_columns: ["sample_ID", "group", "dose", "chemical"],
+      config: {
+        common: {},
+        pipeline: {},
+        qc: {},
+        deseq2: {},
+      },
       suggested_contrasts: [],
       selected_contrasts: [],
       updated_at: "2026-04-10T12:00:00Z",
       finalized_at: null,
+    })),
+  };
+});
+
+vi.mock("../api/studyExplorer", async () => {
+  const actual = await vi.importActual<typeof import("../api/studyExplorer")>("../api/studyExplorer");
+  return {
+    ...actual,
+    fetchStudyExplorerSummary: vi.fn(async () => ({
+      study_id: 11,
+      readiness: {
+        status: "warning",
+        label: "Needs attention",
+        updated_at: "2026-04-10T12:00:00Z",
+        finalized_at: null,
+      },
+      sample_summary: {
+        total: 1,
+        technical_controls: 0,
+        reference_rna_controls: 0,
+        solvent_controls: 0,
+      },
+      assay_summary: {
+        total: 0,
+        samples_with_assays: 0,
+        samples_missing_assays: 1,
+        platforms: [],
+      },
+      design_summary: {
+        groups: [{ value: "control", count: 1 }],
+        doses: [{ value: "0", count: 1 }],
+        chemicals: [{ value: "None", count: 1 }],
+        metadata_columns: ["sample_ID", "group", "dose", "chemical"],
+        treatment_vars: ["group"],
+        batch_vars: [],
+      },
+      contrast_summary: {
+        selected_count: 0,
+        suggested_count: 0,
+        selected: [],
+        suggested: [],
+      },
+      config_summary: {
+        platform: "RNA-Seq",
+        sequencing_mode: "se",
+        instrument_model: "",
+        sequenced_by: "",
+        biospyder_kit: null,
+        can_download_config: false,
+      },
+      blocking_issues: [
+        {
+          code: "missing_assays",
+          severity: "warning",
+          message: "1 sample is missing assay metadata.",
+          action_label: "Filter missing assays",
+          filter: { assay_status: "missing" },
+        },
+      ],
     })),
   };
 });
@@ -146,16 +228,23 @@ function renderPage(initialEntry: string) {
 }
 
 describe("StudyWorkspacePage", () => {
-  it("defaults to the samples-first tab layout", async () => {
+  it("renders an overview-first operational workbench", async () => {
     renderPage("/studies/11");
 
     expect(await screen.findByRole("heading", { name: /hepatocyte mercury dose response/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /samples/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /contrasts/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /collaboration info/i })).toBeInTheDocument();
+    expect(screen.getByText(/needs attention/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /overview/i })).toHaveAttribute("href", "/studies/11");
+    expect(screen.getByRole("link", { name: /samples/i })).toHaveAttribute("href", "/studies/11?view=samples");
+    expect(screen.getByRole("link", { name: /^contrasts$/i })).toHaveAttribute("href", "/studies/11?view=contrasts");
+    expect(screen.getByText(/attention queue/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 sample is missing assay metadata/i)).toBeInTheDocument();
+    expect(screen.getByText(/study design overview/i)).toBeInTheDocument();
+    expect(screen.queryByText(/sample explorer/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/contrasts and config handoff/i)).not.toBeInTheDocument();
+  });
 
-    const samplesTab = screen.getByRole("tab", { name: /samples/i });
-    expect(samplesTab).toHaveAttribute("aria-selected", "true");
+  it("renders samples as a separate workspace view", async () => {
+    renderPage("/studies/11?view=samples");
 
     expect(await screen.findByText(/sample explorer/i)).toBeInTheDocument();
     expect(screen.getByRole("table")).toBeInTheDocument();
@@ -177,32 +266,91 @@ describe("StudyWorkspacePage", () => {
     expect(screen.getByLabelText(/quantification method/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add assay/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add samples/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add contrasts/i })).toBeInTheDocument();
+  });
+
+  it("renders contrasts as a separate workspace view", async () => {
+    renderPage("/studies/11?view=contrasts");
+
+    expect(await screen.findByText(/contrasts and config handoff/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /review contrasts/i })).toHaveAttribute("href", "/studies/11/onboarding?step=finalize");
     expect(screen.getByRole("button", { name: /more study actions/i })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /onboarding wizard/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /metadata onboarding/i })).not.toBeInTheDocument();
   });
 
-  it("syncs the selected tab with the route search params", async () => {
-    renderPage("/studies/11?tab=contrasts");
+  it("renders collaboration as a separate workspace view", async () => {
+    renderPage("/studies/11?view=collaboration");
 
-    const contrastsTab = await screen.findByRole("tab", { name: /contrasts/i });
-    expect(contrastsTab).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText(/contrasts for this study/i)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: /collaboration info/i }));
-    expect(await screen.findByText(/study collaboration description/i)).toBeInTheDocument();
-    expect(screen.queryByText(/collaboration context/i)).not.toBeInTheDocument();
+    expect(await screen.findByText(/collaboration context/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /more study actions/i })).toBeInTheDocument();
   });
 
-  it("opens the intake tools from add samples and switches tabs from add contrasts", async () => {
+  it("syncs sample filters with route search params", async () => {
+    renderPage("/studies/11?view=samples&assay_status=missing");
+
+    expect(await screen.findByText(/sample explorer/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/missing assays/i).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /clear filters/i }));
+    await waitFor(() => {
+      expect(screen.queryByText(/^Missing assays$/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it("opens the intake tools from add samples", async () => {
     renderPage("/studies/11");
 
     fireEvent.click(await screen.findByRole("button", { name: /add samples/i }));
     expect(await screen.findByText(/sample metadata onboarding/i)).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: /add contrasts/i }));
-    expect(await screen.findByText(/contrasts for this study/i)).toBeInTheDocument();
+  it("hides continue onboarding when the study is ready", async () => {
+    vi.mocked(fetchStudyExplorerSummary).mockResolvedValueOnce({
+      study_id: 11,
+      readiness: {
+        status: "ready",
+        label: "Ready",
+        updated_at: "2026-04-10T12:00:00Z",
+        finalized_at: "2026-04-10T12:00:00Z",
+      },
+      sample_summary: {
+        total: 3,
+        technical_controls: 0,
+        reference_rna_controls: 0,
+        solvent_controls: 1,
+      },
+      assay_summary: {
+        total: 3,
+        samples_with_assays: 3,
+        samples_missing_assays: 0,
+        platforms: [{ value: "rna_seq", count: 3 }],
+      },
+      design_summary: {
+        groups: [{ value: "control", count: 3 }],
+        doses: [{ value: "0", count: 3 }],
+        chemicals: [{ value: "vehicle", count: 3 }],
+        metadata_columns: ["sample_ID", "group", "dose", "chemical"],
+        treatment_vars: ["group"],
+        batch_vars: [],
+      },
+      contrast_summary: {
+        selected_count: 1,
+        suggested_count: 1,
+        selected: [{ reference_group: "control", comparison_group: "treated" }],
+        suggested: [{ reference_group: "control", comparison_group: "treated" }],
+      },
+      config_summary: {
+        platform: "RNA-Seq",
+        sequencing_mode: "se",
+        instrument_model: "Illumina NovaSeq 6000",
+        sequenced_by: "HC Genomics lab",
+        biospyder_kit: null,
+        can_download_config: true,
+      },
+      blocking_issues: [],
+    });
+
+    renderPage("/studies/11");
+
+    expect(await screen.findByText(/Hepatocyte mercury dose response/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /continue onboarding/i })).not.toBeInTheDocument();
   });
 
   it("surfaces lower-frequency study actions in a local overflow menu", async () => {

@@ -1,10 +1,11 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import ChemicalSample
 
 
 @admin.register(ChemicalSample)
-class ChemicalSampleAdmin(admin.ModelAdmin):
+class ChemicalSampleAdmin(ModelAdmin):
     list_display = (
         "chemical_sample_id",
         "spid",
