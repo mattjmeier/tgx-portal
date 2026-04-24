@@ -23,7 +23,7 @@ export function StudyCreatePage() {
 
   const projectsQuery = useQuery({
     queryKey: ["projects"],
-    queryFn: fetchProjects,
+    queryFn: () => fetchProjects(),
   });
 
   const query = useQuery({

@@ -12,10 +12,14 @@ class Command(BaseCommand):
     def handle(self, *args, **options):  # noqa: ARG002
         username = "admin"
         password = "admin123"
-        user, created = User.objects.get_or_create(username=username, defaults={"is_staff": True})
+        user, created = User.objects.get_or_create(
+            username=username,
+            defaults={"is_staff": True, "is_superuser": True},
+        )
         if created or not user.check_password(password):
             user.set_password(password)
         user.is_staff = True
+        user.is_superuser = True
         user.save()
 
         profile, _ = UserProfile.objects.get_or_create(user=user)
@@ -27,6 +31,7 @@ class Command(BaseCommand):
         if client_created or not client_user.check_password(client_password):
             client_user.set_password(client_password)
         client_user.is_staff = False
+        client_user.is_superuser = False
         client_user.save()
 
         client_profile, _ = UserProfile.objects.get_or_create(user=client_user)

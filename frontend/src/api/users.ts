@@ -6,13 +6,40 @@ export type ManagedUser = {
   username: string;
   email: string;
   is_staff: boolean;
+  owned_project_count: number;
   profile: {
     role: "admin" | "client" | "system";
   };
 };
 
-export async function fetchUsers(): Promise<PaginatedResponse<ManagedUser>> {
-  const response = await apiFetch("/api/users/");
+export type FetchUsersOptions = {
+  page?: number;
+  pageSize?: number;
+  ordering?: string;
+  search?: string;
+  role?: "admin" | "client" | "system";
+};
+
+export async function fetchUsers(options?: FetchUsersOptions): Promise<PaginatedResponse<ManagedUser>> {
+  const params = new URLSearchParams();
+  if (options?.page) {
+    params.set("page", String(options.page));
+  }
+  if (options?.pageSize) {
+    params.set("page_size", String(options.pageSize));
+  }
+  if (options?.ordering) {
+    params.set("ordering", options.ordering);
+  }
+  if (options?.search) {
+    params.set("search", options.search);
+  }
+  if (options?.role) {
+    params.set("role", options.role);
+  }
+
+  const query = params.toString();
+  const response = await apiFetch(`/api/users/${query ? `?${query}` : ""}`);
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response, "Failed to load users."));
   }

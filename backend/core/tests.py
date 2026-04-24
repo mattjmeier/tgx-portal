@@ -121,6 +121,25 @@ class ProjectApiTests(TestCase):
         project.refresh_from_db()
         self.assertEqual(project.owner_id, client_user.id)
 
+    def test_admin_cannot_assign_non_client_owner(self) -> None:
+        project = Project.objects.create(
+            owner=self.user,
+            pi_name="Dr. Curie",
+            researcher_name="Researcher A",
+            bioinformatician_assigned="Bioinfo A",
+            title="Project Alpha",
+            description="A test project",
+        )
+
+        response = self.client.patch(
+            f"/api/projects/{project.id}/assign-owner/",
+            {"owner_id": self.user.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"owner_id": ["Projects may only be assigned to client users."]})
+
 
 class StudyApiTests(TestCase):
     def setUp(self) -> None:
@@ -427,3 +446,71 @@ class AuthApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("token", response.json())
         self.assertEqual(response.json()["user"]["profile"]["role"], UserProfile.Role.ADMIN)
+
+
+class UserManagementApiTests(TestCase):
+    def setUp(self) -> None:
+        self.client = APIClient()
+        self.admin = User.objects.create_user(username="admin", password="admin123", email="admin@example.com")
+        self.admin.profile.role = UserProfile.Role.ADMIN
+        self.admin.profile.save()
+        self.client.force_authenticate(user=self.admin)
+
+    def test_list_users_supports_role_filter_search_and_owned_project_count(self) -> None:
+        alpha = User.objects.create_user(username="alpha-client", password="client123", email="alpha@example.com")
+        alpha.profile.role = UserProfile.Role.CLIENT
+        alpha.profile.save()
+
+        beta = User.objects.create_user(username="beta-client", password="client123", email="beta@example.com")
+        beta.profile.role = UserProfile.Role.CLIENT
+        beta.profile.save()
+
+        system = User.objects.create_user(username="daemon", password="system123", email="daemon@example.com")
+        system.profile.role = UserProfile.Role.SYSTEM
+        system.profile.save()
+
+        Project.objects.create(
+            owner=alpha,
+            pi_name="PI 1",
+            researcher_name="Researcher 1",
+            bioinformatician_assigned="Bioinfo 1",
+            title="Alpha Project One",
+            description="First owned project",
+        )
+        Project.objects.create(
+            owner=alpha,
+            pi_name="PI 2",
+            researcher_name="Researcher 2",
+            bioinformatician_assigned="Bioinfo 2",
+            title="Alpha Project Two",
+            description="Second owned project",
+        )
+        Project.objects.create(
+            owner=beta,
+            pi_name="PI 3",
+            researcher_name="Researcher 3",
+            bioinformatician_assigned="Bioinfo 3",
+            title="Beta Project",
+            description="Owned by beta",
+        )
+
+        response = self.client.get("/api/users/?role=client&search=alpha&page_size=100")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["username"], "alpha-client")
+        self.assertEqual(payload["results"][0]["profile"]["role"], UserProfile.Role.CLIENT)
+        self.assertEqual(payload["results"][0]["owned_project_count"], 2)
+
+    def test_list_users_supports_ordering(self) -> None:
+        for username in ("zoe", "amy"):
+            user = User.objects.create_user(username=username, password="client123", email=f"{username}@example.com")
+            user.profile.role = UserProfile.Role.CLIENT
+            user.profile.save()
+
+        response = self.client.get("/api/users/?ordering=-username&page_size=100")
+
+        self.assertEqual(response.status_code, 200)
+        usernames = [user["username"] for user in response.json()["results"]]
+        self.assertEqual(usernames[:3], ["zoe", "amy", "admin"])

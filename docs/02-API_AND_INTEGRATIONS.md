@@ -10,6 +10,16 @@ All endpoints must support DRF `PageNumberPagination` to integrate seamlessly wi
   * `GET` must support query params for exporting data: `?study_id=X&has_raw_data=true`.
 * `GET /api/exports/labels/` (Returns PDF/CSV for printing shipping/tube labels).
 
+## Warehouse API Status
+The `chemicals` and `profiling` Django apps currently expose their models through Django admin only. There are no public REST endpoints yet for:
+
+* `/api/chemicals/`
+* `/api/profiling/`
+* historical import staging
+* POD/series/well browser views
+
+When those APIs are added, they must be additive and must not change the existing project/study/sample/config endpoints. Use `docs/06-SCHEMA_HARMONIZATION.md` as the source of truth for warehouse terminology and UL schema mapping.
+
 ## External Integrations
 
 ### 1. Plane Project Management (Triggered on Project Creation)

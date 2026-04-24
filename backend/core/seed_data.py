@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+
+from chemicals.models import ChemicalSample
+from profiling.models import HTTrSeriesWell, HTTrWell, Metric, Pod, ProfilingPlatform, Series, StudyWarehouseMetadata
 
 from .models import (
     Assay,
@@ -763,10 +767,14 @@ def ensure_seed_users() -> dict[str, User]:
     }
     users: dict[str, User] = {}
     for username, (password, is_staff, role) in seeded_users.items():
-        user, created = User.objects.get_or_create(username=username, defaults={"is_staff": is_staff})
+        user, created = User.objects.get_or_create(
+            username=username,
+            defaults={"is_staff": is_staff, "is_superuser": role == UserProfile.Role.ADMIN},
+        )
         if created or not user.check_password(password):
             user.set_password(password)
         user.is_staff = is_staff
+        user.is_superuser = role == UserProfile.Role.ADMIN
         user.save()
 
         profile, _ = UserProfile.objects.get_or_create(user=user)
@@ -813,11 +821,89 @@ def _build_seed_template_context(seed_study: SeedStudy) -> dict[str, object]:
     }
 
 
+def _seed_warehouse_demo(study: Study) -> None:
+    chemical_sample = ChemicalSample.objects.create(
+        chemical_sample_id="HC-AFB1-DEMO-001",
+        spid="HC-AFB1-DEMO-BOTTLE-1",
+        dtxsid="DTXSID7020005",
+        casrn="1162-65-8",
+        preferred_name="Aflatoxin B1",
+        ext={"source_note": "Seeded warehouse demo chemical sample."},
+    )
+    platform = ProfilingPlatform.objects.create(
+        platform_name="rnaseq_hg38_demo",
+        title="RNA-seq hg38 demonstration platform",
+        description="Seeded profiling platform for admin schema exploration.",
+        version="demo-1",
+        technology_type=ProfilingPlatform.TechnologyType.RNA_SEQ,
+        study_type=ProfilingPlatform.StudyType.TGX,
+        species=Study.Species.HUMAN,
+    )
+    warehouse_metadata = StudyWarehouseMetadata.objects.create(
+        study=study,
+        study_name="hc_afb1_warehouse_demo",
+        source="Health Canada",
+        study_type=StudyWarehouseMetadata.StudyType.TGX,
+        in_vitro=True,
+        platform=platform,
+        cell_types=[study.celltype or "MCF-7"],
+        culture_conditions=["standard seeded demo culture"],
+        exposure_conditions=["24h exposure"],
+        references=["demo:tgx-portal-schema-harmonization"],
+        ext={"source_note": "Seeded from reset_seed_data for backend schema exploration."},
+    )
+    series = Series.objects.create(
+        study_metadata=warehouse_metadata,
+        chemical_sample=chemical_sample,
+        treatment_condition="24h",
+        exposure_lower=Decimal("0.01"),
+        exposure_upper=Decimal("1.00"),
+        exposure_unit="uM",
+        exposure_group_count=3,
+        exposure_values=[0.01, 0.1, 1.0],
+        control_type="DMSO",
+        factors=["plate_id"],
+    )
+    metric = Metric.objects.create(
+        metric_name="demo_global_tpod",
+        title="Demonstration global tPOD",
+        description="Seeded POD metric used to make the warehouse schema visible in Django admin.",
+        software_name="tgx-portal",
+        software_version="demo",
+    )
+    Pod.objects.create(
+        series=series,
+        metric=metric,
+        pod=Decimal("0.42"),
+        active=True,
+        ext={"interpretation": "Demonstration value only."},
+    )
+    well = HTTrWell.objects.create(
+        study_metadata=warehouse_metadata,
+        biosample_name="demo_plate_A01",
+        plate_id="demo_plate_1",
+        well_row=HTTrWell.WellRow.A,
+        well_column=1,
+        cell_type=study.celltype or "MCF-7",
+        treatment_name="AFB1_0.1uM",
+        treatment_condition="24h",
+        chemical_sample=chemical_sample,
+        exposure_time_h=24,
+        exposure_concentration=Decimal("0.10"),
+        exposure_vehicle="DMSO",
+        is_treated=True,
+    )
+    HTTrSeriesWell.objects.create(series=series, well=well, dose_level=1)
+
+
 @transaction.atomic
 def reset_seed_data() -> dict[str, int]:
     users = ensure_seed_users()
 
     Project.objects.all().delete()
+    ChemicalSample.objects.all().delete()
+    ProfilingPlatform.objects.all().delete()
+    Metric.objects.all().delete()
     _seed_controlled_lookups()
 
     project_count = 0
@@ -930,6 +1016,8 @@ def reset_seed_data() -> dict[str, int]:
                     quantification_method=seed_study.quantification_method,
                 )
                 assay_count += 1
+
+    _seed_warehouse_demo(Study.objects.get(title="MCF-7 estrogen pulse"))
 
     return {
         "projects": project_count,

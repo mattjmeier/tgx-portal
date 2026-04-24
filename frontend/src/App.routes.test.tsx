@@ -42,6 +42,10 @@ vi.mock("./pages/LoginPage", () => ({
   LoginPage: () => <div>Login page</div>,
 }));
 
+vi.mock("./pages/LandingPage", () => ({
+  LandingPage: () => <div>Landing page</div>,
+}));
+
 vi.mock("./pages/ProjectCreatePage", () => ({
   ProjectCreatePage: () => <div>New collaboration page</div>,
 }));
@@ -83,6 +87,13 @@ function renderApp(initialEntry: string) {
 }
 
 describe("App routes", () => {
+  it("serves the landing page at the base URL", () => {
+    renderApp("/");
+
+    expect(screen.getByText("Landing page")).toBeInTheDocument();
+    expect(screen.queryByTestId("location")).not.toBeInTheDocument();
+  });
+
   it("serves the collaborations browse route", () => {
     renderApp("/collaborations");
 

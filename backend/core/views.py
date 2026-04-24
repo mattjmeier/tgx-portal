@@ -1035,7 +1035,13 @@ class AuthViewSet(viewsets.ViewSet):
 
 
 class UserManagementViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.select_related("profile").all().order_by("username")
+    queryset = User.objects.select_related("profile").annotate(
+        owned_project_count=Count("owned_projects", distinct=True),
+    )
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["username", "email"]
+    ordering_fields = ["username", "email", "profile__role", "owned_project_count"]
+    ordering = ["username"]
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -1046,7 +1052,11 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         _require_admin(self.request.user)
-        return super().get_queryset()
+        queryset = super().get_queryset()
+        role = self.request.query_params.get("role")
+        if role:
+            queryset = queryset.filter(profile__role=role)
+        return queryset
 
     def create(self, request, *args, **kwargs):
         _require_admin(request.user)

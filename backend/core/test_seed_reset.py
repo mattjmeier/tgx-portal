@@ -6,8 +6,10 @@ from zipfile import ZipFile
 from django.core.management import call_command
 from django.test import TestCase
 
+from chemicals.models import ChemicalSample
 from core.models import Assay, Project, Sample, Study, StudyConfig, StudyMetadataFieldSelection, StudyMetadataMapping, StudyOnboardingState
 from core.services import build_project_config_bundle
+from profiling.models import HTTrSeriesWell, HTTrWell, Metric, Pod, ProfilingPlatform, Series, StudyWarehouseMetadata
 
 
 class ResetSeedDataCommandTests(TestCase):
@@ -34,6 +36,24 @@ class ResetSeedDataCommandTests(TestCase):
         self.assertEqual(StudyMetadataMapping.objects.count(), 12)
         self.assertGreater(StudyMetadataFieldSelection.objects.count(), 12)
         self.assertFalse(Project.objects.filter(title="Existing collaboration").exists())
+
+    def test_command_seeds_linked_warehouse_demo_records(self) -> None:
+        call_command("reset_seed_data")
+
+        self.assertEqual(ChemicalSample.objects.count(), 1)
+        self.assertEqual(ProfilingPlatform.objects.count(), 1)
+        self.assertEqual(StudyWarehouseMetadata.objects.count(), 1)
+        self.assertEqual(Series.objects.count(), 1)
+        self.assertEqual(Metric.objects.count(), 1)
+        self.assertEqual(Pod.objects.count(), 1)
+        self.assertEqual(HTTrWell.objects.count(), 1)
+        self.assertEqual(HTTrSeriesWell.objects.count(), 1)
+
+        metadata = StudyWarehouseMetadata.objects.select_related("study", "platform").get()
+        self.assertEqual(metadata.study.title, "MCF-7 estrogen pulse")
+        self.assertEqual(metadata.study_name, "hc_afb1_warehouse_demo")
+        self.assertEqual(metadata.platform.platform_name, "rnaseq_hg38_demo")
+        self.assertEqual(metadata.series.get().chemical_sample.chemical_sample_id, "HC-AFB1-DEMO-001")
 
     def test_seeded_project_can_generate_a_config_bundle(self) -> None:
         call_command("reset_seed_data")

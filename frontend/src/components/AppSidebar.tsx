@@ -12,6 +12,7 @@ import {
   collaborationPath,
   collaborationRegistryPath,
   globalStudyCreatePath,
+  homePath,
   studiesIndexPath,
   studyWorkspacePath,
 } from "../lib/routes";
@@ -217,7 +218,11 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="space-y-3">
-        <div className="flex items-center gap-3 px-2">
+        <NavLink
+          aria-label="TGx Portal home"
+          className="flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-sidebar-accent/50"
+          to={homePath}
+        >
           <div className="size-10 overflow-hidden rounded-lg border border-sidebar-border/70 bg-sidebar-accent/40 shadow-sm">
             <img
               alt="TGx Portal logo"
@@ -231,7 +236,7 @@ export function AppSidebar() {
             <p className="text-[0.68rem] uppercase tracking-[0.24em] text-sidebar-foreground/55">Genomics Lab</p>
             <h1 className="truncate text-lg font-semibold text-sidebar-foreground">TGx Portal</h1>
           </div>
-        </div>
+        </NavLink>
       </SidebarHeader>
 
       <SidebarContent>

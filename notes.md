@@ -18,7 +18,7 @@ Main landing page / home link
     - 
 
 
-new study page: the cards differ before and after selecting collaboration. I want to use the state of after selecting  - the reference definitions card should always be a half-view card on the right and contain the content shown in the after card.
+
 
 
 

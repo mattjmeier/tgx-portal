@@ -201,10 +201,11 @@ class AuthUserSerializer(serializers.ModelSerializer):
 
 class UserAdminSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(read_only=True)
+    owned_project_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "is_staff", "profile"]
+        fields = ["id", "username", "email", "is_staff", "profile", "owned_project_count"]
 
 
 class UserCreateSerializer(serializers.ModelSerializer):

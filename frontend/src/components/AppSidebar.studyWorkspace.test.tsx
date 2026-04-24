@@ -216,6 +216,12 @@ describe("AppSidebar (study workspace)", () => {
     expect(logo).toHaveClass("object-cover");
   });
 
+  it("links the sidebar brand back to the landing page", () => {
+    renderSidebar("/studies/11");
+
+    expect(screen.getByRole("link", { name: /tgx portal home/i })).toHaveAttribute("href", "/");
+  });
+
   it("keeps the selected study visible in the sidebar without duplicating workspace tabs", async () => {
     renderSidebar("/studies/11");
 

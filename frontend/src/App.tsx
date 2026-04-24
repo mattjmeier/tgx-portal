@@ -11,6 +11,7 @@ import {
   studiesIndexPath,
 } from "./lib/routes";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
+import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ProjectCreatePage } from "./pages/ProjectCreatePage";
 import { ProjectsPage } from "./pages/ProjectsPage";
@@ -39,10 +40,10 @@ function LegacyProjectRedirect() {
 export default function App() {
   return (
     <Routes>
+      <Route index element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
-          <Route index element={<Navigate replace to={collaborationRegistryPath} />} />
           <Route path={collaborationRegistryPath} element={<ProjectsPage />} />
           <Route path={collaborationCreatePath} element={<ProjectCreatePage />} />
           <Route path={studiesIndexPath} element={<StudiesPage />} />

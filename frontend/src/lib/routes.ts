@@ -1,3 +1,4 @@
+export const homePath = "/";
 export const collaborationRegistryPath = "/collaborations";
 export const collaborationCreatePath = "/collaborations/new";
 export const studiesIndexPath = "/studies";
