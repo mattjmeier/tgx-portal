@@ -190,6 +190,7 @@ function renderLayout(initialEntry: string) {
       <MemoryRouter initialEntries={[initialEntry]}>
         <Routes>
           <Route element={<AppLayout />}>
+            <Route path="/" element={<div>Home overview page</div>} />
             <Route path="/collaborations" element={<div>Collaborations page</div>} />
             <Route path="/studies" element={<div>Studies page</div>} />
             <Route path="/collaborations/new" element={<div>New collaboration page</div>} />
@@ -266,6 +267,16 @@ describe("AppLayout", () => {
     expect(screen.getByRole("link", { name: /^studies$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /toggle studies/i })).toBeInTheDocument();
     expect(screen.queryByText(/active collaboration/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a home-shell header for the workspace overview route", () => {
+    renderLayout("/");
+
+    expect(screen.getByText("Portal overview")).toBeInTheDocument();
+    expect(
+      screen.getByText("Start from the portal home, then jump into collaborations, studies, or shared reference data."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Home overview page")).toBeInTheDocument();
   });
 
   it("shows reference and admin actions in a bottom utilities section above signed-in details", () => {

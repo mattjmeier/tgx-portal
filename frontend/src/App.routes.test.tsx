@@ -43,7 +43,7 @@ vi.mock("./pages/LoginPage", () => ({
 }));
 
 vi.mock("./pages/LandingPage", () => ({
-  LandingPage: () => <div>Landing page</div>,
+  LandingPage: () => <div>Home page</div>,
 }));
 
 vi.mock("./pages/ProjectCreatePage", () => ({
@@ -87,11 +87,11 @@ function renderApp(initialEntry: string) {
 }
 
 describe("App routes", () => {
-  it("serves the landing page at the base URL", () => {
+  it("serves the home page inside the app layout at the base URL", () => {
     renderApp("/");
 
-    expect(screen.getByText("Landing page")).toBeInTheDocument();
-    expect(screen.queryByTestId("location")).not.toBeInTheDocument();
+    expect(screen.getByText("Home page")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/");
   });
 
   it("serves the collaborations browse route", () => {

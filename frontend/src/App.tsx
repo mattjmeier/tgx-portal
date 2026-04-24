@@ -40,10 +40,10 @@ function LegacyProjectRedirect() {
 export default function App() {
   return (
     <Routes>
-      <Route index element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
+          <Route index element={<LandingPage />} />
           <Route path={collaborationRegistryPath} element={<ProjectsPage />} />
           <Route path={collaborationCreatePath} element={<ProjectCreatePage />} />
           <Route path={studiesIndexPath} element={<StudiesPage />} />

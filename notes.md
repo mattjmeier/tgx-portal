@@ -4,7 +4,8 @@
 - free form notes for bioinformatician input
 - fix landing page
 - clean up "add assay" flow?
-- modify seed data
+
+
 
 - SET UP PLANE SIDECAR
 

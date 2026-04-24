@@ -26,6 +26,17 @@ function formatStudyLabel(study: Study | null) {
 }
 
 function getShellCopy(pathname: string, projectId?: number | null, projectTitle?: string, studyLabel?: string | null) {
+  if (pathname === "/") {
+    return {
+      breadcrumbs: [],
+      eyebrow: "Home",
+      titleHelp: null,
+      title: "Portal overview",
+      description: "Start from the portal home, then jump into collaborations, studies, or shared reference data.",
+      badge: null,
+    };
+  }
+
   if (pathname === collaborationRegistryPath) {
     return {
       breadcrumbs: [],
