@@ -59,6 +59,8 @@ class Study(models.Model):
 
     class Meta:
         ordering = ["id"]
+        verbose_name = "study"
+        verbose_name_plural = "studies"
         constraints = [
             models.UniqueConstraint(
                 fields=["project", "species", "celltype", "treatment_var", "batch_var"],
@@ -183,6 +185,8 @@ class StudyOnboardingState(models.Model):
 
     class Meta:
         ordering = ["study_id"]
+        verbose_name = "study onboarding state"
+        verbose_name_plural = "study onboarding states"
 
     def __str__(self) -> str:
         return f"Onboarding {self.study_id} ({self.status})"
@@ -205,6 +209,8 @@ class StudyMetadataMapping(models.Model):
 
     class Meta:
         ordering = ["study_id"]
+        verbose_name = "study metadata mapping"
+        verbose_name_plural = "study metadata mappings"
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -234,6 +240,8 @@ class StudyConfig(models.Model):
 
     class Meta:
         ordering = ["study_id"]
+        verbose_name = "study configuration"
+        verbose_name_plural = "study configurations"
 
     def clean(self) -> None:
         try:
@@ -334,6 +342,8 @@ class SamplePlating(models.Model):
 
     class Meta:
         ordering = ["sample_id"]
+        verbose_name = "sample plating"
+        verbose_name_plural = "sample plating records"
 
     def __str__(self) -> str:
         return f"{self.sample.sample_ID} @ {self.plate_well}"

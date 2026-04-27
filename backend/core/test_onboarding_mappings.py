@@ -2,6 +2,8 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
+from profiling.models import ProfilingPlatform
+
 from .onboarding import build_group_preview_rows, suggest_contrasts_from_rows
 from .models import Assay, MetadataFieldDefinition, Project, Sample, Study, StudyMetadataFieldSelection, UserProfile
 
@@ -473,6 +475,59 @@ def test_onboarding_finalize_rejects_missing_config_choices_and_missing_uploaded
     assert "Provide where the study was sequenced before finalizing onboarding." in messages
     assert "Choose at least one grouping variable to generate analysis groups." not in messages
     assert "Primary batch variable 'plate' is not present in the last uploaded metadata." in messages
+
+
+@pytest.mark.django_db
+def test_onboarding_config_derives_biospyder_kit_from_selected_profiling_platform() -> None:
+    client = APIClient()
+    user = User.objects.create_user(username="admin", password="admin123")
+    user.profile.role = UserProfile.Role.ADMIN
+    user.profile.save()
+    client.force_authenticate(user=user)
+
+    project = Project.objects.create(
+        owner=user,
+        pi_name="Dr. Curie",
+        researcher_name="Researcher A",
+        bioinformatician_assigned="Bioinfo",
+        title="Mercury tox study",
+        description="",
+    )
+    study = Study.objects.create(project=project, title="Study", species=Study.Species.HUMAN, celltype="Hepatocyte")
+    ProfilingPlatform.objects.create(
+        platform_name="humanWT2_1_brAtten",
+        title="TempO-seq Human WT v2.1, Broad Attenuation",
+        version="2.1",
+        technology_type=ProfilingPlatform.TechnologyType.TEMPO_SEQ,
+        study_type=ProfilingPlatform.StudyType.HTTR,
+        species=Study.Species.HUMAN,
+        ext={"biospyder_kit": "hwt2-1", "attenuation": "broad"},
+    )
+
+    response = client.patch(
+        f"/api/studies/{study.id}/onboarding-state/",
+        {
+            "config": {
+                "common": {
+                    "platform": "TempO-Seq",
+                    "profiling_platform_name": "humanWT2_1_brAtten",
+                    "instrument_model": "Illumina NovaSeq 6000",
+                    "sequenced_by": "HC Genomics lab",
+                    "biospyder_kit": None,
+                },
+                "pipeline": {"mode": "se", "threads": 8},
+                "qc": {},
+                "deseq2": {"cpus": 4},
+            },
+        },
+        format="json",
+    )
+
+    assert response.status_code == 200
+    common = response.json()["config"]["common"]
+    assert common["platform"] == "TempO-Seq"
+    assert common["profiling_platform_name"] == "humanWT2_1_brAtten"
+    assert common["biospyder_kit"] == "hwt2-1"
 
 
 @pytest.mark.django_db

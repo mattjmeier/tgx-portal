@@ -1,8 +1,13 @@
 name: plane-stack
 
 x-plane-app-env: &plane-app-env
+  GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
   API_BASE_URL: ${API_BASE_URL:-http://plane-api:8000}
   LIVE_SERVER_SECRET_KEY: ${LIVE_SERVER_SECRET_KEY}
+  SECRET_KEY: ${PLANE_SECRET_KEY}
+  WEB_URL: ${WEB_URL}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-${WEB_URL}}
+  DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
   POSTGRES_USER: ${PLANE_POSTGRES_USER:-plane}
   POSTGRES_PASSWORD: ${PLANE_POSTGRES_PASSWORD:-plane}
   POSTGRES_DB: ${PLANE_POSTGRES_DB:-plane}
@@ -44,6 +49,8 @@ x-plane-mq-env: &plane-mq-env
 x-plane-minio-env: &plane-minio-env
   MINIO_ROOT_USER: ${PLANE_AWS_ACCESS_KEY_ID:-access-key}
   MINIO_ROOT_PASSWORD: ${PLANE_AWS_SECRET_ACCESS_KEY:-secret-key}
+  MINIO_BROWSER_REDIRECT: ${PLANE_MINIO_BROWSER_REDIRECT:-on}
+  MINIO_BROWSER_REDIRECT_URL: ${PLANE_MINIO_BROWSER_REDIRECT_URL:-${WEB_URL}/minio/}
 
 services:
   plane-db:
@@ -99,7 +106,7 @@ services:
 
   plane-api:
     image: makeplane/plane-backend:stable
-    container_name: plane-api
+    container_name: api
     restart: unless-stopped
     command: ./bin/docker-entrypoint-api.sh
     environment:
@@ -115,10 +122,14 @@ services:
         condition: service_healthy
       plane-minio:
         condition: service_started
+    networks:
+      default:
+        aliases: [api]
+
 
   plane-worker:
     image: makeplane/plane-backend:stable
-    container_name: plane-worker
+    container_name: bgworker
     restart: unless-stopped
     command: ./bin/docker-entrypoint-worker.sh
     environment:
@@ -137,7 +148,7 @@ services:
 
   plane-beat:
     image: makeplane/plane-backend:stable
-    container_name: plane-beat
+    container_name: beatworker
     restart: unless-stopped
     command: ./bin/docker-entrypoint-beat.sh
     environment:
@@ -185,7 +196,7 @@ services:
 
   plane-web:
     image: makeplane/plane-frontend:stable
-    container_name: plane-web
+    container_name: web
     restart: unless-stopped
     environment:
       <<: *plane-app-env
@@ -194,10 +205,13 @@ services:
         condition: service_started
       plane-minio:
         condition: service_started
+    networks:
+      default:
+        aliases: [web]
 
   plane-admin:
     image: makeplane/plane-admin:stable
-    container_name: plane-admin
+    container_name: admin
     restart: unless-stopped
     environment:
       <<: *plane-app-env
@@ -208,10 +222,13 @@ services:
         condition: service_started
       plane-minio:
         condition: service_started
+    networks:
+      default:
+        aliases: [admin]
 
   plane-space:
     image: makeplane/plane-space:stable
-    container_name: plane-space
+    container_name: space
     restart: unless-stopped
     environment:
       <<: *plane-app-env
@@ -222,6 +239,9 @@ services:
         condition: service_started
       plane-minio:
         condition: service_started
+    networks:
+      default:
+        aliases: [space]
 
   plane-proxy:
     image: makeplane/plane-proxy:stable

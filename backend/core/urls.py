@@ -8,6 +8,7 @@ from .views import (
     MetadataValidationViewSet,
     MetadataTemplateViewSet,
     ProjectViewSet,
+    ReferenceLibraryViewSet,
     SampleViewSet,
     StudyViewSet,
     UserManagementViewSet,
@@ -22,6 +23,7 @@ router.register("studies", StudyViewSet, basename="study")
 router.register("samples", SampleViewSet, basename="sample")
 router.register("assays", AssayViewSet, basename="assay")
 router.register("lookups", LookupViewSet, basename="lookups")
+router.register("reference-library", ReferenceLibraryViewSet, basename="reference-library")
 router.register("metadata-templates", MetadataTemplateViewSet, basename="metadata-templates")
 router.register("metadata-validation", MetadataValidationViewSet, basename="metadata-validation")
 

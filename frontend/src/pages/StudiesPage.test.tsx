@@ -97,7 +97,7 @@ describe("StudiesPage", () => {
 
     expect(screen.getByText(/human\s*·\s*hepatocyte/i)).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /samples/i })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: /assays/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /processing metadata/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /^open$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /open collaboration/i })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /^mercury tox study$/i })).toHaveLength(1);

@@ -734,13 +734,90 @@ def _seed_controlled_lookups() -> None:
     )
 
 
+def _rnaseq_platform_name_for_genome(genome_version: str) -> str:
+    if genome_version == "mm10":
+        return "rnaseq_mm10_demo"
+    if genome_version == "rn6":
+        return "rnaseq_rn6_demo"
+    return "rnaseq_hg38_demo"
+
+
+BIOSPYDER_PLATFORM_SEEDS: tuple[dict[str, object], ...] = (
+    {
+        "platform_name": "humanWT2_1_brAtten",
+        "title": "TempO-seq Human WT v2.1, Broad Attenuation",
+        "version": "2.1",
+        "biospyder_kit": "hwt2-1",
+        "species": Study.Species.HUMAN,
+        "probe_set": "whole_transcriptome",
+    },
+    {
+        "platform_name": "humanWT2_0_brAtten",
+        "title": "TempO-seq Human WT v2.0, Broad Attenuation",
+        "version": "2.0",
+        "biospyder_kit": "hwt2-0",
+        "species": Study.Species.HUMAN,
+        "probe_set": "whole_transcriptome",
+    },
+    {
+        "platform_name": "humanS1500_2_0_brAtten",
+        "title": "TempO-seq Human S1500+ v2.0, Broad Attenuation",
+        "version": "2.0",
+        "biospyder_kit": "h1500_2-0",
+        "species": Study.Species.HUMAN,
+        "probe_set": "s1500_plus",
+    },
+    {
+        "platform_name": "humanS1500_1_2_brAtten",
+        "title": "TempO-seq Human S1500+ v1.2, Broad Attenuation",
+        "version": "1.2",
+        "biospyder_kit": "h1500_1-2",
+        "species": Study.Species.HUMAN,
+        "probe_set": "s1500_plus",
+    },
+    {
+        "platform_name": "mouseWT1_0_brAtten",
+        "title": "TempO-seq Mouse WT v1.0, Broad Attenuation",
+        "version": "1.0",
+        "biospyder_kit": "mousewt1-0",
+        "species": Study.Species.MOUSE,
+        "probe_set": "whole_transcriptome",
+    },
+    {
+        "platform_name": "mouseS1500_1_2_brAtten",
+        "title": "TempO-seq Mouse S1500+ v1.2, Broad Attenuation",
+        "version": "1.2",
+        "biospyder_kit": "mouse1500_1-2",
+        "species": Study.Species.MOUSE,
+        "probe_set": "s1500_plus",
+    },
+    {
+        "platform_name": "zebrafishS1500_brAtten",
+        "title": "TempO-seq Zebrafish S1500+, Broad Attenuation",
+        "version": "",
+        "biospyder_kit": "zebrafish1500",
+        "species": None,
+        "probe_set": "s1500_plus",
+        "organism": "zebrafish",
+    },
+)
+
+
 def _seed_study_config(study: Study, seed_study: SeedStudy) -> None:
     config_payload = default_study_config()
+    platform_value = "RNA-Seq" if seed_study.platform == Assay.Platform.RNA_SEQ else "TempO-Seq"
+    profiling_platform_name = (
+        _rnaseq_platform_name_for_genome(seed_study.genome_version)
+        if seed_study.platform == Assay.Platform.RNA_SEQ
+        else "humanWT2_1_brAtten"
+    )
     config_payload["common"].update(
         {
-            "platform": "RNA-Seq" if seed_study.platform == Assay.Platform.RNA_SEQ else "TempO-Seq",
+            "platform": platform_value,
+            "profiling_platform_name": profiling_platform_name,
             "instrument_model": seed_study.instrument_model,
             "sequenced_by": seed_study.sequenced_by,
+            "biospyder_kit": "hwt2-1" if platform_value == "TempO-Seq" else None,
             "celltype": seed_study.celltype,
             "dose": "dose" if "dose" in seed_study.metadata_columns else None,
             "batch_var": seed_study.batch_var or None,
@@ -903,7 +980,7 @@ def _seed_warehouse_demo(study: Study) -> None:
         preferred_name="Aflatoxin B1",
         ext={"source_note": "Seeded warehouse demo chemical sample."},
     )
-    platform = ProfilingPlatform.objects.create(
+    rnaseq_platform = ProfilingPlatform.objects.create(
         platform_name="rnaseq_hg38_demo",
         title="RNA-seq hg38 demonstration platform",
         description="Seeded profiling platform for admin schema exploration.",
@@ -912,13 +989,62 @@ def _seed_warehouse_demo(study: Study) -> None:
         study_type=ProfilingPlatform.StudyType.TGX,
         species=Study.Species.HUMAN,
     )
+    ProfilingPlatform.objects.create(
+        platform_name="rnaseq_mm10_demo",
+        title="RNA-seq mm10 demonstration platform",
+        description="Seeded mouse RNA-seq platform for admin schema exploration.",
+        version="demo-1",
+        technology_type=ProfilingPlatform.TechnologyType.RNA_SEQ,
+        study_type=ProfilingPlatform.StudyType.TGX,
+        species=Study.Species.MOUSE,
+    )
+    ProfilingPlatform.objects.create(
+        platform_name="rnaseq_rn6_demo",
+        title="RNA-seq rn6 demonstration platform",
+        description="Seeded rat RNA-seq platform for admin schema exploration.",
+        version="demo-1",
+        technology_type=ProfilingPlatform.TechnologyType.RNA_SEQ,
+        study_type=ProfilingPlatform.StudyType.TGX,
+        species=Study.Species.RAT,
+    )
+    for platform_seed in BIOSPYDER_PLATFORM_SEEDS:
+        ext = {
+            "biospyder_kit": platform_seed["biospyder_kit"],
+            "attenuation": "broad",
+            "probe_set": platform_seed["probe_set"],
+            "source_note": "Seeded to keep canonical profiling platforms aligned with operational TempO-Seq lookups.",
+        }
+        organism = platform_seed.get("organism")
+        if organism:
+            ext["organism"] = organism
+
+        ProfilingPlatform.objects.create(
+            platform_name=str(platform_seed["platform_name"]),
+            title=str(platform_seed["title"]),
+            description="Seeded TempO-seq platform record representing a concrete BioSpyder probe-set and attenuation combination.",
+            version=str(platform_seed["version"]),
+            technology_type=ProfilingPlatform.TechnologyType.TEMPO_SEQ,
+            study_type=ProfilingPlatform.StudyType.HTTR,
+            species=platform_seed["species"],
+            ext=ext,
+        )
+    ProfilingPlatform.objects.create(
+        platform_name="drugseq_s1500_demo",
+        title="DrugSeq S1500+ demonstration platform",
+        description="Seeded DrugSeq platform record representing a canonical targeted transcriptomics feature set.",
+        version="demo-1",
+        technology_type=ProfilingPlatform.TechnologyType.DRUG_SEQ,
+        study_type=ProfilingPlatform.StudyType.HTTR,
+        species=Study.Species.HUMAN,
+        ext={"source_note": "Seeded to keep canonical profiling platforms aligned with operational DrugSeq lookups."},
+    )
     warehouse_metadata = StudyWarehouseMetadata.objects.create(
         study=study,
         study_name="hc_afb1_warehouse_demo",
         source="Health Canada",
         study_type=StudyWarehouseMetadata.StudyType.TGX,
         in_vitro=True,
-        platform=platform,
+        platform=rnaseq_platform,
         cell_types=[study.celltype or "MCF-7"],
         culture_conditions=["standard seeded demo culture"],
         exposure_conditions=["24h exposure"],

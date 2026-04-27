@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
-from io import BytesIO
+from io import BytesIO, StringIO
+from pathlib import PurePath
 from typing import Any
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -33,6 +35,67 @@ class ConfigGenerationError(Exception):
 class ConfigBundle:
     filename: str
     content: bytes
+
+
+GEO_REQUIRED_COLUMNS = [
+    "study title",
+    "summary (abstract)",
+    "experimental design",
+    "contributor",
+    "extract protocol",
+    "library construction protocol",
+    "data processing description",
+    "assembly or genome build",
+    "processed data files format and content",
+    "library name",
+    "title",
+    "source name",
+    "organism",
+    "tissue",
+    "cell line",
+    "cell type",
+    "treatment",
+    "description",
+    "molecule",
+    "single or paired-end",
+    "instrument model",
+    "library strategy",
+    "raw file",
+    "processed data file",
+]
+
+GEO_MANUAL_FIELD_PRIORITY = [
+    "raw file",
+    "processed data file",
+    "extract protocol",
+    "library construction protocol",
+    "data processing description",
+    "processed data files format and content",
+    "experimental design",
+    "molecule",
+]
+
+GEO_SPECIES_NAMES = {
+    Study.Species.HUMAN: "Homo sapiens",
+    Study.Species.MOUSE: "Mus musculus",
+    Study.Species.RAT: "Rattus norvegicus",
+    Study.Species.HAMSTER: "Mesocricetus auratus",
+}
+
+
+@dataclass
+class GeoMetadataCsv:
+    filename: str
+    content: str
+    rows: list[dict[str, str]]
+
+
+@dataclass
+class GeoMetadataSummary:
+    can_download_csv: bool
+    populated_field_count: int
+    total_field_count: int
+    manual_field_labels: list[str]
 
 
 class SampleImportValidationError(Exception):
@@ -387,6 +450,182 @@ def _resolve_sample_value(sample: Sample, key: str) -> Any:
     if key in CORE_SAMPLE_FIELDS:
         return getattr(sample, key)
     return (sample.metadata or {}).get(key)
+
+
+def _resolve_flat_row_value(row: dict[str, Any], key: str) -> Any:
+    value = row.get(key)
+    if value is not None:
+        return value
+    metadata = row.get("metadata")
+    if isinstance(metadata, dict):
+        return metadata.get(key)
+    return None
+
+
+def _stringify_geo_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value).strip()
+
+
+def _first_geo_value(row: dict[str, Any], keys: list[str]) -> str:
+    for key in keys:
+        value = _stringify_geo_value(_resolve_flat_row_value(row, key))
+        if value:
+            return value
+    return ""
+
+
+def _file_name_only(value: str) -> str:
+    if not value:
+        return ""
+    normalized = value.replace("\\", "/")
+    return PurePath(normalized).name
+
+
+def _geo_file_value(row: dict[str, Any], keys: list[str]) -> str:
+    value = _first_geo_value(row, keys)
+    return _file_name_only(value)
+
+
+def _geo_library_layout(config: StudyConfig | None) -> str:
+    mode = str((config.pipeline if config is not None else {}).get("mode") or "").strip()
+    if mode == "se":
+        return "single"
+    if mode == "pe":
+        return "paired-end"
+    return ""
+
+
+def _geo_genome_build(config: StudyConfig | None) -> str:
+    if config is None:
+        return ""
+    pipeline = config.pipeline or {}
+    return _stringify_geo_value(
+        pipeline.get("genome_name")
+        or pipeline.get("genome_build")
+        or pipeline.get("genome_version")
+        or pipeline.get("genome_filename")
+    )
+
+
+def _geo_treatment(row: dict[str, Any], config: StudyConfig | None) -> str:
+    dose_value = _first_geo_value(row, ["dose", "concentration"])
+    units = _stringify_geo_value((config.common if config is not None else {}).get("units"))
+    if dose_value and units:
+        dose_value = f"{dose_value} {units}"
+
+    values = [
+        _first_geo_value(row, ["chemical_longname"]),
+        _first_geo_value(row, ["chemical"]),
+        dose_value,
+        _first_geo_value(row, ["group"]),
+    ]
+    normalized: list[str] = []
+    for value in values:
+        if value and value not in normalized:
+            normalized.append(value)
+    return "; ".join(normalized)
+
+
+def _sample_to_geo_source_row(sample: Sample) -> dict[str, Any]:
+    row = {
+        "sample_ID": sample.sample_ID,
+        "sample_name": sample.sample_name,
+        "description": sample.description,
+        "technical_control": sample.technical_control,
+        "reference_rna": sample.reference_rna,
+        "solvent_control": sample.solvent_control,
+    }
+    row.update(sample.metadata or {})
+    return row
+
+
+def _geo_source_rows(study: Study) -> list[dict[str, Any]]:
+    samples = list(study.samples.order_by("id"))
+    if samples:
+        return [_sample_to_geo_source_row(sample) for sample in samples]
+
+    onboarding_state = getattr(study, "onboarding_state", None)
+    if onboarding_state is None or not onboarding_state.validated_rows:
+        return []
+    return [
+        _flatten_metadata_upload_row(row) if isinstance(row, dict) else {}
+        for row in onboarding_state.validated_rows
+    ]
+
+
+def build_geo_metadata_rows(study: Study) -> list[dict[str, str]]:
+    config = getattr(study, "config", None)
+    common = config.common if config is not None else {}
+    source_rows = _geo_source_rows(study)
+    rows: list[dict[str, str]] = []
+
+    for source in source_rows:
+        library_name = _first_geo_value(source, ["sample_ID", "library_name", "library name"])
+        sample_title = _first_geo_value(source, ["sample_name", "title", "sample_ID"])
+        row = {column: "" for column in GEO_REQUIRED_COLUMNS}
+        row.update(
+            {
+                "study title": study.title,
+                "summary (abstract)": study.description or study.project.description,
+                "contributor": study.project.researcher_name,
+                "assembly or genome build": _geo_genome_build(config),
+                "library name": library_name,
+                "title": sample_title,
+                "source name": sample_title or library_name,
+                "organism": GEO_SPECIES_NAMES.get(study.species, ""),
+                "tissue": _first_geo_value(source, ["tissue"]),
+                "cell line": _first_geo_value(source, ["cell_line", "cell line"]),
+                "cell type": _first_geo_value(source, ["cell_type", "cell type"]) or (study.celltype or ""),
+                "treatment": _geo_treatment(source, config),
+                "description": _first_geo_value(source, ["description"]),
+                "molecule": _first_geo_value(source, ["molecule"])
+                or _stringify_geo_value(common.get("molecule")),
+                "single or paired-end": _geo_library_layout(config),
+                "instrument model": _stringify_geo_value(common.get("instrument_model")),
+                "library strategy": _first_geo_value(source, ["library_strategy", "library strategy"]) or "RNA-Seq",
+                "raw file": _geo_file_value(source, ["raw_file", "raw file"]),
+                "processed data file": _geo_file_value(
+                    source,
+                    ["processed_data_file", "processed data file"],
+                ),
+            }
+        )
+        rows.append(row)
+    return rows
+
+
+def summarize_geo_metadata_export(study: Study) -> GeoMetadataSummary:
+    rows = build_geo_metadata_rows(study)
+    populated_columns = {
+        column
+        for column in GEO_REQUIRED_COLUMNS
+        if any(row.get(column) for row in rows)
+    }
+    manual_fields = [
+        column
+        for column in GEO_MANUAL_FIELD_PRIORITY
+        if column not in populated_columns
+    ]
+    return GeoMetadataSummary(
+        can_download_csv=bool(rows),
+        populated_field_count=len(populated_columns) if rows else 0,
+        total_field_count=len(GEO_REQUIRED_COLUMNS),
+        manual_field_labels=manual_fields[:5],
+    )
+
+
+def build_geo_metadata_csv(study: Study) -> GeoMetadataCsv:
+    rows = build_geo_metadata_rows(study)
+    buffer = StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=GEO_REQUIRED_COLUMNS, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(rows)
+    filename = f"geo_metadata_{slugify(study.title).replace('-', '_')}.csv"
+    return GeoMetadataCsv(filename=filename, content=buffer.getvalue(), rows=rows)
 
 
 def _build_study_config_payload(project: Project, study: Study, assays: list[Assay], mapping: dict[str, str]) -> dict[str, Any]:

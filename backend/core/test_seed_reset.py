@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 
 from chemicals.models import ChemicalSample
 from core.models import Assay, Project, Sample, Study, StudyConfig, StudyMetadataFieldSelection, StudyMetadataMapping, StudyOnboardingState
+from core.onboarding_options import BIOSPYDER_KIT_VALUES
 from core.services import build_project_config_bundle
 from profiling.models import HTTrSeriesWell, HTTrWell, Metric, Pod, ProfilingPlatform, Series, StudyWarehouseMetadata
 
@@ -45,7 +46,7 @@ class ResetSeedDataCommandTests(TestCase):
         call_command("reset_seed_data")
 
         self.assertEqual(ChemicalSample.objects.count(), 1)
-        self.assertEqual(ProfilingPlatform.objects.count(), 1)
+        self.assertEqual(ProfilingPlatform.objects.count(), 11)
         self.assertEqual(StudyWarehouseMetadata.objects.count(), 1)
         self.assertEqual(Series.objects.count(), 1)
         self.assertEqual(Metric.objects.count(), 1)
@@ -53,11 +54,42 @@ class ResetSeedDataCommandTests(TestCase):
         self.assertEqual(HTTrWell.objects.count(), 1)
         self.assertEqual(HTTrSeriesWell.objects.count(), 1)
 
+        self.assertEqual(
+            set(ProfilingPlatform.objects.values_list("technology_type", flat=True)),
+            {
+                ProfilingPlatform.TechnologyType.RNA_SEQ,
+                ProfilingPlatform.TechnologyType.TEMPO_SEQ,
+                ProfilingPlatform.TechnologyType.DRUG_SEQ,
+            },
+        )
+        seeded_biospyder_kits = {
+            platform.ext["biospyder_kit"]
+            for platform in ProfilingPlatform.objects.filter(technology_type=ProfilingPlatform.TechnologyType.TEMPO_SEQ)
+        }
+        self.assertEqual(seeded_biospyder_kits, set(BIOSPYDER_KIT_VALUES))
+
         metadata = StudyWarehouseMetadata.objects.select_related("study", "platform").get()
         self.assertEqual(metadata.study.title, "MCF-7 estrogen pulse")
         self.assertEqual(metadata.study_name, "hc_afb1_warehouse_demo")
         self.assertEqual(metadata.platform.platform_name, "rnaseq_hg38_demo")
         self.assertEqual(metadata.series.get().chemical_sample.chemical_sample_id, "HC-AFB1-DEMO-001")
+
+    def test_seeded_reference_library_has_no_platform_drift_warnings(self) -> None:
+        admin = User.objects.create_user(username="reference-admin", password="admin123")
+        admin.profile.role = "admin"
+        admin.profile.save()
+        client = APIClient()
+        client.force_authenticate(user=admin)
+
+        call_command("reset_seed_data")
+
+        response = client.get("/api/reference-library/")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["drift_warnings"], [])
+        self.assertEqual(payload["summary"]["technology_type_count"], 3)
+        self.assertEqual(payload["summary"]["profiling_platform_count"], 11)
 
     def test_seeded_project_can_generate_a_config_bundle(self) -> None:
         call_command("reset_seed_data")

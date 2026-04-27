@@ -1,4 +1,5 @@
-from io import BytesIO
+import csv
+from io import BytesIO, StringIO
 from zipfile import ZipFile
 
 from django.contrib.auth import get_user_model
@@ -20,6 +21,7 @@ from .models import (
     UserProfile,
     default_study_config,
 )
+from .services import GEO_REQUIRED_COLUMNS
 from .onboarding import normalize_group_builder
 
 User = get_user_model()
@@ -553,6 +555,149 @@ class ConfigGenerationApiTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("detail", response.json())
+
+
+class GeoMetadataCsvApiTests(TestCase):
+    def setUp(self) -> None:
+        self.client = APIClient()
+        self.admin = User.objects.create_user(username="admin", password="admin123")
+        self.admin.profile.role = UserProfile.Role.ADMIN
+        self.admin.profile.save()
+        self.client.force_authenticate(user=self.admin)
+        self.project = Project.objects.create(
+            owner=self.admin,
+            pi_name="Dr. Curie",
+            researcher_name="Researcher A",
+            bioinformatician_assigned="Bioinfo A",
+            title="Project Alpha",
+            description="Project summary",
+        )
+        self.study = Study.objects.create(
+            project=self.project,
+            title="GEO export study",
+            description="Study abstract",
+            species=Study.Species.HUMAN,
+            celltype="Hepatocyte",
+        )
+        add_template_fields(
+            self.study,
+            "sample_ID",
+            "technical_control",
+            "reference_rna",
+            "solvent_control",
+            "group",
+            "dose",
+            "chemical",
+            "chemical_longname",
+            "CASN",
+        )
+        config = default_study_config()
+        config["common"]["instrument_model"] = "Illumina NovaSeq 6000"
+        config["common"]["units"] = "uM"
+        config["pipeline"]["mode"] = "se"
+        config["pipeline"]["genome_name"] = "GRCh38"
+        StudyConfig.objects.create(study=self.study, **config)
+        StudyOnboardingState.objects.create(
+            study=self.study,
+            status=StudyOnboardingState.Status.FINAL,
+            metadata_columns=["sample_ID", "sample_name", "group", "dose", "chemical", "chemical_longname"],
+            validated_rows=[
+                {
+                    "sample_ID": "draft-1",
+                    "sample_name": "Draft row",
+                    "group": "draft",
+                    "dose": 1,
+                    "chemical": "cadmium",
+                    "chemical_longname": "Cadmium chloride",
+                }
+            ],
+        )
+
+    def _csv_rows(self, response) -> list[dict[str, str]]:
+        return list(csv.DictReader(StringIO(response.content.decode("utf-8"))))
+
+    def test_geo_metadata_csv_returns_exact_required_header(self) -> None:
+        Sample.objects.create(
+            study=self.study,
+            sample_ID="sample-1",
+            sample_name="Sample 1",
+            description="Control sample",
+            metadata={"group": "control", "dose": 0, "chemical": "vehicle"},
+        )
+
+        response = self.client.get(f"/api/studies/{self.study.id}/geo-metadata-csv/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        self.assertIn("geo_metadata_geo_export_study.csv", response["Content-Disposition"])
+        header = response.content.decode("utf-8").splitlines()[0].split(",")
+        self.assertEqual(header, GEO_REQUIRED_COLUMNS)
+
+    def test_geo_metadata_csv_uses_persisted_samples_before_onboarding_rows(self) -> None:
+        Sample.objects.create(
+            study=self.study,
+            sample_ID="sample-1",
+            sample_name="Sample 1",
+            description="Control sample",
+            metadata={"group": "control", "dose": 0, "chemical": "vehicle"},
+        )
+
+        response = self.client.get(f"/api/studies/{self.study.id}/geo-metadata-csv/")
+
+        rows = self._csv_rows(response)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["library name"], "sample-1")
+        self.assertNotIn("draft-1", response.content.decode("utf-8"))
+
+    def test_geo_metadata_csv_falls_back_to_onboarding_validated_rows(self) -> None:
+        response = self.client.get(f"/api/studies/{self.study.id}/geo-metadata-csv/")
+
+        rows = self._csv_rows(response)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["library name"], "draft-1")
+        self.assertEqual(rows[0]["title"], "Draft row")
+        self.assertEqual(rows[0]["organism"], "Homo sapiens")
+        self.assertEqual(rows[0]["cell type"], "Hepatocyte")
+        self.assertEqual(rows[0]["single or paired-end"], "single")
+        self.assertEqual(rows[0]["instrument model"], "Illumina NovaSeq 6000")
+        self.assertEqual(rows[0]["library strategy"], "RNA-Seq")
+        self.assertEqual(rows[0]["treatment"], "Cadmium chloride; cadmium; 1 uM; draft")
+
+    def test_geo_metadata_csv_uses_csv_escaping_and_does_not_guess_files(self) -> None:
+        Sample.objects.create(
+            study=self.study,
+            sample_ID="sample-1",
+            sample_name='Sample, "quoted"',
+            description="Line 1\nLine 2",
+            metadata={"group": "treated", "raw_file": "/path/to/sample_1.fastq.gz"},
+        )
+
+        response = self.client.get(f"/api/studies/{self.study.id}/geo-metadata-csv/")
+
+        rows = self._csv_rows(response)
+        self.assertEqual(rows[0]["title"], 'Sample, "quoted"')
+        self.assertEqual(rows[0]["description"], "Line 1\nLine 2")
+        self.assertEqual(rows[0]["raw file"], "sample_1.fastq.gz")
+        self.assertEqual(rows[0]["processed data file"], "")
+        self.assertEqual(rows[0]["extract protocol"], "")
+
+    def test_geo_metadata_csv_respects_client_project_access(self) -> None:
+        owner = User.objects.create_user(username="owner", password="client123")
+        owner.profile.role = UserProfile.Role.CLIENT
+        owner.profile.save()
+        other_client = User.objects.create_user(username="other", password="client123")
+        other_client.profile.role = UserProfile.Role.CLIENT
+        other_client.profile.save()
+        self.project.owner = owner
+        self.project.save(update_fields=["owner"])
+
+        self.client.force_authenticate(user=owner)
+        allowed_response = self.client.get(f"/api/studies/{self.study.id}/geo-metadata-csv/")
+        self.assertEqual(allowed_response.status_code, 200)
+
+        self.client.force_authenticate(user=other_client)
+        denied_response = self.client.get(f"/api/studies/{self.study.id}/geo-metadata-csv/")
+        self.assertEqual(denied_response.status_code, 404)
 
 
 class AuthApiTests(TestCase):

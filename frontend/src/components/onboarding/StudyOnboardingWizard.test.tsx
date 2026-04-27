@@ -531,6 +531,50 @@ vi.mock("../../api/lookups", async () => {
           },
         },
       },
+      profiling_platforms: [
+        {
+          id: 1,
+          platform_name: "rnaseq_hg38_demo",
+          title: "RNA-seq hg38 demonstration platform",
+          description: "Seeded profiling platform for admin schema exploration.",
+          version: "demo-1",
+          technology_type: "RNA-Seq",
+          study_type: "TGx",
+          species: "human",
+          species_label: "Human",
+          url: "",
+          ext: {},
+          study_count: 0,
+        },
+        {
+          id: 2,
+          platform_name: "humanWT2_1_brAtten",
+          title: "TempO-seq Human WT v2.1, Broad Attenuation",
+          description: "Seeded TempO-seq platform record.",
+          version: "2.1",
+          technology_type: "TempO-Seq",
+          study_type: "HTTr",
+          species: "human",
+          species_label: "Human",
+          url: "",
+          ext: { biospyder_kit: "hwt2-1", attenuation: "broad" },
+          study_count: 0,
+        },
+        {
+          id: 3,
+          platform_name: "drugseq_s1500_demo",
+          title: "DrugSeq S1500+ demonstration platform",
+          description: "Seeded DrugSeq platform record.",
+          version: "demo-1",
+          technology_type: "DrugSeq",
+          study_type: "HTTr",
+          species: "human",
+          species_label: "Human",
+          url: "",
+          ext: {},
+          study_count: 0,
+        },
+      ],
     })),
   };
 });
@@ -842,7 +886,7 @@ describe("StudyOnboardingWizard", () => {
     expect(screen.getByRole("button", { name: "Single-end" })).not.toHaveClass("bg-primary");
   });
 
-  it("shows sequencing config fields on study details and conditionally reveals Biospyder kit", async () => {
+  it("shows sequencing config fields and derives TempO-Seq kit from the platform definition", async () => {
     renderWizard("/studies/11/onboarding");
 
     expect(await screen.findByText("Sequencing setup")).toBeInTheDocument();
@@ -851,11 +895,13 @@ describe("StudyOnboardingWizard", () => {
     expect(screen.getByLabelText("Instrument model")).toBeInTheDocument();
     expect(screen.getByLabelText("Sequenced by")).toBeInTheDocument();
     expect(screen.queryByText("Config summary")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Platform definition")).toBeInTheDocument();
     expect(screen.queryByLabelText("Biospyder kit")).not.toBeInTheDocument();
 
     fireEvent.click(await screen.findByRole("button", { name: "TempO-Seq" }));
 
-    expect(await screen.findByLabelText("Biospyder kit")).toBeInTheDocument();
+    expect(await screen.findByText(/humanWT2_1_brAtten/)).toBeInTheDocument();
+    expect(screen.getByText(/BioSpyder kit hwt2-1/)).toBeInTheDocument();
   });
 
   it("places the description field above sequencing setup on the study details step", async () => {

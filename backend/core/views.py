@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q
 from django.utils.text import slugify
+from profiling.models import ProfilingPlatform
 from rest_framework import filters
 from rest_framework.authtoken.models import Token
 from rest_framework import status, viewsets
@@ -45,6 +46,8 @@ from .services import (
     SampleImportValidationError,
     _build_metadata_upload_row,
     _flatten_metadata_upload_row,
+    build_geo_metadata_csv,
+    summarize_geo_metadata_export,
     build_project_config_bundle,
     create_samples_from_validated_rows,
     validate_metadata_upload,
@@ -165,6 +168,42 @@ def _get_or_create_study_config(study: Study) -> StudyConfig:
     return config
 
 
+def _profiling_platform_for_common_config(common: dict) -> ProfilingPlatform | None:
+    platform_name = str(common.get("profiling_platform_name") or "").strip()
+    technology_type = str(common.get("platform") or "").strip()
+    if not platform_name:
+        return None
+
+    queryset = ProfilingPlatform.objects.filter(platform_name=platform_name)
+    if technology_type:
+        queryset = queryset.filter(technology_type=technology_type)
+    return queryset.first()
+
+
+def _normalize_config_sections_from_platform(config_payload: dict) -> dict:
+    normalized = {
+        section: dict(config_payload.get(section) or {})
+        for section in ("common", "pipeline", "qc", "deseq2")
+        if section in config_payload
+    }
+    common = normalized.get("common")
+    if common is None:
+        return normalized
+
+    profiling_platform = _profiling_platform_for_common_config(common)
+    if profiling_platform is None:
+        return normalized
+
+    common["platform"] = profiling_platform.technology_type
+    common["profiling_platform_name"] = profiling_platform.platform_name
+    if profiling_platform.technology_type == ProfilingPlatform.TechnologyType.TEMPO_SEQ:
+        biospyder_kit = (profiling_platform.ext or {}).get("biospyder_kit")
+        common["biospyder_kit"] = biospyder_kit if isinstance(biospyder_kit, str) and biospyder_kit else None
+    else:
+        common["biospyder_kit"] = None
+    return normalized
+
+
 def _study_finalize_errors(study: Study) -> list[dict[str, str]]:
     config = getattr(study, "config", None)
     errors: dict[str, list[str]] = {}
@@ -182,9 +221,25 @@ def _study_finalize_errors(study: Study) -> list[dict[str, str]]:
         sequenced_by = str((config.common or {}).get("sequenced_by") or "").strip()
         biospyder_kit = (config.common or {}).get("biospyder_kit")
         mode = str((config.pipeline or {}).get("mode") or "").strip()
+        profiling_platform_name = str((config.common or {}).get("profiling_platform_name") or "").strip()
+        matching_platforms = ProfilingPlatform.objects.filter(technology_type=platform) if platform else ProfilingPlatform.objects.none()
+        profiling_platform = _profiling_platform_for_common_config(config.common or {})
 
         if not platform:
             errors.setdefault("config.common.platform", []).append("Select a platform before finalizing onboarding.")
+        elif matching_platforms.exists():
+            if not profiling_platform_name:
+                errors.setdefault("config.common.profiling_platform_name", []).append(
+                    "Select a canonical profiling platform before finalizing onboarding."
+                )
+            elif profiling_platform is None:
+                errors.setdefault("config.common.profiling_platform_name", []).append(
+                    "Selected profiling platform is not valid for the selected technology."
+                )
+            elif profiling_platform.species and study.species and profiling_platform.species != study.species:
+                errors.setdefault("config.common.profiling_platform_name", []).append(
+                    "Selected profiling platform species does not match the study species."
+                )
         if not instrument_model:
             errors.setdefault("config.common.instrument_model", []).append(
                 "Provide an instrument model before finalizing onboarding."
@@ -195,7 +250,8 @@ def _study_finalize_errors(study: Study) -> list[dict[str, str]]:
             )
         if not mode:
             errors.setdefault("config.pipeline.mode", []).append("Choose a sequencing mode before finalizing onboarding.")
-        if platform == "TempO-Seq" and not biospyder_kit:
+        platform_biospyder_kit = (profiling_platform.ext or {}).get("biospyder_kit") if profiling_platform else None
+        if platform == "TempO-Seq" and not biospyder_kit and not platform_biospyder_kit:
             errors.setdefault("config.common.biospyder_kit", []).append(
                 "Select a Biospyder kit before finalizing onboarding."
             )
@@ -262,6 +318,26 @@ def _missing_metadata_query(key: str) -> Q:
         | Q(**{f"metadata__{normalized}": ""})
         | Q(**{f"metadata__{normalized}": None})
     )
+
+
+def _profiling_platform_lookup_rows() -> list[dict[str, object]]:
+    return [
+        {
+            "id": platform.id,
+            "platform_name": platform.platform_name,
+            "title": platform.title,
+            "description": platform.description,
+            "version": platform.version,
+            "technology_type": platform.technology_type,
+            "study_type": platform.study_type,
+            "species": platform.species,
+            "species_label": platform.get_species_display() if platform.species else None,
+            "url": platform.url,
+            "ext": platform.ext,
+            "study_count": platform.study_count,
+        }
+        for platform in ProfilingPlatform.objects.annotate(study_count=Count("studies")).order_by("platform_name", "id")
+    ]
 
 
 class LookupViewSet(viewsets.ViewSet):
@@ -370,6 +446,114 @@ class LookupViewSet(viewsets.ViewSet):
                     "instrument_model": ALL_INSTRUMENT_MODELS[:7],
                 },
             },
+            "profiling_platforms": _profiling_platform_lookup_rows(),
+        }
+        return Response(payload)
+
+
+def _choice_payload(choices) -> list[dict[str, str]]:
+    return [{"value": value, "label": label} for value, label in choices]
+
+
+def _controlled_lookup_values() -> dict[str, list[str]]:
+    controlled_values: dict[str, list[str]] = {category: [] for category, _ in ControlledLookupValue.Category.choices}
+    for item in ControlledLookupValue.objects.filter(is_active=True).order_by("category", "value"):
+        controlled_values[item.category].append(item.value)
+
+    if not controlled_values[ControlledLookupValue.Category.PLATFORM]:
+        controlled_values[ControlledLookupValue.Category.PLATFORM] = PLATFORM_VALUES.copy()
+    if not controlled_values[ControlledLookupValue.Category.INSTRUMENT_MODEL]:
+        controlled_values[ControlledLookupValue.Category.INSTRUMENT_MODEL] = ALL_INSTRUMENT_MODELS.copy()
+    if not controlled_values[ControlledLookupValue.Category.BIOSPYDER_KIT]:
+        controlled_values[ControlledLookupValue.Category.BIOSPYDER_KIT] = BIOSPYDER_KIT_VALUES.copy()
+
+    return controlled_values
+
+
+class ReferenceLibraryViewSet(viewsets.ViewSet):
+    def list(self, request):
+        controlled_values = _controlled_lookup_values()
+        platform_rows = _profiling_platform_lookup_rows()
+        technology_counts = {}
+        for row in platform_rows:
+            technology_counts[row["technology_type"]] = technology_counts.get(row["technology_type"], 0) + 1
+
+        controlled_platforms = set(controlled_values[ControlledLookupValue.Category.PLATFORM])
+        known_technology_types = set(technology_counts)
+        drift_warnings = [
+            {
+                "category": ControlledLookupValue.Category.PLATFORM,
+                "value": value,
+                "message": "Operational platform lookup has no matching profiling platform technology type.",
+            }
+            for value in sorted(controlled_platforms - known_technology_types)
+        ]
+
+        controlled_lookup_payload = {
+            category: {
+                "label": label,
+                "values": (
+                    [
+                        {
+                            "label": BIOSPYDER_KIT_LABELS.get(value, value),
+                            "value": value,
+                        }
+                        for value in values
+                    ]
+                    if category == ControlledLookupValue.Category.BIOSPYDER_KIT
+                    else values
+                ),
+            }
+            for category, label in ControlledLookupValue.Category.choices
+            for values in [controlled_values[category]]
+        }
+
+        payload = {
+            "version": 1,
+            "summary": {
+                "species_count": len(Study.Species.choices),
+                "assay_platform_count": len(Assay.Platform.choices),
+                "profiling_platform_count": len(platform_rows),
+                "technology_type_count": len(technology_counts),
+                "controlled_lookup_count": sum(len(values) for values in controlled_values.values()),
+                "drift_warning_count": len(drift_warnings),
+            },
+            "hierarchy": [
+                {
+                    "name": "Collaboration",
+                    "description": "Top-level container used for ownership, intake, and reporting.",
+                    "app_boundary": "core.Project",
+                },
+                {
+                    "name": "Study",
+                    "description": "Distinct experiment inside a collaboration, defined by species, cell type, or treatment design.",
+                    "app_boundary": "core.Study",
+                },
+                {
+                    "name": "Sample",
+                    "description": "Operational biological record for intake, assay attachment, and R-ODAF metadata upload.",
+                    "app_boundary": "core.Sample",
+                },
+                {
+                    "name": "Assay",
+                    "description": "Operational analytical run applied to a sample for downstream configuration generation.",
+                    "app_boundary": "core.Assay",
+                },
+                {
+                    "name": "Profiling platform",
+                    "description": "Canonical reusable platform or feature-set registry aligned with UL tgx_platforms.",
+                    "app_boundary": "profiling.ProfilingPlatform",
+                },
+            ],
+            "species": _choice_payload(Study.Species.choices),
+            "assay_platforms": _choice_payload(Assay.Platform.choices),
+            "technology_types": [
+                {"value": value, "label": value, "platform_count": count}
+                for value, count in sorted(technology_counts.items())
+            ],
+            "controlled_lookups": controlled_lookup_payload,
+            "profiling_platforms": platform_rows,
+            "drift_warnings": drift_warnings,
         }
         return Response(payload)
 
@@ -942,6 +1126,7 @@ class StudyViewSet(viewsets.ModelViewSet):
             readiness_status = "warning"
             readiness_label = "Needs attention"
 
+        geo_summary = summarize_geo_metadata_export(study)
         return Response(
             {
                 "study_id": study.id,
@@ -991,9 +1176,24 @@ class StudyViewSet(viewsets.ModelViewSet):
                     and state.status == StudyOnboardingState.Status.FINAL
                     and not any(issue["severity"] == "error" for issue in issues),
                 },
+                "geo_summary": {
+                    "can_download_csv": geo_summary.can_download_csv,
+                    "populated_field_count": geo_summary.populated_field_count,
+                    "total_field_count": geo_summary.total_field_count,
+                    "manual_field_labels": geo_summary.manual_field_labels,
+                },
                 "blocking_issues": issues,
             }
         )
+
+    @action(detail=True, methods=["get"], url_path="geo-metadata-csv")
+    def geo_metadata_csv(self, request, pk=None):
+        study = self.get_object()
+        _require_study_access(request.user, study)
+        bundle = build_geo_metadata_csv(study)
+        response = HttpResponse(bundle.content, content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{bundle.filename}"'
+        return response
 
     @action(detail=True, methods=["get", "patch"], url_path="onboarding-state")
     def onboarding_state(self, request, pk=None):
@@ -1045,10 +1245,11 @@ class StudyViewSet(viewsets.ModelViewSet):
                 normalized_group_builder = normalize_group_builder(group_builder_payload)
                 state.group_builder = normalized_group_builder
             if config_payload is not None:
+                normalized_config_payload = _normalize_config_sections_from_platform(config_payload)
                 config = _get_or_create_study_config(study)
                 for section in ("common", "pipeline", "qc", "deseq2"):
-                    if section in config_payload:
-                        setattr(config, section, config_payload[section])
+                    if section in normalized_config_payload:
+                        setattr(config, section, normalized_config_payload[section])
                 config.save()
 
             if state.validated_rows:

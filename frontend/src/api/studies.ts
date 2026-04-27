@@ -118,3 +118,25 @@ export async function deleteStudy(studyId: number): Promise<void> {
     throw new Error(await parseErrorMessage(response, "Failed to delete the study."));
   }
 }
+
+function parseAttachmentFilename(contentDisposition: string | null): string | null {
+  if (!contentDisposition) {
+    return null;
+  }
+
+  const match = /filename="(?<filename>[^"]+)"/i.exec(contentDisposition);
+  return match?.groups?.filename ?? null;
+}
+
+export async function downloadStudyGeoMetadataCsv(studyId: number): Promise<{ blob: Blob; filename: string | null }> {
+  const response = await apiFetch(`${apiBaseUrl}/api/studies/${studyId}/geo-metadata-csv/`);
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response, "Failed to download the GEO CSV."));
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: parseAttachmentFilename(response.headers.get("content-disposition")),
+  };
+}

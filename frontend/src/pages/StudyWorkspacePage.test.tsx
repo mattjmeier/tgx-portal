@@ -4,8 +4,9 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi } from "vitest";
 
 import { StudyWorkspacePage } from "./StudyWorkspacePage";
+import { createAssay, fetchAssays } from "../api/assays";
 import { fetchStudyExplorerSummary } from "../api/studyExplorer";
-import { deleteStudy } from "../api/studies";
+import { deleteStudy, downloadStudyGeoMetadataCsv } from "../api/studies";
 
 class ResizeObserverMock {
   observe() {}
@@ -14,6 +15,10 @@ class ResizeObserverMock {
 }
 
 vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+
+const authMock = vi.hoisted(() => ({
+  role: "admin" as "admin" | "client",
+}));
 
 vi.mock("../api/studies", async () => {
   const actual = await vi.importActual<typeof import("../api/studies")>("../api/studies");
@@ -30,6 +35,10 @@ vi.mock("../api/studies", async () => {
       batch_var: "batch-1",
     })),
     deleteStudy: vi.fn(async () => undefined),
+    downloadStudyGeoMetadataCsv: vi.fn(async () => ({
+      blob: new Blob(["geo"]),
+      filename: "geo_metadata_hepatocyte_mercury_dose_response.csv",
+    })),
   };
 });
 
@@ -144,6 +153,12 @@ vi.mock("../api/studyExplorer", async () => {
         biospyder_kit: null,
         can_download_config: false,
       },
+      geo_summary: {
+        can_download_csv: true,
+        populated_field_count: 12,
+        total_field_count: 24,
+        manual_field_labels: ["raw file", "processed data file", "extract protocol"],
+      },
       blocking_issues: [
         {
           code: "missing_assays",
@@ -197,6 +212,13 @@ vi.mock("../api/assays", async () => {
       previous: null,
       results: [],
     })),
+    createAssay: vi.fn(async () => ({
+      id: 501,
+      sample: 101,
+      platform: "rna_seq" as const,
+      genome_version: "mm10",
+      quantification_method: "raw_counts",
+    })),
   };
 });
 
@@ -206,7 +228,7 @@ vi.mock("../auth/AuthProvider", () => ({
     isAuthenticated: true,
     user: {
       username: "mmeier",
-      profile: { role: "admin" as const },
+      profile: { role: authMock.role },
     },
   }),
 }));
@@ -228,6 +250,10 @@ function renderPage(initialEntry: string) {
 }
 
 describe("StudyWorkspacePage", () => {
+  beforeEach(() => {
+    authMock.role = "admin";
+  });
+
   it("renders an overview-first operational workbench", async () => {
     renderPage("/studies/11");
 
@@ -237,8 +263,13 @@ describe("StudyWorkspacePage", () => {
     expect(screen.getByRole("link", { name: /samples/i })).toHaveAttribute("href", "/studies/11?view=samples");
     expect(screen.getByRole("link", { name: /^contrasts$/i })).toHaveAttribute("href", "/studies/11?view=contrasts");
     expect(screen.getByText(/attention queue/i)).toBeInTheDocument();
-    expect(screen.getByText(/1 sample is missing assay metadata/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 sample is missing processing metadata/i)).toBeInTheDocument();
     expect(screen.getByText(/study design overview/i)).toBeInTheDocument();
+    expect(screen.getByText(/geo submission helper/i)).toBeInTheDocument();
+    expect(screen.getByText(/ready with blanks/i)).toBeInTheDocument();
+    expect(screen.getByText(/known fields: 12\/24 populated/i)).toBeInTheDocument();
+    expect(screen.getByText(/raw file, processed data file, extract protocol/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /download geo csv/i })).toBeInTheDocument();
     expect(screen.queryByText(/sample explorer/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/contrasts and config handoff/i)).not.toBeInTheDocument();
   });
@@ -254,24 +285,91 @@ describe("StudyWorkspacePage", () => {
     expect(screen.getByRole("columnheader", { name: /dose/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /controls/i })).toBeInTheDocument();
     expect(screen.getByText(/showing 1-1 of 1/i)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /selected sample/i })).toBeInTheDocument();
-    expect(screen.getAllByText("S-001")).toHaveLength(2);
-    expect(screen.getByText(/group: control/i)).toBeInTheDocument();
-    expect(screen.getByText(/dose: 0/i)).toBeInTheDocument();
-    expect(screen.getByText(/chemical: none/i)).toBeInTheDocument();
-    expect(screen.getByText(/long chemical name/i)).toBeInTheDocument();
-    expect(screen.getByText(/no assays yet for this sample/i)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /selected sample/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/select a sample row to open full metadata and processing details/i)).toBeInTheDocument();
+    expect(screen.getAllByText("S-001")).toHaveLength(1);
+    expect(screen.queryByText(/group: control/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/long chemical name/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no processing metadata recorded for this sample/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/platform/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/genome version/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/quantification method/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add samples/i })).toBeInTheDocument();
+  });
+
+  it("opens processing metadata creation from the admin-only sample inspector actions menu", async () => {
+    vi.mocked(fetchAssays)
+      .mockResolvedValueOnce({
+        count: 0,
+        next: null,
+        previous: null,
+        results: [],
+      })
+      .mockResolvedValueOnce({
+        count: 1,
+        next: null,
+        previous: null,
+        results: [
+          {
+            id: 501,
+            sample: 101,
+            platform: "rna_seq",
+            genome_version: "mm10",
+            quantification_method: "raw_counts",
+          },
+        ],
+      });
+
+    renderPage("/studies/11?view=samples");
+
+    expect(await screen.findByText(/sample explorer/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/platform/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("cell", { name: "S-001" }));
+    expect(await screen.findByRole("dialog", { name: /sample inspector/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^processing metadata$/i })).toBeInTheDocument();
+    expect(screen.getByText(/no processing metadata recorded for this sample/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /sample actions/i }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /apply processing metadata/i }));
+
+    expect(await screen.findByRole("dialog", { name: /apply processing metadata/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/platform/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/genome version/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/quantification method/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add assay/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /add samples/i })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/genome version/i), { target: { value: "mm10" } });
+    fireEvent.change(screen.getByLabelText(/quantification method/i), { target: { value: "raw_counts" } });
+    fireEvent.click(screen.getByRole("button", { name: /^apply processing metadata$/i }));
+
+    await waitFor(() => {
+      expect(createAssay).toHaveBeenCalled();
+    });
+    expect(vi.mocked(createAssay).mock.calls.at(-1)?.[0]).toEqual({
+      sample: 101,
+      platform: "rna_seq",
+      genome_version: "mm10",
+      quantification_method: "raw_counts",
+    });
+    expect(await screen.findByText(/mm10 \/ raw_counts/i)).toBeInTheDocument();
+  });
+
+  it("hides sample processing metadata actions from client users", async () => {
+    authMock.role = "client";
+
+    renderPage("/studies/11?view=samples");
+
+    expect(await screen.findByText(/sample explorer/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("cell", { name: "S-001" }));
+    expect(await screen.findByRole("dialog", { name: /sample inspector/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /sample actions/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/apply processing metadata/i)).not.toBeInTheDocument();
   });
 
   it("renders contrasts as a separate workspace view", async () => {
     renderPage("/studies/11?view=contrasts");
 
     expect(await screen.findByText(/contrasts and config handoff/i)).toBeInTheDocument();
+    expect(screen.queryByText(/geo submission helper/i)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /review contrasts/i })).toHaveAttribute("href", "/studies/11/onboarding?step=finalize");
     expect(screen.getByRole("button", { name: /more study actions/i })).toBeInTheDocument();
   });
@@ -287,10 +385,10 @@ describe("StudyWorkspacePage", () => {
     renderPage("/studies/11?view=samples&assay_status=missing");
 
     expect(await screen.findByText(/sample explorer/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/missing assays/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/missing processing metadata/i).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /clear filters/i }));
     await waitFor(() => {
-      expect(screen.queryByText(/^Missing assays$/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/^Missing processing metadata$/i)).not.toBeInTheDocument();
     });
   });
 
@@ -344,6 +442,12 @@ describe("StudyWorkspacePage", () => {
         biospyder_kit: null,
         can_download_config: true,
       },
+      geo_summary: {
+        can_download_csv: true,
+        populated_field_count: 14,
+        total_field_count: 24,
+        manual_field_labels: ["raw file", "processed data file"],
+      },
       blocking_issues: [],
     });
 
@@ -363,7 +467,78 @@ describe("StudyWorkspacePage", () => {
       "/collaborations/7",
     );
     expect(screen.getByRole("menuitem", { name: /download config bundle/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /download geo csv/i })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: /delete study/i })).toBeInTheDocument();
+  });
+
+  it("downloads the GEO CSV from the study actions menu", async () => {
+    renderPage("/studies/11");
+
+    fireEvent.click(await screen.findByRole("button", { name: /more study actions/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /download geo csv/i }));
+
+    await waitFor(() => {
+      expect(vi.mocked(downloadStudyGeoMetadataCsv).mock.calls.at(-1)?.[0]).toBe(11);
+    });
+  });
+
+  it("disables the GEO CSV button when there are no exportable rows", async () => {
+    vi.mocked(fetchStudyExplorerSummary).mockResolvedValueOnce({
+      study_id: 11,
+      readiness: {
+        status: "warning",
+        label: "Needs attention",
+        updated_at: "2026-04-10T12:00:00Z",
+        finalized_at: null,
+      },
+      sample_summary: {
+        total: 0,
+        technical_controls: 0,
+        reference_rna_controls: 0,
+        solvent_controls: 0,
+      },
+      assay_summary: {
+        total: 0,
+        samples_with_assays: 0,
+        samples_missing_assays: 0,
+        platforms: [],
+      },
+      design_summary: {
+        groups: [],
+        doses: [],
+        chemicals: [],
+        metadata_columns: [],
+        treatment_vars: [],
+        batch_vars: [],
+      },
+      contrast_summary: {
+        selected_count: 0,
+        suggested_count: 0,
+        selected: [],
+        suggested: [],
+      },
+      config_summary: {
+        platform: "RNA-Seq",
+        sequencing_mode: "",
+        instrument_model: "",
+        sequenced_by: "",
+        biospyder_kit: null,
+        can_download_config: false,
+      },
+      geo_summary: {
+        can_download_csv: false,
+        populated_field_count: 0,
+        total_field_count: 24,
+        manual_field_labels: ["raw file", "processed data file", "protocols"],
+      },
+      blocking_issues: [],
+    });
+
+    renderPage("/studies/11");
+
+    expect(await screen.findByText(/geo submission helper/i)).toBeInTheDocument();
+    expect(screen.getByText(/needs samples/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /download geo csv/i })).toBeDisabled();
   });
 
   it("requires typed confirmation before deleting from the study workspace menu", async () => {

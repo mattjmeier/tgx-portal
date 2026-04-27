@@ -72,7 +72,7 @@ function getMetadataValue(sample: Sample, key: string): string {
 
 function labelForFilter(key: keyof SampleExplorerFilters, value: string): string {
   if (key === "assayStatus") {
-    return value === "missing" ? "Missing assays" : "Has assays";
+    return value === "missing" ? "Missing processing metadata" : "Has processing metadata";
   }
   if (key === "controlFlag") {
     const labels: Record<string, string> = {
@@ -210,6 +210,7 @@ export function SampleExplorerTable({
   return (
     <WorkspaceSectionCard
       contentClassName="flex flex-col gap-5"
+      description="Select a sample row to open full metadata and processing details."
       eyebrow="Explorer"
       title="Sample explorer"
       action={
@@ -237,18 +238,18 @@ export function SampleExplorerTable({
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="assay-status-filter">Assay status</Label>
+          <Label htmlFor="assay-status-filter">Processing metadata</Label>
           <Select
             value={filters.assayStatus ?? "__all__"}
             onValueChange={(value) => onFilterChange({ ...filters, assayStatus: value === "__all__" ? undefined : value as "present" | "missing" })}
           >
-            <SelectTrigger id="assay-status-filter" aria-label="Assay status">
-              <SelectValue placeholder="All assays" />
+            <SelectTrigger id="assay-status-filter" aria-label="Processing metadata status">
+              <SelectValue placeholder="All metadata" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">All assays</SelectItem>
-              <SelectItem value="present">Has assays</SelectItem>
-              <SelectItem value="missing">Missing assays</SelectItem>
+              <SelectItem value="__all__">All metadata states</SelectItem>
+              <SelectItem value="present">Has processing metadata</SelectItem>
+              <SelectItem value="missing">Missing processing metadata</SelectItem>
             </SelectContent>
           </Select>
         </div>

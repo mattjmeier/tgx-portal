@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Ellipsis, FolderOpen, Layers3, Download, Trash2 } from "lucide-react";
+import { Ellipsis, FileSpreadsheet, FolderOpen, Layers3, Download, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { collaborationPath, studyWorkspacePath } from "../lib/routes";
@@ -12,6 +12,8 @@ type StudyActionsMenuProps = {
   studyTitle: string;
   collaborationId: number;
   onDownloadConfig?: () => void;
+  onDownloadGeoCsv?: () => void;
+  canDownloadGeoCsv?: boolean;
   onDeleteStudy?: (studyId: number) => void;
   isDeletingStudy?: boolean;
   showOpenStudy?: boolean;
@@ -23,8 +25,10 @@ type StudyActionsMenuProps = {
 export function StudyActionsMenu({
   collaborationId,
   isDeletingStudy = false,
+  canDownloadGeoCsv = true,
   onDeleteStudy,
   onDownloadConfig,
+  onDownloadGeoCsv,
   showOpenStudy = true,
   studyId,
   studyTitle,
@@ -83,6 +87,21 @@ export function StudyActionsMenu({
             >
               <Download data-icon="inline-start" />
               Download config bundle
+            </DropdownMenuItem>
+          ) : null}
+          {onDownloadGeoCsv ? (
+            <DropdownMenuItem
+              className="rounded-md px-2.5 py-2 focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
+              disabled={!canDownloadGeoCsv}
+              onSelect={(event) => {
+                event.preventDefault();
+                if (canDownloadGeoCsv) {
+                  onDownloadGeoCsv();
+                }
+              }}
+            >
+              <FileSpreadsheet data-icon="inline-start" />
+              Download GEO CSV
             </DropdownMenuItem>
           ) : null}
           {onDeleteStudy ? <DropdownMenuSeparator className="bg-sidebar-border/70" /> : null}

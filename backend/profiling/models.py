@@ -61,6 +61,8 @@ class StudyWarehouseMetadata(models.Model):
 
     class Meta:
         ordering = ["study_name", "id"]
+        verbose_name = "study warehouse metadata"
+        verbose_name_plural = "study warehouse metadata"
 
     def __str__(self) -> str:
         return self.study_name
@@ -83,6 +85,8 @@ class Series(models.Model):
 
     class Meta:
         ordering = ["study_metadata_id", "chemical_sample_id", "id"]
+        verbose_name = "series"
+        verbose_name_plural = "series"
         indexes = [
             models.Index(fields=["study_metadata", "chemical_sample"], name="series_study_chem_idx"),
         ]
@@ -122,6 +126,8 @@ class Pod(models.Model):
 
     class Meta:
         ordering = ["series_id", "metric_id"]
+        verbose_name = "POD"
+        verbose_name_plural = "PODs"
         constraints = [
             models.UniqueConstraint(fields=["series", "metric"], name="unique_pod_per_series_metric"),
         ]
@@ -187,6 +193,8 @@ class HTTrWell(models.Model):
 
     class Meta:
         ordering = ["study_metadata_id", "plate_id", "well_row", "well_column"]
+        verbose_name = "HTTr well"
+        verbose_name_plural = "HTTr wells"
         constraints = [
             models.UniqueConstraint(
                 fields=["study_metadata", "plate_id", "well_row", "well_column"],
@@ -210,6 +218,8 @@ class HTTrSeriesWell(models.Model):
 
     class Meta:
         ordering = ["series_id", "dose_level", "well_id"]
+        verbose_name = "HTTr series well"
+        verbose_name_plural = "HTTr series wells"
         constraints = [
             models.UniqueConstraint(fields=["series", "well"], name="unique_httr_series_well"),
         ]

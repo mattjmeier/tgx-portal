@@ -2,6 +2,8 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
+from profiling.models import ProfilingPlatform
+
 from .models import ControlledLookupValue, MetadataFieldDefinition, Project, Study, UserProfile
 
 
@@ -56,6 +58,15 @@ def test_lookups_returns_enriched_metadata_field_definitions_and_controlled_valu
         species=Study.Species.HUMAN,
         celltype="Hepatocyte",
     )
+    ProfilingPlatform.objects.create(
+        platform_name="humanWT2_1_brAtten",
+        title="TempO-seq Human WT v2.1, Broad Attenuation",
+        version="2.1",
+        technology_type=ProfilingPlatform.TechnologyType.TEMPO_SEQ,
+        study_type=ProfilingPlatform.StudyType.HTTR,
+        species=Study.Species.HUMAN,
+        ext={"biospyder_kit": "hwt2-1", "attenuation": "broad"},
+    )
 
     response = client.get("/api/lookups/")
 
@@ -91,6 +102,22 @@ def test_lookups_returns_enriched_metadata_field_definitions_and_controlled_valu
     assert payload["lookups"]["controlled"]["instrument_model"]["values"] == ["Illumina NovaSeq 6000"]
     assert payload["lookups"]["controlled"]["biospyder_kit"]["values"] == [
         {"label": "Human Whole Transcriptome 2.1", "value": "hwt2-1"}
+    ]
+    assert payload["profiling_platforms"] == [
+        {
+            "id": ProfilingPlatform.objects.get().id,
+            "platform_name": "humanWT2_1_brAtten",
+            "title": "TempO-seq Human WT v2.1, Broad Attenuation",
+            "description": "",
+            "version": "2.1",
+            "technology_type": "TempO-Seq",
+            "study_type": "HTTr",
+            "species": "human",
+            "species_label": "Human",
+            "url": "",
+            "ext": {"biospyder_kit": "hwt2-1", "attenuation": "broad"},
+            "study_count": 0,
+        }
     ]
     assert payload["lookups"]["soft"]["celltype"]["values"] == ["Hepatocyte"]
     assert payload["lookups"]["soft"]["sequenced_by"]["values"] == ["HC Genomics lab"]

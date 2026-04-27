@@ -8,6 +8,7 @@ import {
   type LookupOption,
   type LookupValue,
   type MetadataFieldDefinition,
+  type ProfilingPlatformLookup,
 } from "../../api/lookups";
 import { downloadMetadataTemplate, previewMetadataTemplate } from "../../api/metadataTemplates";
 import {
@@ -321,6 +322,7 @@ function createDefaultDraft(studyId: number): OnboardingDraftV8 {
     config: {
       common: {
         platform: "RNA-Seq",
+        profiling_platform_name: null,
         instrument_model: "",
         sequenced_by: "",
         biospyder_kit: null,
@@ -824,6 +826,50 @@ function lookupOptions(values: LookupValue[] | undefined): LookupOption[] {
   );
 }
 
+function uniqueRawValues(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const candidate = value.trim();
+    if (!candidate || seen.has(candidate)) {
+      continue;
+    }
+    seen.add(candidate);
+    result.push(candidate);
+  }
+  return result;
+}
+
+function platformExtString(platform: ProfilingPlatformLookup | null | undefined, key: string): string | null {
+  const value = platform?.ext?.[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function profilingPlatformLabel(platform: ProfilingPlatformLookup): string {
+  const details = [
+    platform.version ? `v${platform.version}` : "",
+    platform.species_label ?? "",
+    platformExtString(platform, "attenuation"),
+  ].filter(Boolean);
+  return details.length > 0 ? `${platform.title} (${details.join(", ")})` : platform.title;
+}
+
+function deriveCommonConfigFromProfilingPlatform(
+  common: Record<string, unknown>,
+  platform: ProfilingPlatformLookup | null,
+): Record<string, unknown> {
+  if (!platform) {
+    return common;
+  }
+
+  return {
+    ...common,
+    platform: platform.technology_type,
+    profiling_platform_name: platform.platform_name,
+    biospyder_kit: platform.technology_type === "TempO-Seq" ? platformExtString(platform, "biospyder_kit") : null,
+  };
+}
+
 function withStringFallback(values: string[], fallback: string[]): string[] {
   return values.length > 0 ? values : fallback;
 }
@@ -1267,16 +1313,17 @@ export function StudyOnboardingWizard() {
   }
 
   const fieldDefinitions = lookupsQuery.data?.metadata_field_definitions ?? [];
+  const profilingPlatformOptions = lookupsQuery.data?.profiling_platforms ?? [];
   const platformOptions = withStringFallback(
-    lookupStringValues(lookupsQuery.data?.lookups.controlled.platform.values),
-    ["TempO-Seq", "RNA-Seq", "DrugSeq"],
+    uniqueRawValues(profilingPlatformOptions.map((platform) => platform.technology_type)),
+    withStringFallback(lookupStringValues(lookupsQuery.data?.lookups.controlled.platform.values), ["TempO-Seq", "RNA-Seq", "DrugSeq"]),
   );
   const instrumentModelOptions = withStringFallback(
     lookupStringValues(lookupsQuery.data?.lookups.controlled.instrument_model.values),
     [],
   );
   const featuredInstrumentModels = lookupsQuery.data?.lookups.featured?.instrument_model ?? [];
-  const biospyderKitOptions = lookupOptions(lookupsQuery.data?.lookups.controlled.biospyder_kit.values ?? []);
+  const legacyBiospyderKitOptions = lookupOptions(lookupsQuery.data?.lookups.controlled.biospyder_kit.values ?? []);
   const celltypeSuggestions = lookupStringValues(lookupsQuery.data?.lookups.soft.celltype.values ?? []);
   const sequencedBySuggestions = withStringFallback(
     lookupStringValues(lookupsQuery.data?.lookups.soft.sequenced_by.values),
@@ -1403,15 +1450,35 @@ export function StudyOnboardingWizard() {
     !templatePreviewQuery.isLoading &&
     !templatePreviewQuery.isError &&
     Boolean(templatePreviewQuery.data);
+  const selectedTechnology = String(draft.config.common.platform ?? "");
+  const selectedProfilingPlatformName = String(draft.config.common.profiling_platform_name ?? "");
+  const platformsForSelectedTechnology = profilingPlatformOptions.filter((platform) => {
+    if (platform.technology_type !== selectedTechnology) {
+      return false;
+    }
+    return !draft.template.species || !platform.species || platform.species === draft.template.species;
+  });
+  const selectedProfilingPlatform =
+    platformsForSelectedTechnology.find((platform) => platform.platform_name === selectedProfilingPlatformName) ?? null;
+  const selectedMode = String(draft.config.pipeline.mode ?? "");
+  const selectedInstrumentModel = String(draft.config.common.instrument_model ?? "");
+  const selectedSequencedBy = String(draft.config.common.sequenced_by ?? "");
+  const selectedBiospyderKit =
+    platformExtString(selectedProfilingPlatform, "biospyder_kit") ?? draft.config.common.biospyder_kit;
+  const autoSelectableProfilingPlatform =
+    !selectedProfilingPlatformName && platformsForSelectedTechnology.length === 1
+      ? platformsForSelectedTechnology[0]
+      : null;
   const detailsStepComplete =
     draft.details.title.trim().length > 0 &&
     draft.template.species !== null &&
     draft.template.celltype.trim().length > 0 &&
     String(draft.config.common.platform ?? "").trim().length > 0 &&
+    (platformsForSelectedTechnology.length === 0 || selectedProfilingPlatform !== null) &&
     String(draft.config.common.instrument_model ?? "").trim().length > 0 &&
     String(draft.config.common.sequenced_by ?? "").trim().length > 0 &&
     String(draft.config.pipeline.mode ?? "").trim().length > 0 &&
-    (draft.config.common.platform !== "TempO-Seq" || Boolean(draft.config.common.biospyder_kit));
+    (draft.config.common.platform !== "TempO-Seq" || Boolean(selectedBiospyderKit));
   const detailsStepSaved =
     draft.details.title.trim() === (studyQuery.data?.title ?? "").trim() &&
     draft.details.description.trim() === (studyQuery.data?.description ?? "").trim() &&
@@ -1472,11 +1539,6 @@ export function StudyOnboardingWizard() {
   const selectedCustomFieldKeys = templateContext.custom_field_keys;
   const selectedOptionalFieldKeySet = new Set(templateContext.optional_field_keys);
   const selectedCustomFieldKeySet = new Set(templateContext.custom_field_keys);
-  const selectedPlatform = String(draft.config.common.platform ?? "");
-  const selectedMode = String(draft.config.pipeline.mode ?? "");
-  const selectedInstrumentModel = String(draft.config.common.instrument_model ?? "");
-  const selectedSequencedBy = String(draft.config.common.sequenced_by ?? "");
-  const selectedBiospyderKit = draft.config.common.biospyder_kit;
   const reviewWarnings = [
     metadataColumns.length === 0 ? "Upload and validate metadata before generating the handoff bundle." : null,
     !groupBuilder.primary_column && !metadataColumns.includes("group")
@@ -1489,6 +1551,25 @@ export function StudyOnboardingWizard() {
       ? "Batch was marked as part of the study design, but no batch column is resolved yet."
       : null,
   ].filter((message): message is string => Boolean(message));
+
+  useEffect(() => {
+    if (!autoSelectableProfilingPlatform) {
+      return;
+    }
+
+    updateDraft((current) => ({
+      ...current,
+      config: {
+        ...current.config,
+        common:
+          current.config.common.profiling_platform_name ||
+          current.config.common.platform !== autoSelectableProfilingPlatform.technology_type
+            ? current.config.common
+            : deriveCommonConfigFromProfilingPlatform(current.config.common, autoSelectableProfilingPlatform),
+      },
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSelectableProfilingPlatform?.platform_name]);
 
   useEffect(() => {
     const availableColumns = new Set(derivedMetadataColumns);
@@ -1983,29 +2064,44 @@ export function StudyOnboardingWizard() {
                     <Label id="platformLabel">Platform</Label>
                     <div aria-labelledby="platformLabel" className="flex flex-wrap gap-2" role="group">
                       {platformOptions.map((value) => {
-                        const selected = selectedPlatform === value;
+                        const selected = selectedTechnology === value;
                         return (
                           <Button
                             key={value}
                             type="button"
                             variant={selected ? "default" : "outline"}
-                            onClick={() =>
+                            onClick={() => {
+                              const compatiblePlatforms = profilingPlatformOptions.filter((platform) => {
+                                if (platform.technology_type !== value) {
+                                  return false;
+                                }
+                                return !draft.template.species || !platform.species || platform.species === draft.template.species;
+                              });
+                              const hasCompatiblePlatformDefinitions = compatiblePlatforms.length > 0;
+                              const nextProfilingPlatform = compatiblePlatforms.length === 1 ? compatiblePlatforms[0] : null;
                               updateDraft((current) => ({
                                 ...current,
                                 config: {
                                   ...current.config,
-                                  common: {
-                                    ...current.config.common,
-                                    platform: value,
-                                    biospyder_kit: value === "TempO-Seq" ? current.config.common.biospyder_kit : null,
-                                  },
+                                  common: deriveCommonConfigFromProfilingPlatform(
+                                    {
+                                      ...current.config.common,
+                                      platform: value,
+                                      profiling_platform_name: nextProfilingPlatform?.platform_name ?? null,
+                                      biospyder_kit:
+                                        value === "TempO-Seq" && !hasCompatiblePlatformDefinitions
+                                          ? current.config.common.biospyder_kit
+                                          : null,
+                                    },
+                                    nextProfilingPlatform,
+                                  ),
                                   pipeline: {
                                     ...current.config.pipeline,
                                     mode: value === "TempO-Seq" || value === "DrugSeq" ? "se" : current.config.pipeline.mode,
                                   },
                                 },
-                              }))
-                            }
+                              }));
+                            }}
                           >
                             {value}
                           </Button>
@@ -2013,6 +2109,51 @@ export function StudyOnboardingWizard() {
                       })}
                     </div>
                   </div>
+
+                  {platformsForSelectedTechnology.length > 0 ? (
+                    <div className="grid gap-2">
+                      <Label htmlFor="profilingPlatform">Platform definition</Label>
+                      <Select
+                        value={selectedProfilingPlatformName || "__none__"}
+                        onValueChange={(value) => {
+                          const nextProfilingPlatform =
+                            platformsForSelectedTechnology.find((platform) => platform.platform_name === value) ?? null;
+                          updateDraft((current) => ({
+                            ...current,
+                            config: {
+                              ...current.config,
+                              common: deriveCommonConfigFromProfilingPlatform(
+                                {
+                                  ...current.config.common,
+                                  profiling_platform_name: nextProfilingPlatform?.platform_name ?? null,
+                                  biospyder_kit: nextProfilingPlatform ? current.config.common.biospyder_kit : null,
+                                },
+                                nextProfilingPlatform,
+                              ),
+                            },
+                          }));
+                        }}
+                      >
+                        <SelectTrigger id="profilingPlatform" aria-label="Platform definition">
+                          <SelectValue placeholder="Select a platform definition" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Select a platform definition</SelectItem>
+                          {platformsForSelectedTechnology.map((platform) => (
+                            <SelectItem key={platform.platform_name} value={platform.platform_name}>
+                              {profilingPlatformLabel(platform)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedProfilingPlatform ? (
+                        <p className="text-xs text-muted-foreground">
+                          {selectedProfilingPlatform.platform_name}
+                          {selectedBiospyderKit ? ` · BioSpyder kit ${selectedBiospyderKit}` : ""}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   <div className="grid gap-2">
                     <Label id="sequencingModeLabel">Sequencing mode</Label>
@@ -2022,7 +2163,7 @@ export function StudyOnboardingWizard() {
                         { label: "Paired-end", value: "pe" },
                       ].map((option) => {
                         const disabled =
-                          option.value === "pe" && (selectedPlatform === "TempO-Seq" || selectedPlatform === "DrugSeq");
+                          option.value === "pe" && (selectedTechnology === "TempO-Seq" || selectedTechnology === "DrugSeq");
                         return (
                           <Button
                             key={option.value}
@@ -2101,7 +2242,7 @@ export function StudyOnboardingWizard() {
                     </datalist>
                   </div>
 
-                  {selectedPlatform === "TempO-Seq" ? (
+                  {selectedTechnology === "TempO-Seq" && platformsForSelectedTechnology.length === 0 ? (
                     <div className="grid gap-2">
                       <Label htmlFor="biospyderKit">Biospyder kit</Label>
                       <Select
@@ -2124,7 +2265,7 @@ export function StudyOnboardingWizard() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Select a Biospyder kit</SelectItem>
-                          {biospyderKitOptions.map((option) => (
+                          {legacyBiospyderKitOptions.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>
@@ -2984,7 +3125,8 @@ export function StudyOnboardingWizard() {
                     <p className="font-medium text-foreground">Study summary</p>
                     {[
                       ["Title", draft.details.title || "—"],
-                      ["Platform", selectedPlatform || "—"],
+                      ["Platform", selectedTechnology || "—"],
+                      ["Platform definition", selectedProfilingPlatform?.platform_name || "—"],
                       ["Sequencing mode", selectedMode || "—"],
                       ["Instrument model", selectedInstrumentModel || "—"],
                       ["Sequenced by", selectedSequencedBy || "—"],

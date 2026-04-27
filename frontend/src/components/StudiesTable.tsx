@@ -69,7 +69,7 @@ export function StudiesTable({
               )}
             </TableHead>
             <TableHead className="text-foreground">Samples</TableHead>
-            <TableHead className="text-foreground">Assays</TableHead>
+            <TableHead className="text-foreground">Processing metadata</TableHead>
             {hasActions ? <TableHead className="text-foreground">Actions</TableHead> : null}
           </TableRow>
         </TableHeader>

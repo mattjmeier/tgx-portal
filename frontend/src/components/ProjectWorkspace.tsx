@@ -64,7 +64,7 @@ export function ProjectWorkspace({
   }
 
   const collaborationSampleCount = studies.reduce((total, study) => total + (study.sample_count ?? 0), 0);
-  const collaborationAssayCount = studies.reduce((total, study) => total + (study.assay_count ?? 0), 0);
+  const collaborationProcessingMetadataCount = studies.reduce((total, study) => total + (study.assay_count ?? 0), 0);
 
   return (
     <section className="workspace-panel workspace-panel-flat">
@@ -118,11 +118,11 @@ export function ProjectWorkspace({
                   </Card>
                   <Card className="bg-muted/30 shadow-none">
                     <CardHeader className="gap-2 p-4">
-                      <CardDescription className="workspace-stat-label">Assays in collaboration</CardDescription>
-                      <CardTitle className="text-4xl">{collaborationAssayCount}</CardTitle>
+                      <CardDescription className="workspace-stat-label">Processing metadata rows</CardDescription>
+                      <CardTitle className="text-4xl">{collaborationProcessingMetadataCount}</CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0 text-sm text-muted-foreground">
-                      {studies.length > 0 ? "Total assay coverage recorded across all studies in this collaboration." : "Assay totals will appear after samples are added."}
+                      {studies.length > 0 ? "Sample-level processing metadata recorded across all studies in this collaboration." : "Processing metadata totals will appear after samples are added."}
                     </CardContent>
                   </Card>
                 </div>
@@ -156,7 +156,7 @@ export function ProjectWorkspace({
               <CardHeader className="workspace-study-directory-card-header">
                 <div className="workspace-study-directory-header">
                   <h3 className="workspace-study-directory-title">Studies in this collaboration</h3>
-                  <p className="workspace-study-directory-copy">Select one to explore samples and assays for that experiment.</p>
+                  <p className="workspace-study-directory-copy">Select one to explore samples and processing metadata for that experiment.</p>
                 </div>
               </CardHeader>
               <CardContent className="workspace-study-directory-card-content">

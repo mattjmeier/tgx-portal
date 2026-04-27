@@ -1,16 +1,20 @@
 # UI notes
 
 - contrasts - order them? buttons to shortcut ordering 
-- free form notes for bioinformatician input
-- fix landing page
-- clean up "add assay" flow?
 
+- free form notes for bioinformatician input
+
+- fix landing page
+
+- scroll bug
 
 
 - SET UP PLANE SIDECAR
 
+- EXPORT PREPOPULATED GEO
+- EXPORT ILLUMINA SAMPLESHEET
+
 - IMPORT DATA IN ADMIN
-- admin panel - missing completely
 
 - review & finalize page: 
     - "blocking issues" should be more apparent
@@ -22,15 +26,11 @@ https://www.kibo-ui.com/components/gantt advanced components too here
 
 Collapsible sidebar - only mobile?
 
-Main landing page / home link
-
 - EVENTUALLY...
     - Results page on sidebar
     - Chemical management page
-    - 
 
 - Alias table for genes/probes?
-
 
 
 

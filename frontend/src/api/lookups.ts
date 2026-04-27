@@ -35,6 +35,21 @@ export type LookupBucket = {
   values: LookupValue[];
 };
 
+export type ProfilingPlatformLookup = {
+  id: number;
+  platform_name: string;
+  title: string;
+  description: string;
+  version: string;
+  technology_type: string;
+  study_type: string;
+  species: string | null;
+  species_label: string | null;
+  url: string;
+  ext: Record<string, unknown>;
+  study_count: number;
+};
+
 export type LookupsResponseV2 = {
   version: 2;
   metadata_field_definitions: MetadataFieldDefinition[];
@@ -48,6 +63,7 @@ export type LookupsResponseV2 = {
     controlled: Record<string, LookupBucket>;
     featured?: Record<string, string[]>;
   };
+  profiling_platforms?: ProfilingPlatformLookup[];
 };
 
 export async function fetchLookups(): Promise<LookupsResponseV2> {

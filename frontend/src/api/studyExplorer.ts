@@ -56,6 +56,12 @@ export type StudyExplorerSummary = {
     biospyder_kit: string | null;
     can_download_config: boolean;
   };
+  geo_summary: {
+    can_download_csv: boolean;
+    populated_field_count: number;
+    total_field_count: number;
+    manual_field_labels: string[];
+  };
   blocking_issues: StudyExplorerIssue[];
 };
 
