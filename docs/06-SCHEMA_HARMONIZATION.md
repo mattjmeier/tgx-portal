@@ -35,7 +35,7 @@ The UL plan separates shared cross-domain tables from domain-specific tables:
 | `httr_platform_features` | Platform-feature bridge with ordering and attenuation | Missing; scaffold with `httr_features` |
 | `httr_sig_cat`, `httr_sig_sets`, `httr_sig_set_cat`, `httr_sig_cr` | Signature catalog, signature sets, set membership, and active signature hits | Missing; scaffold before Navigator-style signature UI |
 | HTPP/TGx domain well/result tables | Domain-specific wells and active features/results outside HTTr | Missing; defer until first HTPP or non-HTTr TGx import |
-| External data resources | Raw/intermediate/feature/supporting data object pointers | Missing; should be scaffolded before historical import automation |
+| External data resources | Raw/intermediate/feature/supporting data object pointers | Add `profiling.StudyDataResource` attached to warehouse study metadata |
 
 ## Field Similarity Matrix
 
@@ -103,17 +103,19 @@ These are the main UL schema concepts not yet represented in Django models:
 | Active signature results | `HTTrSignatureConcentrationResponse` | Stores active signature-level hits for Navigator-style UI |
 | HTPP wells | `HTPPWell`, later `HTPPSeriesWell` if bridge fields diverge from HTTr | Needed for Cell Painting-style studies |
 | TGx profile/well records | `TGxProfile`, later `TGxSeriesProfile` | Needed for in vivo and non-multiwell TGx studies |
-| External data resources | `StudyDataResource` | Points to raw, intermediate, feature, and supporting files without loading high-dimensional data into PostgreSQL |
-| Import alias/staging support | `ImportBatch`, `ImportAliasMap`, `ImportStagedRow` | Makes historical imports auditable and repeatable |
+| Import alias/staging support | `ImportAliasMap`, `ImportStagedRow` | Makes historical imports repeatable beyond the current batch/resource provenance layer |
 
-Recommended next scaffold: `StudyDataResource` plus explicit import alias/staging models. Those unblock historical study ingestion without prematurely committing to every HTTr/HTPP feature-result table.
+Implemented import-provenance foundation: `StudyDataResource`, `ImportBatch`, and `ImportBatchResource` provide study-level external resource pointers and lightweight audit records for manual or historical import attempts. They store references to files, URLs, accessions, or object URIs, not raw data contents.
+
+Recommended next scaffold: explicit import alias and staging models. Those should map legacy source columns into canonical warehouse fields and hold row-level validation results before committing rows into chemical, platform, series, POD, well, feature, or signature tables.
 
 ## Historical Import Strategy And Open Questions
 
-- Build imports as staged transformations: raw file -> alias map -> typed staging rows -> canonical warehouse models.
+- Build imports as staged transformations: `StudyDataResource` source pointer -> `ImportBatch` audit record -> alias map -> typed staging rows -> canonical warehouse models.
 - Enforce uniqueness at canonical boundaries: chemical sample ID, platform name, warehouse study name, POD `(series, metric)`, and well position per study/plate.
 - Keep per-study extras in `ext` JSON fields, but only after canonical fields have been extracted.
 - Require each warehouse study to select one platform. If a historical study spans multiple platforms, split it into multiple warehouse study records linked to the same portal project when useful.
+- Existing operational file/path mechanisms are not provenance substitutes: `SequencingRun.raw_data_path` is sequencing-run metadata, onboarding `validated_rows` is the last uploaded intake payload, and sample metadata fields such as `raw_file` are intake/export values.
 - Open questions:
   - Which source should be authoritative for ROC IDs once available?
   - Do historical Health Canada studies already have stable chemical sample IDs, or do we need a deterministic generation rule?
@@ -127,7 +129,7 @@ Django admin is the preferred short-term explorer for the warehouse schema becau
 - Start the stack with `docker compose up`.
 - Open `http://localhost:8003/admin/`.
 - Sign in with `admin / admin123`.
-- Use the `Chemicals` and `Profiling` sections to inspect or manually create `ChemicalSample`, platform, warehouse study metadata, series, POD, and HTTr well records.
+- Use the `Chemicals` and `Profiling` sections to inspect or manually create `ChemicalSample`, platform, warehouse study metadata, study data resources, import batches, series, POD, and HTTr well records.
 - Run `docker compose run --rm api python manage.py reset_seed_data` to load one linked warehouse demo record set alongside the existing project/study/sample fixtures.
 
 For raw database inspection, PostgreSQL is exposed on local port `5433`:

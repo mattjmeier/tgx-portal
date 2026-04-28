@@ -1,7 +1,18 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 
-from .models import HTTrSeriesWell, HTTrWell, Metric, Pod, ProfilingPlatform, Series, StudyWarehouseMetadata
+from .models import (
+    HTTrSeriesWell,
+    HTTrWell,
+    ImportBatch,
+    ImportBatchResource,
+    Metric,
+    Pod,
+    ProfilingPlatform,
+    Series,
+    StudyDataResource,
+    StudyWarehouseMetadata,
+)
 
 
 class SeriesInline(admin.TabularInline):
@@ -9,6 +20,20 @@ class SeriesInline(admin.TabularInline):
     extra = 0
     fields = ("chemical_sample", "treatment_condition", "exposure_lower", "exposure_upper", "exposure_unit")
     autocomplete_fields = ("chemical_sample",)
+    show_change_link = True
+
+
+class StudyDataResourceInline(admin.TabularInline):
+    model = StudyDataResource
+    extra = 0
+    fields = ("display_name", "resource_type", "storage_kind", "availability_status", "file_format", "uri")
+    show_change_link = True
+
+
+class ImportBatchInline(admin.TabularInline):
+    model = ImportBatch
+    extra = 0
+    fields = ("source_name", "source_system", "status", "records_seen", "records_created", "records_updated", "records_rejected")
     show_change_link = True
 
 
@@ -28,6 +53,14 @@ class HTTrSeriesWellInline(admin.TabularInline):
     show_change_link = True
 
 
+class ImportBatchResourceInline(admin.TabularInline):
+    model = ImportBatchResource
+    extra = 0
+    fields = ("data_resource", "role", "notes")
+    autocomplete_fields = ("data_resource",)
+    show_change_link = True
+
+
 @admin.register(ProfilingPlatform)
 class ProfilingPlatformAdmin(ModelAdmin):
     list_display = ("platform_name", "technology_type", "study_type", "species", "version")
@@ -44,7 +77,52 @@ class StudyWarehouseMetadataAdmin(ModelAdmin):
     autocomplete_fields = ("platform",)
     raw_id_fields = ("study",)
     readonly_fields = ("created_at", "updated_at")
-    inlines = (SeriesInline,)
+    inlines = (StudyDataResourceInline, ImportBatchInline, SeriesInline)
+
+
+@admin.register(StudyDataResource)
+class StudyDataResourceAdmin(ModelAdmin):
+    list_display = (
+        "display_name",
+        "study_metadata",
+        "resource_type",
+        "storage_kind",
+        "availability_status",
+        "file_format",
+        "version",
+    )
+    search_fields = ("display_name", "uri", "description", "study_metadata__study_name")
+    list_filter = ("resource_type", "storage_kind", "availability_status", "file_format")
+    autocomplete_fields = ("study_metadata",)
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(ImportBatch)
+class ImportBatchAdmin(ModelAdmin):
+    list_display = (
+        "source_name",
+        "study_metadata",
+        "source_system",
+        "status",
+        "records_seen",
+        "records_created",
+        "records_updated",
+        "records_rejected",
+        "created_at",
+    )
+    search_fields = ("source_name", "source_system", "notes", "study_metadata__study_name", "resource_links__data_resource__uri")
+    list_filter = ("status", "source_system", "created_at")
+    autocomplete_fields = ("study_metadata", "initiated_by")
+    readonly_fields = ("created_at", "updated_at")
+    inlines = (ImportBatchResourceInline,)
+
+
+@admin.register(ImportBatchResource)
+class ImportBatchResourceAdmin(ModelAdmin):
+    list_display = ("import_batch", "data_resource", "role")
+    search_fields = ("import_batch__source_name", "data_resource__display_name", "data_resource__uri")
+    list_filter = ("role",)
+    autocomplete_fields = ("import_batch", "data_resource")
 
 
 @admin.register(Series)

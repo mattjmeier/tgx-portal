@@ -33,7 +33,7 @@ Default local credentials:
 - `admin / admin123` (Django superuser and portal Admin role)
 - `client / client123`
 
-The Django admin explorer is available at `http://localhost:8003/admin/`. Use it as the preferred short-term browser for backend-only warehouse models in `chemicals` and `profiling`.
+The Django admin explorer is available at `http://localhost:8003/admin/`. Use it as the preferred short-term browser for backend-only warehouse models in `chemicals` and `profiling`, including study data resources and import provenance records.
 
 This automation reduces startup drift, but it does not replace safe migration design. If a migration introduces a new constraint, the migration must still handle legacy rows that might violate it.
 
@@ -69,7 +69,7 @@ This command preserves users and lookup definitions, but replaces the current pr
 - 4 collaborations
 - 3 studies per collaboration
 - seeded samples, assays, and finalized onboarding states
-- one linked warehouse demo set across `ChemicalSample`, `ProfilingPlatform`, `StudyWarehouseMetadata`, `Series`, `Metric`, `Pod`, `HTTrWell`, and `HTTrSeriesWell`
+- one linked warehouse demo set across `ChemicalSample`, `ProfilingPlatform`, `StudyWarehouseMetadata`, `StudyDataResource`, `ImportBatch`, `Series`, `Metric`, `Pod`, `HTTrWell`, and `HTTrSeriesWell`
 
 The seeded records are mock QA fixtures inspired by the examples in `mocks/metadata.csv`, `mocks/contrasts.txt`, and `mocks/config.yaml`, adapted to the fields currently stored by the Django app.
 

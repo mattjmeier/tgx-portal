@@ -12,7 +12,18 @@ from chemicals.models import ChemicalSample
 from core.models import Assay, Project, Sample, Study, StudyConfig, StudyMetadataFieldSelection, StudyMetadataMapping, StudyOnboardingState
 from core.onboarding_options import BIOSPYDER_KIT_VALUES
 from core.services import build_project_config_bundle
-from profiling.models import HTTrSeriesWell, HTTrWell, Metric, Pod, ProfilingPlatform, Series, StudyWarehouseMetadata
+from profiling.models import (
+    HTTrSeriesWell,
+    HTTrWell,
+    ImportBatch,
+    ImportBatchResource,
+    Metric,
+    Pod,
+    ProfilingPlatform,
+    Series,
+    StudyDataResource,
+    StudyWarehouseMetadata,
+)
 
 User = get_user_model()
 
@@ -53,6 +64,9 @@ class ResetSeedDataCommandTests(TestCase):
         self.assertEqual(Pod.objects.count(), 1)
         self.assertEqual(HTTrWell.objects.count(), 1)
         self.assertEqual(HTTrSeriesWell.objects.count(), 1)
+        self.assertEqual(StudyDataResource.objects.count(), 2)
+        self.assertEqual(ImportBatch.objects.count(), 1)
+        self.assertEqual(ImportBatchResource.objects.count(), 2)
 
         self.assertEqual(
             set(ProfilingPlatform.objects.values_list("technology_type", flat=True)),
@@ -73,6 +87,13 @@ class ResetSeedDataCommandTests(TestCase):
         self.assertEqual(metadata.study_name, "hc_afb1_warehouse_demo")
         self.assertEqual(metadata.platform.platform_name, "rnaseq_hg38_demo")
         self.assertEqual(metadata.series.get().chemical_sample.chemical_sample_id, "HC-AFB1-DEMO-001")
+        self.assertEqual(
+            set(metadata.data_resources.values_list("resource_type", flat=True)),
+            {StudyDataResource.ResourceType.MANIFEST, StudyDataResource.ResourceType.FEATURE},
+        )
+        import_batch = metadata.import_batches.get()
+        self.assertEqual(import_batch.status, ImportBatch.Status.COMPLETED)
+        self.assertEqual(import_batch.resource_links.count(), 2)
 
     def test_seeded_reference_library_has_no_platform_drift_warnings(self) -> None:
         admin = User.objects.create_user(username="reference-admin", password="admin123")

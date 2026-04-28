@@ -7,7 +7,18 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 
 from chemicals.models import ChemicalSample
-from profiling.models import HTTrSeriesWell, HTTrWell, Metric, Pod, ProfilingPlatform, Series, StudyWarehouseMetadata
+from profiling.models import (
+    HTTrSeriesWell,
+    HTTrWell,
+    ImportBatch,
+    ImportBatchResource,
+    Metric,
+    Pod,
+    ProfilingPlatform,
+    Series,
+    StudyDataResource,
+    StudyWarehouseMetadata,
+)
 
 from .models import (
     Assay,
@@ -1093,6 +1104,50 @@ def _seed_warehouse_demo(study: Study) -> None:
         is_treated=True,
     )
     HTTrSeriesWell.objects.create(series=series, well=well, dose_level=1)
+    metadata_manifest = StudyDataResource.objects.create(
+        study_metadata=warehouse_metadata,
+        resource_type=StudyDataResource.ResourceType.MANIFEST,
+        storage_kind=StudyDataResource.StorageKind.LOCAL_PATH,
+        display_name="Seeded warehouse metadata manifest",
+        uri="/data/demo/hc_afb1_warehouse_demo/manifest.csv",
+        description="Demonstration pointer for the historical import manifest used to seed the warehouse demo.",
+        file_format="csv",
+        availability_status=StudyDataResource.AvailabilityStatus.AVAILABLE,
+        version="demo-1",
+        ext={"source_note": "Seeded resource pointer; file contents are not stored in PostgreSQL."},
+    )
+    feature_resource = StudyDataResource.objects.create(
+        study_metadata=warehouse_metadata,
+        resource_type=StudyDataResource.ResourceType.FEATURE,
+        storage_kind=StudyDataResource.StorageKind.LOCAL_PATH,
+        display_name="Seeded feature matrix",
+        uri="/data/demo/hc_afb1_warehouse_demo/features.parquet",
+        description="Demonstration pointer for a feature-level matrix that would remain outside the portal database.",
+        file_format="parquet",
+        availability_status=StudyDataResource.AvailabilityStatus.AVAILABLE,
+        version="demo-1",
+    )
+    import_batch = ImportBatch.objects.create(
+        study_metadata=warehouse_metadata,
+        source_system="reset_seed_data",
+        source_name="Seeded warehouse provenance demo",
+        status=ImportBatch.Status.COMPLETED,
+        records_seen=2,
+        records_created=2,
+        records_updated=0,
+        records_rejected=0,
+        notes="Demonstrates how source resources are linked to a warehouse import batch.",
+    )
+    ImportBatchResource.objects.create(
+        import_batch=import_batch,
+        data_resource=metadata_manifest,
+        role=ImportBatchResource.ResourceRole.INPUT,
+    )
+    ImportBatchResource.objects.create(
+        import_batch=import_batch,
+        data_resource=feature_resource,
+        role=ImportBatchResource.ResourceRole.OUTPUT,
+    )
 
 
 @transaction.atomic

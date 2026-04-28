@@ -24,7 +24,7 @@ It is meant to be a single point of authority on project metadata. The backend i
 3. **Backend App Boundaries**:
    * `core`: Operational intake, Projects, Studies, Samples, Assays, onboarding, R-ODAF config generation, RBAC, and existing public APIs.
    * `chemicals`: Canonical chemical/environmental sample identity. Do not overload `core.Sample` for UL `tgx_samples` concepts.
-   * `profiling`: Broad-profiling warehouse models such as platforms, study warehouse metadata, concentration/dose-response series, POD metrics/values, and domain well tables.
+   * `profiling`: Broad-profiling warehouse models such as platforms, study warehouse metadata, external data resources, import provenance, concentration/dose-response series, POD metrics/values, and domain well tables.
 4. **RBAC**: Always assume three roles: `Admin` (Bioinformatics Staff), `Client` (Collaborators), `System` (Automated tasks). Clients can only view/edit their own assigned projects. Django admin is an internal schema/data explorer for staff, not the collaborator UI.
 5. **Context Routing**: Do not guess implementation details. Refer to the specific markdown files in the `docs/` folder for exact structural requirements:
 
@@ -50,5 +50,5 @@ To locate specific parts of the code, begin with `.codesight/CODESIGHT.md`, a wi
   * `docker compose run --rm api python manage.py migrate`
   * `docker compose run --rm api python manage.py reset_seed_data`
 * When a deterministic workspace is needed, prefer `reset_seed_data` over preserving ad hoc local records.
-  * `reset_seed_data` now seeds one linked warehouse demo set across `chemicals` and `profiling` in addition to the core project/study/sample fixtures.
+  * `reset_seed_data` now seeds one linked warehouse demo set across `chemicals` and `profiling`, including study data resources and import provenance, in addition to the core project/study/sample fixtures.
 * If `docker compose exec api ...` fails because the service is not running, use `docker compose run --rm api ...` instead.

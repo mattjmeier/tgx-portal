@@ -122,3 +122,57 @@ class WarehouseModelContractTests(TestCase):
 
         with self.assertRaises(IntegrityError), transaction.atomic():
             HTTrSeriesWell.objects.create(series=series, well=well, is_control=False, dose_level=1)
+
+    def test_study_data_resource_and_import_batch_constraints(self) -> None:
+        from django.core.exceptions import ValidationError
+
+        from profiling.models import ImportBatch, ImportBatchResource, StudyDataResource
+
+        resource = StudyDataResource.objects.create(
+            study_metadata=self.study_metadata,
+            resource_type=StudyDataResource.ResourceType.MANIFEST,
+            storage_kind=StudyDataResource.StorageKind.LOCAL_PATH,
+            display_name="Original manifest",
+            uri="/historical/epa_httr_u2os_screen/manifest.csv",
+            file_format="csv",
+            availability_status=StudyDataResource.AvailabilityStatus.AVAILABLE,
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            StudyDataResource.objects.create(
+                study_metadata=self.study_metadata,
+                resource_type=StudyDataResource.ResourceType.MANIFEST,
+                storage_kind=StudyDataResource.StorageKind.LOCAL_PATH,
+                display_name="Duplicate manifest pointer",
+                uri="/historical/epa_httr_u2os_screen/manifest.csv",
+            )
+
+        invalid_resource = StudyDataResource(
+            study_metadata=self.study_metadata,
+            resource_type="unsupported",
+            storage_kind=StudyDataResource.StorageKind.LOCAL_PATH,
+            display_name="Invalid resource",
+            uri="/historical/invalid.csv",
+        )
+        with self.assertRaises(ValidationError):
+            invalid_resource.full_clean()
+
+        batch = ImportBatch.objects.create(
+            study_metadata=self.study_metadata,
+            source_system="UL export",
+            source_name="EPA HTTr U-2 OS import",
+            status=ImportBatch.Status.COMPLETED,
+            records_seen=1,
+            records_created=1,
+        )
+        ImportBatchResource.objects.create(
+            import_batch=batch,
+            data_resource=resource,
+            role=ImportBatchResource.ResourceRole.INPUT,
+        )
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ImportBatchResource.objects.create(
+                import_batch=batch,
+                data_resource=resource,
+                role=ImportBatchResource.ResourceRole.OUTPUT,
+            )

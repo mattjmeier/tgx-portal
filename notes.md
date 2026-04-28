@@ -50,3 +50,22 @@ Template preview
 # URL patterns
 
 - studies have things like /56/onboarding - we should make a slug form based on title (this should also be used as the folder name; or, we derive folder name from another way, YYYY_PI-name_slug-study-name)
+
+- make dose/concentration mandatory
+
+
+- aflatoxin-response-study-45_metadata.csv - template has wrong name
+
+My study onboarding flow has a few UI bugs and tweaks I'd like to make:
+
+- the "finalize metadata" step - would more accurately be called "finalize and download template"
+
+- On step 5, there is a kind of infinite loop where it says "saving...", causing that element to appear/disappear/re-appear repeatedly. What is standard practice? Usually just a static message saying "Your work is saved"?
+
+- I got to the end of an onboarding and realized that steps 2 and 3 became unchecked. I'm not exactly sure why their state is inconsistent. That might be the hardest challenge to track.
+
+- "Onboarding finalized"
+
+Samples are now available in the study workspace. Config outputs can be downloaded later from study actions -- REWORK DESIGN
+
+- continue designing vs continue onboarding

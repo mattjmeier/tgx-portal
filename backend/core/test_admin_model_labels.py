@@ -15,7 +15,18 @@ from core.models import (
     StudyMetadataMapping,
     StudyOnboardingState,
 )
-from profiling.models import HTTrSeriesWell, HTTrWell, Metric, Pod, ProfilingPlatform, Series, StudyWarehouseMetadata
+from profiling.models import (
+    HTTrSeriesWell,
+    HTTrWell,
+    ImportBatch,
+    ImportBatchResource,
+    Metric,
+    Pod,
+    ProfilingPlatform,
+    Series,
+    StudyDataResource,
+    StudyWarehouseMetadata,
+)
 
 
 class AdminModelLabelTests(SimpleTestCase):
@@ -36,6 +47,9 @@ class AdminModelLabelTests(SimpleTestCase):
             StudyMetadataFieldSelection: ("study metadata field selection", "study metadata field selections"),
             ProfilingPlatform: ("profiling platform", "profiling platforms"),
             StudyWarehouseMetadata: ("study warehouse metadata", "study warehouse metadata"),
+            StudyDataResource: ("study data resource", "study data resources"),
+            ImportBatch: ("import batch", "import batches"),
+            ImportBatchResource: ("import batch resource", "import batch resources"),
             Series: ("series", "series"),
             Metric: ("metric", "metrics"),
             Pod: ("POD", "PODs"),

@@ -56,8 +56,16 @@ Before a `Sample` sheet is ingested into Django models, it must pass through a `
   * Fields include `platform_name`, `title`, `description`, `version`, `technology_type`, `study_type`, `species`, `url`, and `ext`.
 * **`StudyWarehouseMetadata`**: One-to-one warehouse metadata for a portal `Study`, corresponding to UL `tgx_study`.
   * Fields include `study_name`, `source`, `study_type`, `in_vitro`, `platform`, `cell_types`, `culture_conditions`, `exposure_conditions`, `references`, and `ext`.
+* **`StudyDataResource`**: Study-level registry of external data objects for historical imports and warehouse review.
+  * Fields include `resource_type`, `storage_kind`, `display_name`, `uri`, `description`, `file_format`, checksum fields, `size_bytes`, `version`, `availability_status`, `notes`, and `ext`.
+  * This stores pointers and provenance metadata only; raw/intermediate matrices stay outside PostgreSQL.
+* **`ImportBatch`** and **`ImportBatchResource`**: Lightweight provenance layer for manual or historical import attempts and their source/output resources.
+  * Import batches track source system/name, status, timestamps, initiating user, notes, and summary counts.
+  * Import-batch resources link batches to `StudyDataResource` rows with roles such as input, output, reference, and QA.
 * **`Series`**, **`Metric`**, and **`Pod`**: Concentration/dose-response series, global metric definitions, and global POD values corresponding to UL `tgx_series`, `tgx_metrics`, and `tgx_pods`.
 * **`HTTrWell`** and **`HTTrSeriesWell`**: HTTr well metadata and series-well bridge corresponding to UL `httr_wells` and `httr_series_wells`.
+
+Existing operational file/path fields are not a durable provenance layer. `SequencingRun.raw_data_path` describes sequencing-run data, onboarding `validated_rows` preserves the latest uploaded sample metadata rows, and sample metadata fields such as `raw_file` are export/intake values. Historical warehouse imports should use `StudyDataResource` and `ImportBatch` instead.
 
 ### 8. Known UL Schema Gaps
 The current scaffold covers the cross-domain warehouse foundation and HTTr wells. The following UL concepts are not implemented yet:
@@ -67,5 +75,4 @@ The current scaffold covers the cross-domain warehouse foundation and HTTr wells
 * HTTr signature catalog, signature sets, set membership, and concentration-response signature hits: `httr_sig_cat`, `httr_sig_sets`, `httr_sig_set_cat`, `httr_sig_cr`.
 * HTPP-specific well metadata and active-feature/result tables.
 * TGx-specific non-HTTr well/profile metadata tables.
-* External data-resource tracking for raw, intermediate, feature, and supporting data objects.
 * Explicit import alias maps and staged historical import tables.

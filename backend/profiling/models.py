@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.db import models
 
 from core.models import Study
@@ -66,6 +67,138 @@ class StudyWarehouseMetadata(models.Model):
 
     def __str__(self) -> str:
         return self.study_name
+
+
+class StudyDataResource(models.Model):
+    class ResourceType(models.TextChoices):
+        RAW = "raw", "Raw data"
+        INTERMEDIATE = "intermediate", "Intermediate data"
+        FEATURE = "feature", "Feature data"
+        SIGNATURE = "signature", "Signature data"
+        METADATA = "metadata", "Metadata"
+        MANIFEST = "manifest", "Manifest"
+        PUBLICATION = "publication", "Publication"
+        SUPPORTING = "supporting", "Supporting data"
+        OTHER = "other", "Other"
+
+    class StorageKind(models.TextChoices):
+        LOCAL_PATH = "local_path", "Local path"
+        NETWORK_PATH = "network_path", "Network path"
+        OBJECT_URI = "object_uri", "Object URI"
+        URL = "url", "URL"
+        ACCESSION = "accession", "Accession"
+        OTHER = "other", "Other"
+
+    class AvailabilityStatus(models.TextChoices):
+        AVAILABLE = "available", "Available"
+        PENDING = "pending", "Pending"
+        ARCHIVED = "archived", "Archived"
+        MISSING = "missing", "Missing"
+        UNKNOWN = "unknown", "Unknown"
+
+    study_metadata = models.ForeignKey(StudyWarehouseMetadata, on_delete=models.CASCADE, related_name="data_resources")
+    resource_type = models.CharField(max_length=30, choices=ResourceType.choices)
+    storage_kind = models.CharField(max_length=30, choices=StorageKind.choices)
+    display_name = models.CharField(max_length=255)
+    uri = models.TextField()
+    description = models.TextField(blank=True)
+    file_format = models.CharField(max_length=100, blank=True)
+    checksum_algorithm = models.CharField(max_length=50, blank=True)
+    checksum = models.CharField(max_length=255, blank=True)
+    size_bytes = models.BigIntegerField(null=True, blank=True)
+    version = models.CharField(max_length=100, blank=True)
+    availability_status = models.CharField(
+        max_length=30,
+        choices=AvailabilityStatus.choices,
+        default=AvailabilityStatus.UNKNOWN,
+    )
+    notes = models.TextField(blank=True)
+    ext = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["study_metadata_id", "resource_type", "display_name", "id"]
+        indexes = [
+            models.Index(fields=["study_metadata", "resource_type"], name="resource_study_type_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["study_metadata", "uri"], name="unique_resource_uri_per_study"),
+            models.CheckConstraint(
+                check=models.Q(size_bytes__isnull=True) | models.Q(size_bytes__gte=0),
+                name="study_resource_size_non_negative",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.study_metadata.study_name}: {self.display_name}"
+
+
+class ImportBatch(models.Model):
+    class Status(models.TextChoices):
+        PLANNED = "planned", "Planned"
+        RUNNING = "running", "Running"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+        SUPERSEDED = "superseded", "Superseded"
+
+    study_metadata = models.ForeignKey(StudyWarehouseMetadata, on_delete=models.CASCADE, related_name="import_batches")
+    source_system = models.CharField(max_length=255, blank=True)
+    source_name = models.CharField(max_length=255)
+    status = models.CharField(max_length=30, choices=Status.choices, default=Status.PLANNED)
+    initiated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="profiling_import_batches",
+        null=True,
+        blank=True,
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    records_seen = models.PositiveIntegerField(default=0)
+    records_created = models.PositiveIntegerField(default=0)
+    records_updated = models.PositiveIntegerField(default=0)
+    records_rejected = models.PositiveIntegerField(default=0)
+    notes = models.TextField(blank=True)
+    ext = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        verbose_name = "import batch"
+        verbose_name_plural = "import batches"
+        indexes = [
+            models.Index(fields=["study_metadata", "status"], name="import_batch_study_status_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.source_name} ({self.status})"
+
+
+class ImportBatchResource(models.Model):
+    class ResourceRole(models.TextChoices):
+        INPUT = "input", "Input"
+        OUTPUT = "output", "Output"
+        REFERENCE = "reference", "Reference"
+        QA = "qa", "QA"
+        OTHER = "other", "Other"
+
+    import_batch = models.ForeignKey(ImportBatch, on_delete=models.CASCADE, related_name="resource_links")
+    data_resource = models.ForeignKey(StudyDataResource, on_delete=models.CASCADE, related_name="import_links")
+    role = models.CharField(max_length=30, choices=ResourceRole.choices, default=ResourceRole.INPUT)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["import_batch_id", "role", "data_resource_id"]
+        verbose_name = "import batch resource"
+        verbose_name_plural = "import batch resources"
+        constraints = [
+            models.UniqueConstraint(fields=["import_batch", "data_resource"], name="unique_resource_per_import_batch"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.import_batch_id}: {self.data_resource_id} ({self.role})"
 
 
 class Series(models.Model):
