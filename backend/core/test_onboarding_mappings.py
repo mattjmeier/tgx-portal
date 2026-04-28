@@ -255,6 +255,61 @@ def test_onboarding_finalize_rejects_missing_required_template_context_choices()
 
 
 @pytest.mark.django_db
+def test_onboarding_finalize_rejects_chemical_without_exposure() -> None:
+    client = APIClient()
+    user = User.objects.create_user(username="admin", password="admin123")
+    user.profile.role = UserProfile.Role.ADMIN
+    user.profile.save()
+    client.force_authenticate(user=user)
+
+    project = Project.objects.create(
+        owner=user,
+        pi_name="Dr. Curie",
+        researcher_name="Researcher A",
+        bioinformatician_assigned="Bioinfo",
+        title="Mercury tox study",
+        description="",
+    )
+    study = Study.objects.create(project=project, title="Chemical only study", species=Study.Species.HUMAN, celltype="Hepatocyte")
+
+    client.patch(
+        f"/api/studies/{study.id}/onboarding-state/",
+        {
+            "template_context": {
+                "study_design_elements": ["chemical"],
+                "exposure_label_mode": None,
+                "exposure_custom_label": "",
+                "treatment_vars": [],
+                "batch_vars": [],
+                "optional_field_keys": ["chemical"],
+                "custom_field_keys": [],
+            },
+            "mappings": {"treatment_level_1": "group"},
+            "group_builder": {"primary_column": "chemical", "additional_columns": [], "batch_column": ""},
+            "config": {
+                "common": {
+                    "platform": "RNA-Seq",
+                    "instrument_model": "Illumina NovaSeq 6000",
+                    "sequenced_by": "HC Genomics lab",
+                },
+                "pipeline": {"mode": "se", "threads": 8},
+                "qc": {},
+                "deseq2": {"cpus": 4},
+            },
+        },
+        format="json",
+    )
+
+    response = client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
+
+    assert response.status_code == 400
+    assert any(
+        issue["message"] == "Select exposure level for chemical studies before finalizing onboarding."
+        for issue in response.json()["errors"]
+    )
+
+
+@pytest.mark.django_db
 def test_onboarding_finalize_imports_uploaded_samples_only_once() -> None:
     client = APIClient()
     user = User.objects.create_user(username="admin", password="admin123")

@@ -559,8 +559,11 @@ class ReferenceLibraryViewSet(viewsets.ViewSet):
 
 
 def _compute_project_code(project: Project) -> str:
-    base = slugify(project.title) or "project"
-    return f"{base}-{project.id}"
+    return (slugify(project.title) or "project").replace("-", "_")
+
+
+def _compute_study_code(study: Study) -> str:
+    return (slugify(study.title) or f"study_{study.id}").replace("-", "_")
 
 
 def _normalize_field_key(value: str) -> str:
@@ -769,7 +772,8 @@ class MetadataTemplateViewSet(viewsets.ViewSet):
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         project_code = _compute_project_code(study.project)
-        filename = f"{project_code}_metadata.csv"
+        study_code = _compute_study_code(study)
+        filename = f"{project_code}_{study_code}_metadata.csv"
 
         return Response(
             {

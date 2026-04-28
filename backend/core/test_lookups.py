@@ -372,6 +372,7 @@ def test_metadata_template_download_returns_csv_attachment_for_persisted_selecti
     assert response.status_code == 200
     assert response["Content-Type"].startswith("text/csv")
     assert "attachment" in response["Content-Disposition"]
+    assert 'filename="mercury_tox_study_study_metadata.csv"' in response["Content-Disposition"]
     assert response.content.decode("utf-8").strip() == "sample_ID,technical_control,reference_rna,solvent_control,sample_name"
 
 

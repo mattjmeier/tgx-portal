@@ -98,6 +98,9 @@ export function MetadataUploadStep({
     setParseError(null);
     setValidationError(null);
     setValidationResult(null);
+    setParsedRows([]);
+    setParsedColumns([]);
+    onValidationResultChange?.(null);
     onFileNameChange(file.name);
 
     Papa.parse<Record<string, unknown>>(file, {
@@ -118,6 +121,10 @@ export function MetadataUploadStep({
         onValidationResultChange?.(null);
       },
     });
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   }
 
   const errorCount = issues.filter((issue) => issue.severity === "error").length;

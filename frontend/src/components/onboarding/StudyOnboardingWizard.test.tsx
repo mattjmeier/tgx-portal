@@ -797,7 +797,7 @@ describe("StudyOnboardingWizard", () => {
     expect(await screen.findByRole("heading", { name: "Study details" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Study details/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Template design/i })).toBeInTheDocument();
-    const metadataStepButton = screen.getByRole("button", { name: /Finalize metadata/i });
+    const metadataStepButton = screen.getByRole("button", { name: /Finalize and download template/i });
     expect(metadataStepButton).toBeInTheDocument();
     expect(metadataStepButton).toHaveTextContent("Not started");
     expect(metadataStepButton).not.toHaveTextContent("Complete and saved");
@@ -1065,6 +1065,34 @@ describe("StudyOnboardingWizard", () => {
     expect(screen.getByText("operator")).toBeInTheDocument();
   });
 
+  it("shows blocking design guidance inside the relevant cards", async () => {
+    renderWizard("/studies/11/onboarding?step=design");
+
+    expect(await screen.findByRole("heading", { name: "Template design" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/select at least one study design element/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /Treatment/i }));
+
+    expect(screen.queryByText(/select at least one study design element/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/add at least one treatment variable/i)).toHaveClass("text-destructive");
+    expect(screen.queryByText("No values added yet.")).not.toBeInTheDocument();
+  });
+
+  it("requires exposure level when chemical is selected", async () => {
+    renderWizard("/studies/11/onboarding?step=design");
+
+    const continueButton = await screen.findByRole("button", { name: "Continue" });
+    fireEvent.click(screen.getByRole("button", { name: /Chemical/i }));
+
+    expect(continueButton).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/select exposure level for chemical studies/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /Exposure level/i }));
+
+    await waitFor(() => expect(continueButton).toBeEnabled());
+    expect(screen.queryByText(/select exposure level for chemical studies/i)).not.toBeInTheDocument();
+  });
+
   it("requires a custom exposure label before continuing when custom mode is selected", async () => {
     renderWizard("/studies/11/onboarding?step=design");
 
@@ -1080,10 +1108,10 @@ describe("StudyOnboardingWizard", () => {
     expect(continueButton).toBeEnabled();
   });
 
-  it("keeps sequencing mode out of finalize metadata and labels sequencing fields as identifiers", async () => {
+  it("keeps sequencing mode out of finalize and download template and labels sequencing fields as identifiers", async () => {
     mockOnboardingState.template_context = {
-      study_design_elements: ["chemical"],
-      exposure_label_mode: null,
+      study_design_elements: ["chemical", "exposure"],
+      exposure_label_mode: "dose",
       exposure_custom_label: "",
       treatment_vars: ["group"],
       batch_vars: ["plate"],
@@ -1093,14 +1121,14 @@ describe("StudyOnboardingWizard", () => {
 
     renderWizard("/studies/11/onboarding?step=metadata");
 
-    expect(await screen.findByRole("heading", { name: "Finalize metadata" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Finalize and download template" })).toBeInTheDocument();
     expect(await screen.findByText("i5 index")).toBeInTheDocument();
     expect(screen.getByText("i7 index")).toBeInTheDocument();
     expect(screen.getByText("Well ID")).toBeInTheDocument();
     expect(screen.queryByText("Sequencing mode")).not.toBeInTheDocument();
   });
 
-  it("checks sequencing identifier fields by default on finalize metadata", async () => {
+  it("checks sequencing identifier fields by default on finalize and download template", async () => {
     mockOnboardingState.template_context = {
       study_design_elements: ["chemical"],
       exposure_label_mode: null,
@@ -1113,7 +1141,7 @@ describe("StudyOnboardingWizard", () => {
 
     renderWizard("/studies/11/onboarding?step=metadata");
 
-    expect(await screen.findByRole("heading", { name: "Finalize metadata" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Finalize and download template" })).toBeInTheDocument();
     expect(await screen.findByTestId("template-field-checkbox-i5_index")).toHaveAttribute("data-state", "checked");
     expect(await screen.findByTestId("template-field-checkbox-i7_index")).toHaveAttribute("data-state", "checked");
     expect(await screen.findByTestId("template-field-checkbox-well_id")).toHaveAttribute("data-state", "checked");
@@ -1122,7 +1150,7 @@ describe("StudyOnboardingWizard", () => {
   it("limits common fields to the curated default set and keeps inline custom field entry", async () => {
     renderWizard("/studies/11/onboarding?step=metadata");
 
-    expect(await screen.findByRole("heading", { name: "Finalize metadata" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Finalize and download template" })).toBeInTheDocument();
     expect(screen.getByText("Common fields")).toBeInTheDocument();
     expect(screen.getByText("Additional fields")).toBeInTheDocument();
     expect(screen.queryByTestId("template-field-checkbox-CASN")).not.toBeInTheDocument();
@@ -1139,7 +1167,7 @@ describe("StudyOnboardingWizard", () => {
 
     renderWizard("/studies/11/onboarding?step=metadata");
 
-    expect(await screen.findByRole("heading", { name: "Finalize metadata" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Finalize and download template" })).toBeInTheDocument();
 
     const chipBatch = await screen.findByText("Chip Batch");
     const animalCohort = await screen.findByText("Animal Cohort");
@@ -1162,7 +1190,7 @@ describe("StudyOnboardingWizard", () => {
   it("keeps showing selected columns when preview refresh fails after selecting an additional field chip", async () => {
     renderWizard("/studies/11/onboarding?step=metadata");
 
-    expect(await screen.findByRole("heading", { name: "Finalize metadata" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Finalize and download template" })).toBeInTheDocument();
     expect(await screen.findByText("sample_ID")).toBeInTheDocument();
 
     vi.mocked(previewMetadataTemplate).mockRejectedValueOnce(new Error("Bad gateway while refreshing preview."));
@@ -1176,7 +1204,9 @@ describe("StudyOnboardingWizard", () => {
 
   it("validates uploads against the finalized template without sequencing_mode", async () => {
     mockOnboardingState.template_context = {
-      study_design_elements: ["chemical"],
+      study_design_elements: ["chemical", "exposure"],
+      exposure_label_mode: "dose",
+      exposure_custom_label: "",
       treatment_vars: ["group"],
       batch_vars: ["plate"],
       optional_field_keys: ["i5_index"],
@@ -1304,6 +1334,30 @@ describe("StudyOnboardingWizard", () => {
     expect(await screen.findByTestId("location")).toHaveTextContent("/studies/11");
   });
 
+  it("keeps template steps checked after final review autosaves mappings", async () => {
+    mockOnboardingState.template_context = {
+      study_design_elements: ["chemical", "exposure"],
+      exposure_label_mode: "dose",
+      exposure_custom_label: "",
+      treatment_vars: ["group"],
+      batch_vars: ["plate"],
+      optional_field_keys: ["i5_index", "i7_index", "well_id"],
+      custom_field_keys: [],
+    };
+    mockOnboardingState.metadata_columns = ["group", "plate", "sample_ID", "technical_control", "reference_rna", "solvent_control"];
+
+    renderWizard("/studies/11/onboarding?step=finalize");
+
+    expect(await screen.findByRole("heading", { name: "Review & finalize" })).toBeInTheDocument();
+
+    await waitFor(() => expect(patchStudyOnboardingState).toHaveBeenCalled());
+    const lastPayload = vi.mocked(patchStudyOnboardingState).mock.calls.at(-1)?.[1] as Record<string, unknown>;
+    expect(lastPayload).not.toHaveProperty("template_context");
+    expect(screen.getByRole("button", { name: /Template design/i })).toHaveTextContent("Complete and saved");
+    expect(screen.getByRole("button", { name: /Finalize and download template/i })).toHaveTextContent("Complete and saved");
+    expect(await screen.findByText("Your work is saved.")).toBeInTheDocument();
+  });
+
   it("recomputes derived group previews and suggested contrasts from selected grouping columns", async () => {
     mockOnboardingState.metadata_columns = [
       "sample_ID",
@@ -1378,7 +1432,9 @@ describe("StudyOnboardingWizard", () => {
 
   it("downloads the finalized metadata template from the dedicated metadata step", async () => {
     mockOnboardingState.template_context = {
-      study_design_elements: ["chemical"],
+      study_design_elements: ["chemical", "exposure"],
+      exposure_label_mode: "dose",
+      exposure_custom_label: "",
       treatment_vars: ["group"],
       batch_vars: [],
       optional_field_keys: ["i5_index"],
@@ -1392,5 +1448,55 @@ describe("StudyOnboardingWizard", () => {
     fireEvent.click(downloadButton);
 
     await waitFor(() => expect(downloadMetadataTemplate).toHaveBeenCalled());
+  });
+
+  it("warns before continuing to upload when the current template has not been downloaded", async () => {
+    mockOnboardingState.template_context = {
+      study_design_elements: ["chemical", "exposure"],
+      exposure_label_mode: "dose",
+      exposure_custom_label: "",
+      treatment_vars: [],
+      batch_vars: [],
+      optional_field_keys: [],
+      custom_field_keys: [],
+    };
+
+    renderWizard("/studies/11/onboarding?step=metadata");
+
+    const continueButton = await screen.findByRole("button", { name: "Continue" });
+    await waitFor(() => expect(continueButton).toBeEnabled());
+    fireEvent.click(continueButton);
+
+    expect(await screen.findByRole("dialog", { name: /download this template before upload/i })).toBeInTheDocument();
+    expect(screen.getByText(/the next step expects rows from this exact template/i)).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/studies/11/onboarding?step=metadata");
+
+    fireEvent.click(screen.getByRole("button", { name: /continue anyway/i }));
+
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("/studies/11/onboarding?step=upload"));
+  });
+
+  it("marks the downloaded template stale when template selections change", async () => {
+    mockOnboardingState.template_context = {
+      study_design_elements: ["chemical", "exposure"],
+      exposure_label_mode: "dose",
+      exposure_custom_label: "",
+      treatment_vars: [],
+      batch_vars: [],
+      optional_field_keys: [],
+      custom_field_keys: [],
+    };
+
+    renderWizard("/studies/11/onboarding?step=metadata");
+
+    const downloadButton = await screen.findByRole("button", { name: "Download template" });
+    await waitFor(() => expect(downloadButton).toBeEnabled());
+    fireEvent.click(downloadButton);
+    await waitFor(() => expect(downloadMetadataTemplate).toHaveBeenCalled());
+
+    fireEvent.click(await screen.findByRole("button", { name: "Chip Batch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByRole("dialog", { name: /download this template before upload/i })).toBeInTheDocument();
   });
 });

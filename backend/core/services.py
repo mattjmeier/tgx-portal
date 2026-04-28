@@ -785,7 +785,7 @@ def build_project_config_bundle(project: Project) -> ConfigBundle:
             )
             contrasts_tsv = _build_contrasts_tsv(study)
 
-            study_slug = slugify(study.title).replace("-", "_")
+            study_slug = slugify(study.title).replace("-", "_") or f"study_{study.id}"
             archive.writestr(f"{study_slug}/config.yaml", config_yaml)
             archive.writestr(f"{study_slug}/metadata.tsv", metadata_tsv)
             archive.writestr(f"{study_slug}/contrasts.tsv", contrasts_tsv)

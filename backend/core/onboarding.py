@@ -347,6 +347,13 @@ def validate_template_context_for_finalize(
                 "message": "Select at least one study design element before finalizing onboarding.",
             }
         )
+    if "chemical" in study_design_elements and "exposure" not in study_design_elements:
+        errors.append(
+            {
+                "field": "template_context.study_design_elements",
+                "message": "Select exposure level for chemical studies before finalizing onboarding.",
+            }
+        )
     if "treatment" in study_design_elements and not treatment_vars:
         errors.append(
             {

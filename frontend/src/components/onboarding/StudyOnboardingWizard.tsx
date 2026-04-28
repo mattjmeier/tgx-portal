@@ -29,6 +29,7 @@ import {
   type StudyTemplateContext,
 } from "../../api/studyOnboarding";
 import { MetadataUploadStep } from "./MetadataUploadStep";
+import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { MultiSelect } from "../ui/multi-select";
 import { StudyDeleteDialog } from "../StudyDeleteDialog";
 import { Badge } from "../ui/badge";
@@ -42,6 +43,14 @@ import {
   CardTitle,
 } from "../ui/card";
 import { Checkbox } from "../ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
@@ -144,6 +153,7 @@ type OnboardingDraftV7 = Omit<OnboardingDraftV6, "version"> & {
 type OnboardingDraftV8 = Omit<OnboardingDraftV7, "version"> & {
   version: 8;
   metadataDefaultsInitialized: boolean;
+  templateDownloadSignature?: string;
   groupBuilder: StudyOnboardingGroupBuilder;
   upload: OnboardingDraftV7["upload"] & {
     validatedRows: Array<Record<string, unknown>>;
@@ -160,6 +170,8 @@ type ChipSelectOrAddProps = {
   inputId: string;
   addLabel: string;
   required?: boolean;
+  emptyMessage?: string;
+  invalid?: boolean;
   onChange: (values: string[]) => void;
 };
 
@@ -238,7 +250,7 @@ const steps: Array<{
   },
   {
     key: "metadata",
-    title: "Finalize metadata",
+    title: "Finalize and download template",
     description: "Preview the generated template and choose optional or custom metadata columns.",
   },
   {
@@ -307,6 +319,7 @@ function createDefaultDraft(studyId: number): OnboardingDraftV8 {
     updatedAt: new Date().toISOString(),
     attempts: {},
     metadataDefaultsInitialized: false,
+    templateDownloadSignature: undefined,
     details: {
       title: "",
       piName: "",
@@ -544,6 +557,7 @@ function migrateDraftV7ToV8(draft: OnboardingDraftV7): OnboardingDraftV8 {
     attempts: draft.attempts,
     metadataDefaultsInitialized:
       draft.template.context.optional_field_keys.length > 0,
+    templateDownloadSignature: undefined,
     details: draft.details,
     template: {
       ...draft.template,
@@ -576,6 +590,7 @@ function loadDraft(studyId: number): OnboardingDraftV8 {
         ...draft,
         metadataDefaultsInitialized:
           draft.metadataDefaultsInitialized ?? draft.template.context.optional_field_keys.length > 0,
+        templateDownloadSignature: draft.templateDownloadSignature,
         template: {
           ...draft.template,
           context: normalizeTemplateContext(draft.template.context),
@@ -673,6 +688,10 @@ function areTemplateContextsEqual(left: StudyTemplateContext, right: StudyTempla
     areStringListsEqual(left.optional_field_keys, right.optional_field_keys) &&
     areStringListsEqual(left.custom_field_keys, right.custom_field_keys)
   );
+}
+
+function buildTemplateDownloadSignature(context: StudyTemplateContext): string {
+  return JSON.stringify(normalizeTemplateContext(context));
 }
 
 function areMappingsEqual(
@@ -882,6 +901,8 @@ function ChipSelectOrAdd({
   inputId,
   addLabel,
   required = false,
+  emptyMessage,
+  invalid = false,
   onChange,
 }: ChipSelectOrAddProps) {
   const [draftValue, setDraftValue] = useState("");
@@ -896,7 +917,12 @@ function ChipSelectOrAdd({
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4">
+    <div
+      className={cn(
+        "space-y-3 rounded-xl border bg-muted/20 p-4",
+        invalid ? "border-destructive/50" : "border-border/70",
+      )}
+    >
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <Label htmlFor={inputId} className="text-sm font-medium text-foreground">
@@ -909,7 +935,9 @@ function ChipSelectOrAdd({
 
       <div className="flex flex-wrap gap-2">
         {values.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No values added yet.</p>
+          <p className={cn("text-sm", invalid ? "font-medium text-destructive" : "text-muted-foreground")}>
+            {emptyMessage ?? "No values added yet."}
+          </p>
         ) : (
           values.map((value) => (
             <Badge key={value} variant="secondary" className="gap-1 rounded-full px-3 py-1">
@@ -1092,6 +1120,7 @@ export function StudyOnboardingWizard() {
   const [onboardingSaveError, setOnboardingSaveError] = useState<string | null>(null);
   const [onboardingFinalizeError, setOnboardingFinalizeError] = useState<string | null>(null);
   const [deleteStudyError, setDeleteStudyError] = useState<string | null>(null);
+  const [templateDownloadWarningOpen, setTemplateDownloadWarningOpen] = useState(false);
 
   const [draft, setDraft] = useState<OnboardingDraftV8 | null>(() => {
     if (studyId === null) {
@@ -1438,13 +1467,22 @@ export function StudyOnboardingWizard() {
       ...(groupBuilder.primary_column ? ["group"] : []),
     ]),
   });
+  const noStudyDesignElements = templateContext.study_design_elements.length === 0;
+  const chemicalMissingExposure =
+    templateContext.study_design_elements.includes("chemical") &&
+    !templateContext.study_design_elements.includes("exposure");
+  const treatmentVarsMissing =
+    templateContext.study_design_elements.includes("treatment") && templateContext.treatment_vars.length === 0;
+  const batchVarsMissing =
+    templateContext.study_design_elements.includes("batch") && templateContext.batch_vars.length === 0;
   const designStepBlocked =
-    templateContext.study_design_elements.length === 0 ||
+    noStudyDesignElements ||
+    chemicalMissingExposure ||
     (templateContext.study_design_elements.includes("exposure") &&
       templateContext.exposure_label_mode === "custom" &&
       templateContext.exposure_custom_label.length === 0) ||
-    (templateContext.study_design_elements.includes("treatment") && templateContext.treatment_vars.length === 0) ||
-    (templateContext.study_design_elements.includes("batch") && templateContext.batch_vars.length === 0);
+    treatmentVarsMissing ||
+    batchVarsMissing;
   const canDownloadTemplate =
     !designStepBlocked &&
     !templatePreviewQuery.isLoading &&
@@ -1539,6 +1577,8 @@ export function StudyOnboardingWizard() {
   const selectedCustomFieldKeys = templateContext.custom_field_keys;
   const selectedOptionalFieldKeySet = new Set(templateContext.optional_field_keys);
   const selectedCustomFieldKeySet = new Set(templateContext.custom_field_keys);
+  const templateDownloadSignature = buildTemplateDownloadSignature(templateContext);
+  const currentTemplateDownloaded = draft.templateDownloadSignature === templateDownloadSignature;
   const reviewWarnings = [
     metadataColumns.length === 0 ? "Upload and validate metadata before generating the handoff bundle." : null,
     !groupBuilder.primary_column && !metadataColumns.includes("group")
@@ -1680,7 +1720,6 @@ export function StudyOnboardingWizard() {
         },
         selected_contrasts,
         group_builder: groupBuilder,
-        template_context: finalizeTemplateContext,
         config: currentDraft.config,
       });
       markStepAttempted(stepKey);
@@ -1696,6 +1735,36 @@ export function StudyOnboardingWizard() {
       goToStep(stepKey);
     } catch {
       // mutation handlers surface errors
+    }
+  }
+
+  async function handleDownloadTemplate() {
+    setTemplateDownloadError(null);
+    try {
+      await persistTemplateContext();
+      markStepAttempted("metadata");
+      const { blob, filename } = await downloadMetadataTemplate({
+        study_id: studyId as number,
+        optional_field_keys: templateContext.optional_field_keys,
+        custom_field_keys: templateContext.custom_field_keys,
+        template_context: templateContext,
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download =
+        filename ?? templatePreviewQuery.data?.filename ?? "metadata.csv";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setTemplateDownloadWarningOpen(false);
+      updateDraft((current) => ({
+        ...current,
+        templateDownloadSignature,
+      }));
+    } catch (error) {
+      setTemplateDownloadError(
+        error instanceof Error ? error.message : "Failed to download the template.",
+      );
     }
   }
 
@@ -1747,7 +1816,25 @@ export function StudyOnboardingWizard() {
       return;
     }
 
+    if (activeStep === "metadata" && !currentTemplateDownloaded) {
+      setTemplateDownloadWarningOpen(true);
+      return;
+    }
+
     try {
+      await persistCurrentStep(activeStep);
+      goToStep(nextStep);
+    } catch {
+      return;
+    }
+  }
+
+  async function handleContinueWithoutTemplateDownload() {
+    if (!nextStep) {
+      return;
+    }
+    try {
+      setTemplateDownloadWarningOpen(false);
       await persistCurrentStep(activeStep);
       goToStep(nextStep);
     } catch {
@@ -1772,7 +1859,6 @@ export function StudyOnboardingWizard() {
         },
         selected_contrasts,
         group_builder: groupBuilder,
-        template_context: finalizeTemplateContext,
         config: currentDraft.config,
       });
       markStepAttempted("finalize");
@@ -1819,7 +1905,6 @@ export function StudyOnboardingWizard() {
         },
         selected_contrasts,
         group_builder: groupBuilder,
-        template_context: finalizeTemplateContext,
         config: draft.config,
       });
     }, 500);
@@ -1834,7 +1919,6 @@ export function StudyOnboardingWizard() {
     effectivePrimaryBatchMapping,
     effectivePrimaryTreatmentMapping,
     finalizePending,
-    finalizeTemplateContext,
     groupBuilder,
     mappingsStepSaved,
     onboardingStatus,
@@ -2281,7 +2365,12 @@ export function StudyOnboardingWizard() {
 
           {activeStep === "design" ? (
             <div className="space-y-5">
-              <div className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4">
+              <div
+                className={cn(
+                  "space-y-3 rounded-xl border bg-muted/20 p-4",
+                  noStudyDesignElements || chemicalMissingExposure ? "border-destructive/50" : "border-border/70",
+                )}
+              >
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-foreground">Study design elements</p>
@@ -2301,6 +2390,7 @@ export function StudyOnboardingWizard() {
                         className={cn(
                           "rounded-xl border bg-background/70 transition-colors",
                           selected ? "border-foreground bg-background shadow-sm" : "border-border hover:border-foreground/40",
+                          chemicalMissingExposure && option.key === "exposure" ? "border-destructive bg-destructive/5" : "",
                         )}
                       >
                         <button
@@ -2427,6 +2517,26 @@ export function StudyOnboardingWizard() {
                     );
                   })}
                 </div>
+
+                {noStudyDesignElements ? (
+                  <Alert variant="destructive">
+                    <AlertCircle aria-hidden="true" />
+                    <AlertTitle>Study design required</AlertTitle>
+                    <AlertDescription>
+                      Select at least one study design element, then name any treatment or batch variables required by that design before continuing.
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+
+                {chemicalMissingExposure ? (
+                  <Alert variant="destructive">
+                    <AlertCircle aria-hidden="true" />
+                    <AlertTitle>Exposure level required</AlertTitle>
+                    <AlertDescription>
+                      Select exposure level for chemical studies so the template captures dose, concentration, both, or a custom exposure field.
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
               </div>
 
               {(templateContext.study_design_elements.includes("treatment") ||
@@ -2441,6 +2551,8 @@ export function StudyOnboardingWizard() {
                       suggestions={metadataColumnSuggestions}
                       addLabel="Add a treatment variable"
                       required
+                      invalid={treatmentVarsMissing}
+                      emptyMessage="Add at least one treatment variable before continuing."
                       onChange={(values) =>
                         updateDraft((current) => ({
                           ...current,
@@ -2462,6 +2574,8 @@ export function StudyOnboardingWizard() {
                       suggestions={metadataColumnSuggestions}
                       addLabel="Add a batch variable"
                       required
+                      invalid={batchVarsMissing}
+                      emptyMessage="Add at least one batch variable before continuing."
                       onChange={(values) =>
                         updateDraft((current) => ({
                           ...current,
@@ -2473,14 +2587,6 @@ export function StudyOnboardingWizard() {
                       }
                     />
                   ) : null}
-                </div>
-              ) : null}
-
-              {designStepBlocked ? (
-                <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
-                  <p className="text-sm font-medium text-destructive">
-                    Select at least one study design element, then name any treatment or batch variables required by that design before continuing.
-                  </p>
                 </div>
               ) : null}
             </div>
@@ -2500,29 +2606,8 @@ export function StudyOnboardingWizard() {
                     <Button
                       type="button"
                       disabled={!canDownloadTemplate}
-                      onClick={async () => {
-                        setTemplateDownloadError(null);
-                        try {
-                          await persistTemplateContext();
-                          markStepAttempted("metadata");
-                          const { blob, filename } = await downloadMetadataTemplate({
-                            study_id: studyId,
-                            optional_field_keys: templateContext.optional_field_keys,
-                            custom_field_keys: templateContext.custom_field_keys,
-                            template_context: templateContext,
-                          });
-                          const url = URL.createObjectURL(blob);
-                          const anchor = document.createElement("a");
-                          anchor.href = url;
-                          anchor.download =
-                            filename ?? templatePreviewQuery.data?.filename ?? "metadata.csv";
-                          anchor.click();
-                          URL.revokeObjectURL(url);
-                        } catch (error) {
-                          setTemplateDownloadError(
-                            error instanceof Error ? error.message : "Failed to download the template.",
-                          );
-                        }
+                      onClick={() => {
+                        void handleDownloadTemplate();
                       }}
                     >
                       Download template
@@ -3195,9 +3280,9 @@ export function StudyOnboardingWizard() {
                         {finalizeOnboardingMutation.isPending ? "Finalizing…" : "Finalize onboarding"}
                       </Button>
                     </div>
-                    {saveStudyDetailsMutation.isPending || saveOnboardingDraftMutation.isPending ? (
-                      <p className="text-sm text-muted-foreground">Saving your review changes automatically…</p>
-                    ) : null}
+                    <p className="text-sm text-muted-foreground" aria-live="polite">
+                      {finalizePending ? "Saving your review changes automatically..." : "Your work is saved."}
+                    </p>
                     {onboardingStatus !== "final" ? (
                       <p className="text-sm text-muted-foreground">
                         Finalize onboarding to move into the study workspace and unlock downstream outputs.
@@ -3257,6 +3342,47 @@ export function StudyOnboardingWizard() {
           ) : null}
         </CardFooter>
       </Card>
+
+      <Dialog open={templateDownloadWarningOpen} onOpenChange={setTemplateDownloadWarningOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Download this template before upload</DialogTitle>
+            <DialogDescription>
+              The next step expects rows from this exact template. Download it first unless you already have a matching file.
+            </DialogDescription>
+          </DialogHeader>
+          <Alert variant="destructive">
+            <AlertCircle aria-hidden="true" />
+            <AlertTitle>Template not downloaded</AlertTitle>
+            <AlertDescription>
+              Continuing without the current template can make the upload fail because the expected columns may not match your file.
+            </AlertDescription>
+          </Alert>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setTemplateDownloadWarningOpen(false)}>
+              Stay here
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                void handleContinueWithoutTemplateDownload();
+              }}
+            >
+              Continue anyway
+            </Button>
+            <Button
+              type="button"
+              disabled={!canDownloadTemplate}
+              onClick={() => {
+                void handleDownloadTemplate();
+              }}
+            >
+              Download template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

@@ -30,39 +30,26 @@ Collapsible sidebar - only mobile?
     - Results page on sidebar
     - Chemical management page
 
-- Alias table for genes/probes?
+- Alias table for genes/probes? FEATURES TABLE + ALIAS TABLE
+
+
+
+- "No values added yet." - I think this text (on step 2) should be red since it indicates a blocking issue. In fact, maybe instead of that, the message "select at least one study design element..." should appear inside the applicable card instead of below them, I think that would draw attention nicely. What do you think??
+
+- On metadata template download page (step 3) aflatoxin-response-study-45_metadata.csv - template has the 'collaboration' as part of the slug, but let's also include the study name, instead of the number? separated by an underscore maybe?
+    - somewhat related... study URL paths have things like /56/onboarding - we should make a slug form based on title (this should also be used as the folder name; or, we derive folder name from another way, YYYY_PI-name_slug-study-name)
+
+- If a user clicks "continue" from step 3 to 4, but they never clicked "download template", perhaps a modal should warn them (using nice "warning" formatting) that they have to provide a template on the next page, which they must download on the current page, and give them the option to continue or not?
+
+- On step 4 - re-uploading a corrected file via the "Choose file" menu does not seem to update the data source...? it does work correctly with drag n drop though!
+
+- I think we need to make selection of exposure level mandatory if (but only if) chemical is selected as a study design element.
 
 
 
 
 
-QUESTIONS - treatment/batch vars
-
-
-
-On an existing study: the download template should reflect the shape of the current study in question.
-
-
-Template preview
-
-
-
-# URL patterns
-
-- studies have things like /56/onboarding - we should make a slug form based on title (this should also be used as the folder name; or, we derive folder name from another way, YYYY_PI-name_slug-study-name)
-
-- make dose/concentration mandatory
-
-
-- aflatoxin-response-study-45_metadata.csv - template has wrong name
-
-My study onboarding flow has a few UI bugs and tweaks I'd like to make:
-
-- the "finalize metadata" step - would more accurately be called "finalize and download template"
-
-- On step 5, there is a kind of infinite loop where it says "saving...", causing that element to appear/disappear/re-appear repeatedly. What is standard practice? Usually just a static message saying "Your work is saved"?
-
-- I got to the end of an onboarding and realized that steps 2 and 3 became unchecked. I'm not exactly sure why their state is inconsistent. That might be the hardest challenge to track.
+---
 
 - "Onboarding finalized"
 
