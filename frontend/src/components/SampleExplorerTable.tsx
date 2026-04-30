@@ -61,6 +61,14 @@ type SampleExplorerTableProps = {
 };
 
 const metadataColumnOptions = ["group", "dose", "chemical"];
+const fixedSampleColumnKeys = new Set([
+  "sample_ID",
+  "sample_name",
+  "description",
+  "technical_control",
+  "reference_rna",
+  "solvent_control",
+]);
 
 function getMetadataValue(sample: Sample, key: string): string {
   const value = sample.metadata?.[key];
@@ -72,7 +80,7 @@ function getMetadataValue(sample: Sample, key: string): string {
 
 function labelForFilter(key: keyof SampleExplorerFilters, value: string): string {
   if (key === "assayStatus") {
-    return value === "missing" ? "Missing processing metadata" : "Has processing metadata";
+    return value === "missing" ? "Awaiting assay setup" : "Assay setup complete";
   }
   if (key === "controlFlag") {
     const labels: Record<string, string> = {
@@ -87,6 +95,12 @@ function labelForFilter(key: keyof SampleExplorerFilters, value: string): string
     return `Missing ${value}`;
   }
   return `${key}: ${value}`;
+}
+
+function labelForMetadataColumn(key: string): string {
+  return key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 export function SampleExplorerTable({
@@ -117,12 +131,17 @@ export function SampleExplorerTable({
   const allPageSelected = samples.length > 0 && selectedOnPage.length === samples.length;
   const somePageSelected = selectedOnPage.length > 0 && selectedOnPage.length < samples.length;
   const availableMetadataColumns = metadataColumns.length ? metadataColumns : metadataColumnOptions;
+  const metadataColumnKeys = availableMetadataColumns.filter((column, index, columns) => {
+    const normalized = column.trim();
+    return normalized.length > 0 && !fixedSampleColumnKeys.has(normalized) && columns.indexOf(column) === index;
+  });
   const activeFilters = Object.entries(filters).filter((entry): entry is [keyof SampleExplorerFilters, string] =>
     typeof entry[1] === "string" && entry[1].trim().length > 0,
   );
 
   const columns = useMemo<ColumnDef<Sample>[]>(
-    () => [
+    () => {
+      const sampleColumns: ColumnDef<Sample>[] = [
       {
         id: "select",
         header: () => (
@@ -167,6 +186,13 @@ export function SampleExplorerTable({
         header: "Chemical",
         cell: ({ row }) => getMetadataValue(row.original, "chemical"),
       },
+      ...metadataColumnKeys
+        .filter((key) => !metadataColumnOptions.includes(key))
+        .map<ColumnDef<Sample>>((key) => ({
+          id: key,
+          header: labelForMetadataColumn(key),
+          cell: ({ row }) => getMetadataValue(row.original, key),
+        })),
       {
         id: "controls",
         header: "Controls",
@@ -180,8 +206,16 @@ export function SampleExplorerTable({
           return flags.length > 0 ? flags.join(", ") : "None";
         },
       },
-    ],
-    [allPageSelected, onTogglePageSelection, onToggleSampleSelection, samples, selectedSampleIds, somePageSelected],
+      ];
+
+      return sampleColumns.filter((column) => {
+        if (!column.id || !metadataColumnOptions.includes(column.id)) {
+          return true;
+        }
+        return metadataColumnKeys.includes(column.id);
+      });
+    },
+    [allPageSelected, metadataColumnKeys, onTogglePageSelection, onToggleSampleSelection, samples, selectedSampleIds, somePageSelected],
   );
 
   const table = useReactTable({
@@ -238,18 +272,18 @@ export function SampleExplorerTable({
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="assay-status-filter">Processing metadata</Label>
+          <Label htmlFor="assay-status-filter">Assay coverage</Label>
           <Select
             value={filters.assayStatus ?? "__all__"}
             onValueChange={(value) => onFilterChange({ ...filters, assayStatus: value === "__all__" ? undefined : value as "present" | "missing" })}
           >
-            <SelectTrigger id="assay-status-filter" aria-label="Processing metadata status">
-              <SelectValue placeholder="All metadata" />
+            <SelectTrigger id="assay-status-filter" aria-label="Assay coverage status">
+              <SelectValue placeholder="All assay states" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">All metadata states</SelectItem>
-              <SelectItem value="present">Has processing metadata</SelectItem>
-              <SelectItem value="missing">Missing processing metadata</SelectItem>
+              <SelectItem value="__all__">All assay states</SelectItem>
+              <SelectItem value="present">Assay setup complete</SelectItem>
+              <SelectItem value="missing">Awaiting assay setup</SelectItem>
             </SelectContent>
           </Select>
         </div>

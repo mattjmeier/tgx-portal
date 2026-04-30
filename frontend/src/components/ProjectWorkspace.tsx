@@ -133,11 +133,11 @@ export function ProjectWorkspace({
                   </Card>
                   <Card className="bg-muted/30 shadow-none">
                     <CardHeader className="gap-2 p-4">
-                      <CardDescription className="workspace-stat-label">Processing metadata rows</CardDescription>
+                      <CardDescription className="workspace-stat-label">Assay setup rows</CardDescription>
                       <CardTitle className="text-4xl">{collaborationProcessingMetadataCount}</CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0 text-sm text-muted-foreground">
-                      {studies.length > 0 ? "Sample-level processing metadata recorded across all studies in this collaboration." : "Processing metadata totals will appear after samples are added."}
+                      {studies.length > 0 ? "Sample-level assay setup recorded across all studies in this collaboration." : "Assay setup totals will appear after samples are added."}
                     </CardContent>
                   </Card>
                 </div>
@@ -171,7 +171,7 @@ export function ProjectWorkspace({
               <CardHeader className="workspace-study-directory-card-header">
                 <div className="workspace-study-directory-header">
                   <h3 className="workspace-study-directory-title">Studies in this collaboration</h3>
-                  <p className="workspace-study-directory-copy">Select one to explore samples and processing metadata for that experiment.</p>
+                  <p className="workspace-study-directory-copy">Select one to explore samples and assay setup for that experiment.</p>
                 </div>
               </CardHeader>
               <CardContent className="workspace-study-directory-card-content">

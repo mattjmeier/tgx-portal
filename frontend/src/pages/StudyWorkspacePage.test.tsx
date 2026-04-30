@@ -114,8 +114,8 @@ vi.mock("../api/studyExplorer", async () => {
     fetchStudyExplorerSummary: vi.fn(async () => ({
       study_id: 11,
       readiness: {
-        status: "warning",
-        label: "Needs attention",
+        status: "ready",
+        label: "Ready for handoff",
         updated_at: "2026-04-10T12:00:00Z",
         finalized_at: null,
       },
@@ -163,8 +163,8 @@ vi.mock("../api/studyExplorer", async () => {
         {
           code: "missing_assays",
           severity: "warning",
-          message: "1 sample is missing assay metadata.",
-          action_label: "Filter missing assays",
+          message: "1 sample is awaiting assay setup.",
+          action_label: "Show awaiting assays",
           filter: { assay_status: "missing" },
         },
       ],
@@ -258,12 +258,12 @@ describe("StudyWorkspacePage", () => {
     renderPage("/studies/11");
 
     expect(await screen.findByRole("heading", { name: /hepatocyte mercury dose response/i })).toBeInTheDocument();
-    expect(screen.getByText(/needs attention/i)).toBeInTheDocument();
+    expect(screen.getByText(/ready for handoff/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /overview/i })).toHaveAttribute("href", "/studies/11");
     expect(screen.getByRole("link", { name: /samples/i })).toHaveAttribute("href", "/studies/11?view=samples");
     expect(screen.getByRole("link", { name: /^contrasts$/i })).toHaveAttribute("href", "/studies/11?view=contrasts");
-    expect(screen.getByText(/attention queue/i)).toBeInTheDocument();
-    expect(screen.getByText(/1 sample is missing processing metadata/i)).toBeInTheDocument();
+    expect(screen.getByText(/readiness notes/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 sample is awaiting assay setup/i)).toBeInTheDocument();
     expect(screen.getByText(/study design overview/i)).toBeInTheDocument();
     expect(screen.getByText(/geo submission helper/i)).toBeInTheDocument();
     expect(screen.getByText(/ready with blanks/i)).toBeInTheDocument();
@@ -290,14 +290,73 @@ describe("StudyWorkspacePage", () => {
     expect(screen.getAllByText("S-001")).toHaveLength(1);
     expect(screen.queryByText(/group: control/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/long chemical name/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/no processing metadata recorded for this sample/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no assay setup recorded for this sample/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/platform/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/genome version/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/quantification method/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add samples/i })).toBeInTheDocument();
   });
 
-  it("opens processing metadata creation from the admin-only sample inspector actions menu", async () => {
+  it("uses study metadata columns for the sample explorer", async () => {
+    vi.mocked(fetchStudyExplorerSummary).mockResolvedValueOnce({
+      study_id: 11,
+      readiness: {
+        status: "warning",
+        label: "Needs attention",
+        updated_at: "2026-04-10T12:00:00Z",
+        finalized_at: null,
+      },
+      sample_summary: {
+        total: 1,
+        technical_controls: 0,
+        reference_rna_controls: 0,
+        solvent_controls: 0,
+      },
+      assay_summary: {
+        total: 0,
+        samples_with_assays: 0,
+        samples_missing_assays: 1,
+        platforms: [],
+      },
+      design_summary: {
+        groups: [{ value: "5", count: 1 }],
+        doses: [],
+        chemicals: [],
+        metadata_columns: ["sample_ID", "concentration", "group"],
+        treatment_vars: ["concentration"],
+        batch_vars: [],
+      },
+      contrast_summary: {
+        selected_count: 0,
+        suggested_count: 0,
+        selected: [],
+        suggested: [],
+      },
+      config_summary: {
+        platform: "RNA-Seq",
+        sequencing_mode: "se",
+        instrument_model: "",
+        sequenced_by: "",
+        biospyder_kit: null,
+        can_download_config: false,
+      },
+      geo_summary: {
+        can_download_csv: true,
+        populated_field_count: 12,
+        total_field_count: 24,
+        manual_field_labels: [],
+      },
+      blocking_issues: [],
+    });
+
+    renderPage("/studies/11?view=samples");
+
+    expect(await screen.findByText(/sample explorer/i)).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /concentration/i })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /^dose$/i })).not.toBeInTheDocument();
+  });
+
+  it("opens assay setup creation from the admin-only sample inspector actions menu", async () => {
     vi.mocked(fetchAssays)
       .mockResolvedValueOnce({
         count: 0,
@@ -327,19 +386,19 @@ describe("StudyWorkspacePage", () => {
 
     fireEvent.click(screen.getByRole("cell", { name: "S-001" }));
     expect(await screen.findByRole("dialog", { name: /sample inspector/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /^processing metadata$/i })).toBeInTheDocument();
-    expect(screen.getByText(/no processing metadata recorded for this sample/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^assay setup$/i })).toBeInTheDocument();
+    expect(screen.getByText(/no assay setup recorded for this sample/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /sample actions/i }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /apply processing metadata/i }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /apply assay setup/i }));
 
-    expect(await screen.findByRole("dialog", { name: /apply processing metadata/i })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: /apply assay setup/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/platform/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/genome version/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/quantification method/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/genome version/i), { target: { value: "mm10" } });
     fireEvent.change(screen.getByLabelText(/quantification method/i), { target: { value: "raw_counts" } });
-    fireEvent.click(screen.getByRole("button", { name: /^apply processing metadata$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^apply assay setup$/i }));
 
     await waitFor(() => {
       expect(createAssay).toHaveBeenCalled();
@@ -353,7 +412,7 @@ describe("StudyWorkspacePage", () => {
     expect(await screen.findByText(/mm10 \/ raw_counts/i)).toBeInTheDocument();
   });
 
-  it("hides sample processing metadata actions from client users", async () => {
+  it("hides sample assay setup actions from client users", async () => {
     authMock.role = "client";
 
     renderPage("/studies/11?view=samples");
@@ -362,7 +421,7 @@ describe("StudyWorkspacePage", () => {
     fireEvent.click(screen.getByRole("cell", { name: "S-001" }));
     expect(await screen.findByRole("dialog", { name: /sample inspector/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /sample actions/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/apply processing metadata/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/apply assay setup/i)).not.toBeInTheDocument();
   });
 
   it("renders contrasts as a separate workspace view", async () => {
@@ -385,10 +444,10 @@ describe("StudyWorkspacePage", () => {
     renderPage("/studies/11?view=samples&assay_status=missing");
 
     expect(await screen.findByText(/sample explorer/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/missing processing metadata/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/awaiting assay setup/i).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /clear filters/i }));
     await waitFor(() => {
-      expect(screen.queryByText(/^Missing processing metadata$/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/^Awaiting assay setup$/i)).not.toBeInTheDocument();
     });
   });
 

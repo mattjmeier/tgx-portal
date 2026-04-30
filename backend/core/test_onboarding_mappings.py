@@ -200,6 +200,180 @@ def test_onboarding_state_persists_template_mappings_and_config_before_finalize(
 
 
 @pytest.mark.django_db
+def test_onboarding_finalize_persists_derived_group_metadata() -> None:
+    client = APIClient()
+    user = User.objects.create_user(username="admin", password="admin123")
+    user.profile.role = UserProfile.Role.ADMIN
+    user.profile.save()
+    client.force_authenticate(user=user)
+
+    project = Project.objects.create(
+        owner=user,
+        pi_name="Dr. Curie",
+        researcher_name="Researcher A",
+        bioinformatician_assigned="Bioinfo",
+        title="Mercury tox study",
+        description="",
+    )
+    study = Study.objects.create(project=project, title="Concentration study", species=Study.Species.HUMAN, celltype="Hepatocyte")
+
+    patch_response = client.patch(
+        f"/api/studies/{study.id}/onboarding-state/",
+        {
+            "group_builder": {
+                "primary_column": "concentration",
+                "additional_columns": [],
+                "batch_column": "",
+            },
+            "template_context": {
+                "study_design_elements": ["exposure", "treatment"],
+                "exposure_label_mode": "concentration",
+                "exposure_custom_label": "",
+                "treatment_vars": ["concentration"],
+                "batch_vars": [],
+                "optional_field_keys": [],
+                "custom_field_keys": [],
+            },
+            "mappings": {"treatment_level_1": "group"},
+            "config": {
+                "common": {
+                    "dose": "concentration",
+                    "units": "uM",
+                    "platform": "RNA-Seq",
+                    "instrument_model": "Illumina NovaSeq 6000",
+                    "sequenced_by": "HC Genomics lab",
+                },
+                "pipeline": {"mode": "se", "threads": 8},
+                "qc": {"dendro_color_by": "group"},
+                "deseq2": {"cpus": 4},
+            },
+        },
+        format="json",
+    )
+    assert patch_response.status_code == 200
+
+    validation_response = client.post(
+        "/api/metadata-validation/",
+        {
+            "study_id": study.id,
+            "rows": [
+                {
+                    "sample_ID": "sample-1",
+                    "technical_control": False,
+                    "reference_rna": False,
+                    "solvent_control": True,
+                    "concentration": "0",
+                },
+                {
+                    "sample_ID": "sample-2",
+                    "technical_control": False,
+                    "reference_rna": False,
+                    "solvent_control": False,
+                    "concentration": "5",
+                },
+            ],
+        },
+        format="json",
+    )
+    assert validation_response.status_code == 200
+    assert validation_response.json()["valid"] is True
+
+    finalize_response = client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
+
+    assert finalize_response.status_code == 200
+    assert list(study.samples.order_by("sample_ID").values_list("sample_ID", "metadata")) == [
+        ("sample-1", {"concentration": 0.0, "group": "0"}),
+        ("sample-2", {"concentration": 5.0, "group": "5"}),
+    ]
+
+
+@pytest.mark.django_db
+def test_onboarding_finalize_backfills_missing_derived_group_metadata() -> None:
+    client = APIClient()
+    user = User.objects.create_user(username="admin", password="admin123")
+    user.profile.role = UserProfile.Role.ADMIN
+    user.profile.save()
+    client.force_authenticate(user=user)
+
+    project = Project.objects.create(
+        owner=user,
+        pi_name="Dr. Curie",
+        researcher_name="Researcher A",
+        bioinformatician_assigned="Bioinfo",
+        title="Mercury tox study",
+        description="",
+    )
+    study = Study.objects.create(project=project, title="Existing samples study", species=Study.Species.HUMAN, celltype="Hepatocyte")
+    Sample.objects.create(study=study, sample_ID="sample-1", metadata={"concentration": 0.0})
+    Sample.objects.create(study=study, sample_ID="sample-2", metadata={"concentration": 5.0})
+
+    client.patch(
+        f"/api/studies/{study.id}/onboarding-state/",
+        {
+            "group_builder": {
+                "primary_column": "concentration",
+                "additional_columns": [],
+                "batch_column": "",
+            },
+            "template_context": {
+                "study_design_elements": ["exposure", "treatment"],
+                "exposure_label_mode": "concentration",
+                "exposure_custom_label": "",
+                "treatment_vars": ["concentration"],
+                "batch_vars": [],
+                "optional_field_keys": [],
+                "custom_field_keys": [],
+            },
+            "mappings": {"treatment_level_1": "group"},
+            "config": {
+                "common": {
+                    "dose": "concentration",
+                    "units": "uM",
+                    "platform": "RNA-Seq",
+                    "instrument_model": "Illumina NovaSeq 6000",
+                    "sequenced_by": "HC Genomics lab",
+                },
+                "pipeline": {"mode": "se", "threads": 8},
+                "qc": {"dendro_color_by": "group"},
+                "deseq2": {"cpus": 4},
+            },
+        },
+        format="json",
+    )
+    client.post(
+        "/api/metadata-validation/",
+        {
+            "study_id": study.id,
+            "rows": [
+                {
+                    "sample_ID": "sample-1",
+                    "technical_control": False,
+                    "reference_rna": False,
+                    "solvent_control": True,
+                    "concentration": "0",
+                },
+                {
+                    "sample_ID": "sample-2",
+                    "technical_control": False,
+                    "reference_rna": False,
+                    "solvent_control": False,
+                    "concentration": "5",
+                },
+            ],
+        },
+        format="json",
+    )
+
+    finalize_response = client.post(f"/api/studies/{study.id}/onboarding-finalize/", format="json")
+
+    assert finalize_response.status_code == 200
+    assert list(study.samples.order_by("sample_ID").values_list("sample_ID", "metadata")) == [
+        ("sample-1", {"concentration": 0.0, "group": "0"}),
+        ("sample-2", {"concentration": 5.0, "group": "5"}),
+    ]
+
+
+@pytest.mark.django_db
 def test_onboarding_finalize_rejects_missing_required_template_context_choices() -> None:
     client = APIClient()
     user = User.objects.create_user(username="admin", password="admin123")

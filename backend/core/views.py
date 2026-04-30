@@ -591,6 +591,60 @@ def _normalize_field_key(value: str) -> str:
     return value.strip().replace(" ", "_")
 
 
+def _prepare_final_sample_rows(
+    *,
+    study: Study,
+    flat_rows: list[dict],
+    preview_rows: list[dict],
+) -> list[dict]:
+    validated_rows = validate_sample_import_rows(
+        [
+            _build_metadata_upload_row(row, study_id=study.id)
+            for row in flat_rows
+        ]
+    )
+
+    for normalized_row, preview_row in zip(validated_rows, preview_rows, strict=False):
+        group_value = preview_row.get("group")
+        if group_value is None or str(group_value).strip() == "":
+            continue
+        metadata = normalized_row.setdefault("metadata", {})
+        if isinstance(metadata, dict):
+            metadata["group"] = str(group_value).strip()
+
+    return validated_rows
+
+
+def _flatten_onboarding_rows(state: StudyOnboardingState) -> list[dict]:
+    return [
+        _flatten_metadata_upload_row(row) if isinstance(row, dict) else row
+        for row in state.validated_rows
+        if isinstance(row, dict)
+    ]
+
+
+def _backfill_derived_sample_groups(study: Study, preview_rows: list[dict]) -> None:
+    groups_by_sample_id = {
+        str(row.get("sample_ID") or "").strip(): str(row.get("group") or "").strip()
+        for row in preview_rows
+        if str(row.get("sample_ID") or "").strip() and str(row.get("group") or "").strip()
+    }
+    if not groups_by_sample_id:
+        return
+
+    samples_to_update: list[Sample] = []
+    for sample in study.samples.filter(sample_ID__in=groups_by_sample_id):
+        metadata = dict(sample.metadata or {})
+        if metadata.get("group") not in (None, ""):
+            continue
+        metadata["group"] = groups_by_sample_id[sample.sample_ID]
+        sample.metadata = metadata
+        samples_to_update.append(sample)
+
+    if samples_to_update:
+        Sample.objects.bulk_update(samples_to_update, ["metadata"])
+
+
 def _upsert_study_template(study: Study, template_context: dict[str, object]):
     core_order = {
         "sample_ID": 0,
@@ -1045,6 +1099,7 @@ class StudyViewSet(viewsets.ModelViewSet):
         group_builder = normalize_group_builder(state.group_builder) if state is not None else DEFAULT_GROUP_BUILDER
         common_config = config.common if config is not None else {}
         pipeline_config = config.pipeline if config is not None else {}
+        exposure_bucket_key = "concentration" if "concentration" in metadata_columns and "dose" not in metadata_columns else "dose"
 
         issues: list[dict[str, object]] = []
         if total_samples == 0:
@@ -1063,8 +1118,8 @@ class StudyViewSet(viewsets.ModelViewSet):
                 {
                     "code": "missing_assays",
                     "severity": "warning",
-                    "message": f"{samples_missing_assays} {noun} missing assay metadata.",
-                    "action_label": "Filter missing assays",
+                    "message": f"{samples_missing_assays} {noun} awaiting assay setup.",
+                    "action_label": "Show awaiting assays",
                     "filter": {"assay_status": "missing"},
                 }
             )
@@ -1139,11 +1194,11 @@ class StudyViewSet(viewsets.ModelViewSet):
                 )
 
         readiness_status = "ready"
-        readiness_label = "Ready"
+        readiness_label = "Ready for handoff"
         if any(issue["severity"] == "error" for issue in issues):
             readiness_status = "error"
             readiness_label = "Blocked"
-        elif issues:
+        elif any(issue["code"] != "missing_assays" for issue in issues):
             readiness_status = "warning"
             readiness_label = "Needs attention"
 
@@ -1174,7 +1229,7 @@ class StudyViewSet(viewsets.ModelViewSet):
                 },
                 "design_summary": {
                     "groups": _top_metadata_buckets(samples, "group"),
-                    "doses": _top_metadata_buckets(samples, "dose"),
+                    "doses": _top_metadata_buckets(samples, exposure_bucket_key),
                     "chemicals": _top_metadata_buckets(samples, "chemical"),
                     "metadata_columns": metadata_columns,
                     "treatment_vars": template_context.get("treatment_vars", []),
@@ -1351,22 +1406,22 @@ class StudyViewSet(viewsets.ModelViewSet):
         if all_errors:
             return Response({"errors": all_errors}, status=status.HTTP_400_BAD_REQUEST)
 
-        if state.validated_rows and not study.samples.exists():
+        if state.validated_rows:
+            flat_rows = _flatten_onboarding_rows(state)
+            preview_rows = build_group_preview_rows(flat_rows, group_builder)
             try:
-                validated_rows = validate_sample_import_rows(
-                    [
-                        _build_metadata_upload_row(
-                            _flatten_metadata_upload_row(row) if isinstance(row, dict) else row,
-                            study_id=study.id,
-                        )
-                        for row in state.validated_rows
-                    ]
-                )
-            except SampleImportValidationError as exc:
+                validated_rows = _prepare_final_sample_rows(
+                    study=study,
+                    flat_rows=flat_rows,
+                    preview_rows=preview_rows,
+                ) if not study.samples.exists() else []
+            except SampleImportValidationError:
                 validated_rows = []
 
-            if validated_rows:
+            if validated_rows and not study.samples.exists():
                 create_samples_from_validated_rows(validated_rows)
+            elif preview_rows:
+                _backfill_derived_sample_groups(study, preview_rows)
 
         with transaction.atomic():
             state.status = StudyOnboardingState.Status.FINAL

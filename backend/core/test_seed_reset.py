@@ -182,7 +182,7 @@ class ResetSeedDataCommandTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["readiness"]["status"], "ready")
-        self.assertEqual(payload["readiness"]["label"], "Ready")
+        self.assertEqual(payload["readiness"]["label"], "Ready for handoff")
         self.assertEqual(payload["sample_summary"]["total"], 9)
         self.assertEqual(payload["sample_summary"]["solvent_controls"], 3)
         self.assertEqual(payload["assay_summary"]["samples_with_assays"], 9)

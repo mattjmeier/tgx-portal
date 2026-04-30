@@ -98,7 +98,7 @@ export function AssayForm({ onSuccess, sampleId, studyId }: AssayFormProps) {
         </div>
       </div>
       <Button className="w-full sm:w-fit" disabled={mutation.isPending} type="submit">
-        {mutation.isPending ? "Applying..." : "Apply processing metadata"}
+        {mutation.isPending ? "Applying..." : "Apply assay setup"}
       </Button>
       {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
     </form>

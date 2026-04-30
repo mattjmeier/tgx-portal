@@ -222,7 +222,8 @@ class StudyApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["study_id"], study.id)
-        self.assertEqual(payload["readiness"]["status"], "warning")
+        self.assertEqual(payload["readiness"]["status"], "ready")
+        self.assertEqual(payload["readiness"]["label"], "Ready for handoff")
         self.assertEqual(payload["sample_summary"]["total"], 3)
         self.assertEqual(payload["sample_summary"]["solvent_controls"], 1)
         self.assertEqual(payload["assay_summary"]["samples_with_assays"], 2)
@@ -231,7 +232,9 @@ class StudyApiTests(TestCase):
         self.assertIn("dose", payload["design_summary"]["metadata_columns"])
         self.assertEqual(payload["contrast_summary"]["selected_count"], 1)
         self.assertEqual(payload["config_summary"]["platform"], "RNA-Seq")
-        self.assertTrue(any(issue["code"] == "missing_assays" for issue in payload["blocking_issues"]))
+        missing_assay_issue = next(issue for issue in payload["blocking_issues"] if issue["code"] == "missing_assays")
+        self.assertEqual(missing_assay_issue["message"], "1 sample is awaiting assay setup.")
+        self.assertEqual(missing_assay_issue["action_label"], "Show awaiting assays")
 
     def test_client_cannot_read_other_project_explorer_summary(self) -> None:
         owner = User.objects.create_user(username="owner", password="client123")

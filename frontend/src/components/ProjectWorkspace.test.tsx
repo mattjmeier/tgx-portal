@@ -106,7 +106,7 @@ describe("ProjectWorkspace", () => {
     expect(screen.getAllByText(/^7$/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/^3$/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/samples in collaboration/i)).toBeInTheDocument();
-    expect(screen.getByText(/processing metadata rows/i)).toBeInTheDocument();
+    expect(screen.getByText(/assay setup rows/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /add study/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /new study/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /download config bundle/i })).not.toBeInTheDocument();
@@ -117,7 +117,7 @@ describe("ProjectWorkspace", () => {
 
     expect(await screen.findByRole("columnheader", { name: /study/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /samples/i })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: /processing metadata/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /assay setup/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /actions/i })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: /^mcf7 estrogen pulse$/i })).toHaveAttribute("href", "/studies/11");
     expect(screen.getAllByText(/breast epithelial/i).length).toBeGreaterThan(0);

@@ -160,10 +160,6 @@ function IssueIcon({ severity }: { severity: StudyExplorerIssue["severity"] }) {
   return severity === "error" ? <AlertTriangle data-icon="inline-start" /> : <CircleDashed data-icon="inline-start" />;
 }
 
-function formatIssueMessage(message: string): string {
-  return message.replace(/assay metadata/gi, "processing metadata");
-}
-
 function SampleDetailPanel({
   assays,
   isAdmin,
@@ -236,7 +232,7 @@ function SampleDetailPanel({
                     }}
                   >
                     <Plus data-icon="inline-start" />
-                    Apply processing metadata
+                    Apply assay setup
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
               </DropdownMenuContent>
@@ -275,8 +271,8 @@ function SampleDetailPanel({
 
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <h4 className="text-sm font-semibold text-foreground">Processing metadata</h4>
-            <p className="text-sm text-muted-foreground">Recorded platform and processing metadata for the selected sample.</p>
+            <h4 className="text-sm font-semibold text-foreground">Assay setup</h4>
+            <p className="text-sm text-muted-foreground">Recorded platform, genome, and quantification settings for the selected sample.</p>
           </div>
           {assays.length ? (
             <div className="grid gap-3">
@@ -292,7 +288,7 @@ function SampleDetailPanel({
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No processing metadata recorded for this sample.</p>
+            <p className="text-sm text-muted-foreground">No assay setup recorded for this sample.</p>
           )}
         </div>
       </WorkspaceSectionCard>
@@ -300,7 +296,7 @@ function SampleDetailPanel({
       <Dialog open={assayDialogOpen} onOpenChange={setAssayDialogOpen}>
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Apply processing metadata</DialogTitle>
+            <DialogTitle>Apply assay setup</DialogTitle>
             <DialogDescription>
               Record platform, genome, and quantification metadata for {sample.sample_ID}.
             </DialogDescription>
@@ -512,6 +508,8 @@ export function StudyWorkspace() {
     summary?.design_summary.metadata_columns ??
     onboardingStateQuery.data?.metadata_columns ??
     [];
+  const exposureSummaryLabel = metadataColumns.includes("concentration") && !metadataColumns.includes("dose") ? "Concentrations" : "Doses";
+  const exposureEmptyLabel = exposureSummaryLabel === "Concentrations" ? "No concentration values found." : "No dose values found.";
 
   function viewHref(view: StudyWorkspaceView): string {
     const nextParams = new URLSearchParams(searchParams);
@@ -632,9 +630,9 @@ export function StudyWorkspace() {
                 />
                 <SummaryTile label="Samples" value={summary?.sample_summary.total ?? "—"} helper="Biological metadata rows" />
                 <SummaryTile
-                  label="Processing metadata"
+                  label="Assay coverage"
                   value={summary ? `${summary.assay_summary.samples_with_assays}/${summary.sample_summary.total}` : "—"}
-                  helper={`${summary?.assay_summary.samples_missing_assays ?? 0} missing processing metadata`}
+                  helper={`${summary?.assay_summary.samples_missing_assays ?? 0} awaiting assay setup`}
                   status={summary && summary.assay_summary.samples_missing_assays > 0 ? "warning" : "ready"}
                 />
                 <SummaryTile label="Contrasts" value={summary?.contrast_summary.selected_count ?? "—"} helper={`${summary?.contrast_summary.suggested_count ?? 0} suggested`} />
@@ -653,8 +651,8 @@ export function StudyWorkspace() {
                     <BucketList buckets={summary?.design_summary.groups ?? []} emptyLabel="No groups found." />
                   </div>
                   <div className="flex flex-col gap-3">
-                    <h3 className="text-sm font-semibold text-foreground">Doses</h3>
-                    <BucketList buckets={summary?.design_summary.doses ?? []} emptyLabel="No dose values found." />
+                    <h3 className="text-sm font-semibold text-foreground">{exposureSummaryLabel}</h3>
+                    <BucketList buckets={summary?.design_summary.doses ?? []} emptyLabel={exposureEmptyLabel} />
                   </div>
                   <div className="flex flex-col gap-3">
                     <h3 className="text-sm font-semibold text-foreground">Chemicals</h3>
@@ -664,9 +662,9 @@ export function StudyWorkspace() {
 
                 <WorkspaceSectionCard
                   contentClassName="flex flex-col gap-3"
-                  description="Issues that can change whether the generated handoff is complete."
+                  description="Staff-side assay setup and handoff notes after sample metadata submission."
                   eyebrow="Review"
-                  title="Attention queue"
+                  title="Readiness notes"
                 >
                   {summary?.blocking_issues.length ? (
                     summary.blocking_issues.map((issue) => (
@@ -676,13 +674,13 @@ export function StudyWorkspace() {
                             <IssueIcon severity={issue.severity} />
                           </span>
                           <div className="flex min-w-0 flex-col gap-1">
-                            <p className="text-sm font-medium text-foreground">{formatIssueMessage(issue.message)}</p>
+                            <p className="text-sm font-medium text-foreground">{issue.message}</p>
                             <p className="text-xs text-muted-foreground">{issue.severity === "error" ? "Blocking" : "Warning"}</p>
                           </div>
                         </div>
                         {Object.keys(issue.filter).length > 0 ? (
                           <Button size="sm" type="button" variant="outline" onClick={() => applyIssueFilter(issue)}>
-                            {formatIssueMessage(issue.action_label)}
+                            {issue.action_label}
                           </Button>
                         ) : (
                           <Button asChild size="sm" variant="outline">
@@ -754,7 +752,7 @@ export function StudyWorkspace() {
           {activeView === "samples" ? (
             <section className="grid gap-4">
               {samplesQuery.isError ? <p className="error-text">Unable to load samples.</p> : null}
-              {assaysQuery.isError ? <p className="error-text">Unable to load processing metadata.</p> : null}
+              {assaysQuery.isError ? <p className="error-text">Unable to load assay setup.</p> : null}
               <SampleExplorerTable
               samples={samplesQuery.data?.results ?? []}
               totalCount={samplesQuery.data?.count ?? 0}
