@@ -20,6 +20,7 @@ from .models import (
     Assay,
     ControlledLookupValue,
     MetadataFieldDefinition,
+    PlaneWorkItemSync,
     Project,
     Sample,
     Study,
@@ -54,7 +55,7 @@ from .services import (
     validate_sample_import_rows,
     get_study_template_columns,
 )
-from .tasks import create_plane_ticket
+from .tasks import sync_study_to_plane
 from .onboarding import (
     DEFAULT_GROUP_BUILDER,
     DEFAULT_MAPPINGS,
@@ -178,6 +179,13 @@ def _profiling_platform_for_common_config(common: dict) -> ProfilingPlatform | N
     if technology_type:
         queryset = queryset.filter(technology_type=technology_type)
     return queryset.first()
+
+
+def _queue_plane_work_item_sync(study_id: int) -> None:
+    try:
+        sync_study_to_plane.delay(study_id)
+    except Exception:
+        logger.warning("Unable to queue Plane work item sync for study %s.", study_id, exc_info=True)
 
 
 def _normalize_config_sections_from_platform(config_payload: dict) -> dict:
@@ -899,11 +907,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer) -> None:
-        project = serializer.save(owner=self.request.user)
-        try:
-            create_plane_ticket.delay(project.id)
-        except Exception:
-            logger.warning("Unable to queue Plane ticket task for project %s.", project.id, exc_info=True)
+        serializer.save(owner=self.request.user)
 
     @action(detail=True, methods=["post"], url_path="generate-config")
     def generate_config(self, request, pk=None):
@@ -1308,6 +1312,7 @@ class StudyViewSet(viewsets.ModelViewSet):
         study = self.get_object()
         _require_study_access(request.user, study)
         state = _get_or_create_onboarding_state(study)
+        was_final = state.status == StudyOnboardingState.Status.FINAL
         mapping_model = _get_or_create_metadata_mapping(study)
         mappings = {**DEFAULT_MAPPINGS, **mapping_model.as_dict()}
         group_builder = normalize_group_builder(state.group_builder)
@@ -1360,6 +1365,12 @@ class StudyViewSet(viewsets.ModelViewSet):
             study.treatment_var = build_compatibility_summary(template_context.get("treatment_vars", []))
             study.batch_var = build_compatibility_summary(template_context.get("batch_vars", []))
             study.save(update_fields=["status", "treatment_var", "batch_var"])
+            existing_sync = getattr(study, "plane_work_item_sync", None)
+            has_successful_sync = (
+                existing_sync is not None and existing_sync.status == PlaneWorkItemSync.Status.SUCCEEDED
+            )
+            if not was_final and not has_successful_sync:
+                transaction.on_commit(lambda study_id=study.id: _queue_plane_work_item_sync(study_id))
         return Response(
             {
                 "study_id": study.id,

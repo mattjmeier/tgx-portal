@@ -22,14 +22,15 @@ When those APIs are added, they must be additive and must not change the existin
 
 ## External Integrations
 
-### 1. Plane Project Management (Triggered on Project Creation)
-When a `Project` is successfully saved, trigger a Celery task `create_plane_ticket`.
-* **Action**: Make a POST request to the Plane API.
+### 1. Plane Project Management (Triggered on Study Onboarding Finalization)
+When a `Study` successfully transitions to final onboarding state through `POST /api/studies/{id}/onboarding-finalize/`, trigger the Celery task `sync_study_to_plane`.
+* **Action**: Make a POST request to the Plane `/work-items/` API for the configured workspace and project.
 * **Payload mappings**:
-  * Allocate to Workspace based on `PI Name`.
-  * Issue Name = `Project.title`
-  * Issue Description = `Project.description` + Link to portal project page.
-  * Assignee = `Project.bioinformatician_assigned`.
+  * Work item name = `Onboard TGx study: {Study.title}`.
+  * Work item description = TGx project title, PI, researcher, assigned bioinformatician, study species/cell type, finalized timestamp, and portal onboarding link.
+  * Priority = `medium`.
+* **Visibility**: Store sync attempts in `PlaneWorkItemSync` and inspect them in Django admin.
+* **Idempotency**: Re-finalizing an already-final study must not create duplicate Plane work items.
 
 ### 2. Config YAML Generation & Notifications
 * Provide an endpoint: `POST /api/projects/{id}/generate-config/`

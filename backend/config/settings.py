@@ -125,3 +125,10 @@ CELERY_RESULT_BACKEND = os.environ.get(
     "redis://redis:6379/1",
 )
 CELERY_TASK_ALWAYS_EAGER = os.environ.get("CELERY_TASK_ALWAYS_EAGER", "0") == "1"
+
+PLANE_API_BASE_URL = os.environ.get("PLANE_API_BASE_URL", "http://host.docker.internal").rstrip("/")
+PLANE_API_KEY = os.environ.get("PLANE_API_KEY", "")
+PLANE_WORKSPACE_SLUG = os.environ.get("PLANE_WORKSPACE_SLUG", "")
+PLANE_PROJECT_ID = os.environ.get("PLANE_PROJECT_ID", "")
+PLANE_WEB_BASE_URL = os.environ.get("PLANE_WEB_BASE_URL", "http://localhost").rstrip("/")
+TGX_PORTAL_BASE_URL = os.environ.get("TGX_PORTAL_BASE_URL", "http://localhost:5173").rstrip("/")

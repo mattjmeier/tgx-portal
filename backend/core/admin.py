@@ -8,6 +8,7 @@ from .models import (
     Assay,
     ControlledLookupValue,
     MetadataFieldDefinition,
+    PlaneWorkItemSync,
     Project,
     Sample,
     SamplePlating,
@@ -121,6 +122,37 @@ class StudyOnboardingStateAdmin(ModelAdmin):
     list_filter = ("status", "updated_at", "finalized_at")
     autocomplete_fields = ("study",)
     readonly_fields = ("updated_at", "finalized_at")
+
+
+@admin.register(PlaneWorkItemSync)
+class PlaneWorkItemSyncAdmin(ModelAdmin):
+    list_display = (
+        "study",
+        "status",
+        "plane_workspace_slug",
+        "plane_project_id",
+        "plane_work_item_id",
+        "attempt_count",
+        "updated_at",
+    )
+    search_fields = (
+        "study__title",
+        "study__project__title",
+        "plane_workspace_slug",
+        "plane_project_id",
+        "plane_work_item_id",
+    )
+    list_filter = ("status", "plane_workspace_slug", "created_at", "updated_at")
+    autocomplete_fields = ("study",)
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "attempt_count",
+        "request_payload",
+        "response_payload",
+        "last_error",
+        "plane_work_item_url",
+    )
 
 
 admin.site.unregister(User)

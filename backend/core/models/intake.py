@@ -273,6 +273,34 @@ class StudyConfig(models.Model):
         return f"Config for study {self.study_id}"
 
 
+class PlaneWorkItemSync(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+
+    study = models.OneToOneField(Study, on_delete=models.CASCADE, related_name="plane_work_item_sync")
+    plane_workspace_slug = models.CharField(max_length=255, blank=True)
+    plane_project_id = models.CharField(max_length=255, blank=True)
+    plane_work_item_id = models.CharField(max_length=255, blank=True)
+    plane_work_item_url = models.URLField(max_length=1000, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    attempt_count = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(blank=True)
+    request_payload = models.JSONField(default=dict, blank=True)
+    response_payload = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+        verbose_name = "Plane work item sync"
+        verbose_name_plural = "Plane work item syncs"
+
+    def __str__(self) -> str:
+        return f"Plane sync for study {self.study_id} ({self.status})"
+
+
 class Sample(models.Model):
     study = models.ForeignKey(Study, on_delete=models.CASCADE, related_name="samples")
     sample_ID = models.CharField(max_length=100, validators=[sample_id_validator])
