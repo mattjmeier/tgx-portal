@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Ellipsis, FileSpreadsheet, FolderOpen, Layers3, Download, Trash2 } from "lucide-react";
+import { Download, Ellipsis, ExternalLink, FileSpreadsheet, FolderOpen, Layers3, LoaderCircle, RotateCcw, Send, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import type { PlaneSync } from "../api/studies";
 import { collaborationPath, studyWorkspacePath } from "../lib/routes";
 import { StudyDeleteDialog } from "./StudyDeleteDialog";
 import { Button } from "./ui/button";
@@ -16,6 +17,10 @@ type StudyActionsMenuProps = {
   canDownloadGeoCsv?: boolean;
   onDeleteStudy?: (studyId: number) => void;
   isDeletingStudy?: boolean;
+  planeSync?: PlaneSync | null;
+  canSyncToPlane?: boolean;
+  isSyncingToPlane?: boolean;
+  onSyncToPlane?: (studyId: number) => void;
   showOpenStudy?: boolean;
   triggerClassName?: string;
   triggerLabel?: string;
@@ -29,6 +34,10 @@ export function StudyActionsMenu({
   onDeleteStudy,
   onDownloadConfig,
   onDownloadGeoCsv,
+  canSyncToPlane = false,
+  isSyncingToPlane = false,
+  onSyncToPlane,
+  planeSync,
   showOpenStudy = true,
   studyId,
   studyTitle,
@@ -39,6 +48,17 @@ export function StudyActionsMenu({
   const accessibleLabel = triggerLabel ?? `Study actions for ${studyTitle}`;
   const [open, setOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const planeSyncStatus = planeSync?.status;
+  const hasPlaneAction = canSyncToPlane && (Boolean(onSyncToPlane) || Boolean(planeSync?.plane_work_item_url));
+  const isPlanePending = isSyncingToPlane || planeSyncStatus === "pending";
+  const planeActionLabel =
+    planeSyncStatus === "succeeded" && planeSync?.plane_work_item_url
+      ? "Open in Plane"
+      : isPlanePending
+        ? "Sending to Plane..."
+        : planeSyncStatus === "failed"
+          ? "Retry Plane sync"
+          : "Send to Plane";
 
   return (
     <>
@@ -103,6 +123,39 @@ export function StudyActionsMenu({
               <FileSpreadsheet data-icon="inline-start" />
               Download GEO CSV
             </DropdownMenuItem>
+          ) : null}
+          {hasPlaneAction ? (
+            <>
+              <DropdownMenuSeparator className="bg-sidebar-border/70" />
+              {planeSyncStatus === "succeeded" && planeSync?.plane_work_item_url ? (
+                <DropdownMenuItem asChild className="rounded-md px-2.5 py-2 focus:bg-sidebar-accent focus:text-sidebar-accent-foreground">
+                  <a href={planeSync.plane_work_item_url} rel="noreferrer" target="_blank">
+                    <ExternalLink data-icon="inline-start" />
+                    {planeActionLabel}
+                  </a>
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem
+                  className="rounded-md px-2.5 py-2 focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
+                  disabled={isPlanePending || !onSyncToPlane}
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    if (!isPlanePending && onSyncToPlane) {
+                      onSyncToPlane(studyId);
+                    }
+                  }}
+                >
+                  {isPlanePending ? (
+                    <LoaderCircle data-icon="inline-start" />
+                  ) : planeSyncStatus === "failed" ? (
+                    <RotateCcw data-icon="inline-start" />
+                  ) : (
+                    <Send data-icon="inline-start" />
+                  )}
+                  {planeActionLabel}
+                </DropdownMenuItem>
+              )}
+            </>
           ) : null}
           {onDeleteStudy ? <DropdownMenuSeparator className="bg-sidebar-border/70" /> : null}
           {onDeleteStudy ? (

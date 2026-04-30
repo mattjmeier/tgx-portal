@@ -4,7 +4,7 @@ import { ChevronRight, ClipboardList, FlaskConical, Layers3, LibraryBig, LogOut,
 import { NavLink, useLocation, useMatch, useNavigate } from "react-router-dom";
 
 import { downloadProjectConfig, fetchProject, fetchProjects } from "../api/projects";
-import { deleteStudy, fetchStudiesIndex, fetchStudy, type Study } from "../api/studies";
+import { deleteStudy, fetchStudiesIndex, fetchStudy, syncStudyToPlane, type Study } from "../api/studies";
 import { useAuth } from "../auth/AuthProvider";
 import { StudyActionsMenu } from "./StudyActionsMenu";
 import {
@@ -215,6 +215,17 @@ export function AppSidebar() {
     },
   });
 
+  const planeSyncMutation = useMutation({
+    mutationFn: syncStudyToPlane,
+    onSuccess: async (_, syncedStudyId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["study", syncedStudyId] }),
+        queryClient.invalidateQueries({ queryKey: ["studies"] }),
+        queryClient.invalidateQueries({ queryKey: ["studies-index"] }),
+      ]);
+    },
+  });
+
   return (
     <Sidebar>
       <SidebarHeader className="space-y-3">
@@ -368,8 +379,12 @@ export function AppSidebar() {
                             <StudyActionsMenu
                               collaborationId={study.project}
                               isDeletingStudy={deleteStudyMutation.isPending && deleteStudyMutation.variables === study.id}
+                              isSyncingToPlane={planeSyncMutation.isPending && planeSyncMutation.variables === study.id}
                               onDeleteStudy={deleteStudyMutation.mutate}
                               onDownloadConfig={isAdmin ? () => configMutation.mutate(study.project) : undefined}
+                              onSyncToPlane={isAdmin ? planeSyncMutation.mutate : undefined}
+                              canSyncToPlane={isAdmin && study.status === "active"}
+                              planeSync={study.plane_sync}
                               studyId={study.id}
                               studyTitle={study.title}
                               triggerClassName="size-9 shrink-0 border-transparent bg-transparent text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"

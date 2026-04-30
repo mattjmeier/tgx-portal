@@ -4,9 +4,11 @@ import { ArrowRight, Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { Project } from "../api/projects";
-import { deleteStudy, fetchStudies } from "../api/studies";
+import { deleteStudy, fetchStudies, syncStudyToPlane } from "../api/studies";
+import { useAuth } from "../auth/AuthProvider";
 import { collaborationStudyCreatePath, studyOnboardingPath, studyWorkspacePath } from "../lib/routes";
 import { clearDeletedStudyClientState } from "../lib/studyDeletion";
+import { StudyActionsMenu } from "./StudyActionsMenu";
 import { StudyDeleteDialog } from "./StudyDeleteDialog";
 import { StudiesTable } from "./StudiesTable";
 import { Button } from "./ui/button";
@@ -24,7 +26,9 @@ export function ProjectWorkspace({
   showProjectSelector = true,
 }: ProjectWorkspaceProps) {
   const queryClient = useQueryClient();
+  const auth = useAuth();
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(initialProjectId ?? projects[0]?.id ?? null);
+  const isAdmin = auth.user?.profile.role === "admin";
 
   useEffect(() => {
     const selectedProjectStillExists = projects.some((project) => project.id === selectedProjectId);
@@ -54,6 +58,17 @@ export function ProjectWorkspace({
       clearDeletedStudyClientState(queryClient, deletedStudyId);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["studies", selectedProjectId] }),
+        queryClient.invalidateQueries({ queryKey: ["studies-index"] }),
+      ]);
+    },
+  });
+
+  const planeSyncMutation = useMutation({
+    mutationFn: syncStudyToPlane,
+    onSuccess: async (_, syncedStudyId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["study", syncedStudyId] }),
+        queryClient.invalidateQueries({ queryKey: ["studies"] }),
         queryClient.invalidateQueries({ queryKey: ["studies-index"] }),
       ]);
     },
@@ -200,10 +215,24 @@ export function ProjectWorkspace({
                         <Trash2 />
                       </Button>
                     </StudyDeleteDialog>
+                    <StudyActionsMenu
+                      collaborationId={study.project}
+                      isSyncingToPlane={planeSyncMutation.isPending && planeSyncMutation.variables === study.id}
+                      onSyncToPlane={isAdmin ? planeSyncMutation.mutate : undefined}
+                      canSyncToPlane={isAdmin && study.status === "active"}
+                      planeSync={study.plane_sync}
+                      showOpenStudy={false}
+                      studyId={study.id}
+                      studyTitle={study.title}
+                      triggerClassName="shrink-0"
+                      triggerLabel={`More actions for study ${study.title}`}
+                      triggerVariant="outline"
+                    />
                   </div>
                 )}
               />
                 {deleteStudyMutation.isError ? <p className="error-text">{deleteStudyMutation.error.message}</p> : null}
+                {planeSyncMutation.isError ? <p className="error-text">{planeSyncMutation.error.message}</p> : null}
               </CardContent>
             </Card>
           </div>

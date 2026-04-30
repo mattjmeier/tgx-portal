@@ -8,7 +8,7 @@ import { fetchAssays, type Assay } from "../api/assays";
 import { downloadProjectConfig, fetchProject } from "../api/projects";
 import { fetchSamples, type Sample } from "../api/samples";
 import { fetchStudyExplorerSummary, type StudyExplorerIssue, type SummaryBucket } from "../api/studyExplorer";
-import { deleteStudy, downloadStudyGeoMetadataCsv, fetchStudy } from "../api/studies";
+import { deleteStudy, downloadStudyGeoMetadataCsv, fetchStudy, syncStudyToPlane } from "../api/studies";
 import { fetchStudyOnboardingState } from "../api/studyOnboarding";
 import { useAuth } from "../auth/AuthProvider";
 import { cn } from "../lib/utils";
@@ -425,6 +425,17 @@ export function StudyWorkspace() {
     },
   });
 
+  const planeSyncMutation = useMutation({
+    mutationFn: syncStudyToPlane,
+    onSuccess: async (_, syncedStudyId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["study", syncedStudyId] }),
+        queryClient.invalidateQueries({ queryKey: ["studies"] }),
+        queryClient.invalidateQueries({ queryKey: ["studies-index"] }),
+      ]);
+    },
+  });
+
   useEffect(() => {
     setSamplePagination((current) => ({ ...current, pageIndex: 0 }));
   }, [sampleSearch, sampleSorting, sampleFilters, studyId]);
@@ -567,10 +578,14 @@ export function StudyWorkspace() {
             <StudyActionsMenu
               collaborationId={study.project}
               isDeletingStudy={deleteStudyMutation.isPending}
+              isSyncingToPlane={planeSyncMutation.isPending && planeSyncMutation.variables === study.id}
               onDeleteStudy={deleteStudyMutation.mutate}
               onDownloadConfig={isAdmin ? () => configMutation.mutate(study.project) : undefined}
               onDownloadGeoCsv={() => geoCsvMutation.mutate(study.id)}
+              onSyncToPlane={isAdmin ? planeSyncMutation.mutate : undefined}
               canDownloadGeoCsv={Boolean(summary?.geo_summary?.can_download_csv) && !geoCsvMutation.isPending}
+              canSyncToPlane={isAdmin && study.status === "active"}
+              planeSync={study.plane_sync}
               showOpenStudy={false}
               studyId={study.id}
               studyTitle={study.title}
@@ -585,6 +600,7 @@ export function StudyWorkspace() {
       {studyQuery.isLoading ? <p>Loading study workspace...</p> : null}
       {studyQuery.isError ? <p className="error-text">Unable to load this study.</p> : null}
       {explorerSummaryQuery.isError ? <p className="error-text">Unable to load study explorer summary.</p> : null}
+      {planeSyncMutation.isError ? <p className="error-text">{planeSyncMutation.error.message}</p> : null}
 
       {study ? (
         <div className="mt-5 flex flex-col gap-6">

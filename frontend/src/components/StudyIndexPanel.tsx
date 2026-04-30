@@ -4,10 +4,12 @@ import type { PaginationState } from "@tanstack/react-table";
 import { ArrowRight, ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { deleteStudy, fetchStudiesIndex } from "../api/studies";
+import { deleteStudy, fetchStudiesIndex, syncStudyToPlane } from "../api/studies";
+import { useAuth } from "../auth/AuthProvider";
 import { collaborationPath, globalStudyCreateRoute, studyOnboardingPath, studyWorkspacePath } from "../lib/routes";
 import { clearDeletedStudyClientState } from "../lib/studyDeletion";
 import { StudyDeleteDialog } from "./StudyDeleteDialog";
+import { StudyActionsMenu } from "./StudyActionsMenu";
 import { StudiesTable } from "./StudiesTable";
 import { WorkspaceSectionCard } from "./WorkspaceSectionCard";
 import { Button } from "./ui/button";
@@ -22,6 +24,7 @@ function getStudyOrderingParam(titleSort: "asc" | "desc"): string {
 
 export function StudyIndexPanel() {
   const queryClient = useQueryClient();
+  const auth = useAuth();
   const [search, setSearch] = useState("");
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [titleSort, setTitleSort] = useState<"asc" | "desc">("asc");
@@ -43,12 +46,24 @@ export function StudyIndexPanel() {
   const pageCount = Math.max(1, Math.ceil(totalCount / pagination.pageSize));
   const firstRow = totalCount === 0 ? 0 : pagination.pageIndex * pagination.pageSize + 1;
   const lastRow = Math.min(totalCount, (pagination.pageIndex + 1) * pagination.pageSize);
+  const isAdmin = auth.user?.profile.role === "admin";
 
   const deleteStudyMutation = useMutation<void, Error, number>({
     mutationFn: deleteStudy,
     onSuccess: async (_, deletedStudyId) => {
       clearDeletedStudyClientState(queryClient, deletedStudyId);
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["studies"] }),
+        queryClient.invalidateQueries({ queryKey: ["studies-index"] }),
+      ]);
+    },
+  });
+
+  const planeSyncMutation = useMutation({
+    mutationFn: syncStudyToPlane,
+    onSuccess: async (_, syncedStudyId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["study", syncedStudyId] }),
         queryClient.invalidateQueries({ queryKey: ["studies"] }),
         queryClient.invalidateQueries({ queryKey: ["studies-index"] }),
       ]);
@@ -169,10 +184,24 @@ export function StudyIndexPanel() {
                 <Trash2 />
               </Button>
             </StudyDeleteDialog>
+            <StudyActionsMenu
+              collaborationId={study.project}
+              isSyncingToPlane={planeSyncMutation.isPending && planeSyncMutation.variables === study.id}
+              onSyncToPlane={isAdmin ? planeSyncMutation.mutate : undefined}
+              canSyncToPlane={isAdmin && study.status === "active"}
+              planeSync={study.plane_sync}
+              showOpenStudy={false}
+              studyId={study.id}
+              studyTitle={study.title}
+              triggerClassName="shrink-0"
+              triggerLabel={`More actions for study ${study.title}`}
+              triggerVariant="outline"
+            />
           </div>
         )}
       />
       {deleteStudyMutation.isError ? <p className="text-sm text-destructive">{deleteStudyMutation.error.message}</p> : null}
+      {planeSyncMutation.isError ? <p className="text-sm text-destructive">{planeSyncMutation.error.message}</p> : null}
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <p className="text-sm text-muted-foreground">

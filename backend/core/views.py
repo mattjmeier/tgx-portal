@@ -188,6 +188,19 @@ def _queue_plane_work_item_sync(study_id: int) -> None:
         logger.warning("Unable to queue Plane work item sync for study %s.", study_id, exc_info=True)
 
 
+def _serialize_plane_sync(sync: PlaneWorkItemSync | None) -> dict | None:
+    if sync is None:
+        return None
+    return {
+        "status": sync.status,
+        "attempt_count": sync.attempt_count,
+        "last_error": sync.last_error,
+        "plane_work_item_id": sync.plane_work_item_id,
+        "plane_work_item_url": sync.plane_work_item_url,
+        "updated_at": sync.updated_at.isoformat() if sync.updated_at else None,
+    }
+
+
 def _normalize_config_sections_from_platform(config_payload: dict) -> dict:
     normalized = {
         section: dict(config_payload.get(section) or {})
@@ -1386,6 +1399,43 @@ class StudyViewSet(viewsets.ModelViewSet):
                 "finalized_at": state.finalized_at.isoformat(),
             }
         )
+
+    @action(detail=True, methods=["post"], url_path="sync-plane")
+    def sync_plane(self, request, pk=None):
+        _require_admin(request.user)
+        study = self.get_object()
+        state = getattr(study, "onboarding_state", None)
+        if state is None or state.status != StudyOnboardingState.Status.FINAL:
+            return Response(
+                {"detail": "Finalize study onboarding before sending the study to Plane."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        sync = getattr(study, "plane_work_item_sync", None)
+        if sync is not None and sync.status in {
+            PlaneWorkItemSync.Status.SUCCEEDED,
+            PlaneWorkItemSync.Status.PENDING,
+        }:
+            return Response({"plane_sync": _serialize_plane_sync(sync)})
+
+        with transaction.atomic():
+            sync, _ = PlaneWorkItemSync.objects.get_or_create(study=study)
+            sync.status = PlaneWorkItemSync.Status.PENDING
+            sync.last_error = ""
+            sync.plane_workspace_slug = ""
+            sync.plane_project_id = ""
+            sync.save(
+                update_fields=[
+                    "status",
+                    "last_error",
+                    "plane_workspace_slug",
+                    "plane_project_id",
+                    "updated_at",
+                ]
+            )
+            transaction.on_commit(lambda study_id=study.id: _queue_plane_work_item_sync(study_id))
+
+        return Response({"plane_sync": _serialize_plane_sync(sync)}, status=status.HTTP_202_ACCEPTED)
 
 
 class SampleViewSet(viewsets.ModelViewSet):

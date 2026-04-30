@@ -14,6 +14,20 @@ export type Study = {
   batch_var: string | null;
   sample_count?: number;
   assay_count?: number;
+  plane_sync?: PlaneSync | null;
+};
+
+export type PlaneSync = {
+  status: "pending" | "succeeded" | "failed";
+  attempt_count: number;
+  last_error: string;
+  plane_work_item_id: string;
+  plane_work_item_url: string;
+  updated_at: string | null;
+};
+
+export type PlaneSyncResponse = {
+  plane_sync: PlaneSync;
 };
 
 export type CreateStudyPayload = {
@@ -117,6 +131,18 @@ export async function deleteStudy(studyId: number): Promise<void> {
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response, "Failed to delete the study."));
   }
+}
+
+export async function syncStudyToPlane(studyId: number): Promise<PlaneSyncResponse> {
+  const response = await apiFetch(`${apiBaseUrl}/api/studies/${studyId}/sync-plane/`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response, "Failed to send the study to Plane."));
+  }
+
+  return response.json();
 }
 
 function parseAttachmentFilename(contentDisposition: string | null): string | null {

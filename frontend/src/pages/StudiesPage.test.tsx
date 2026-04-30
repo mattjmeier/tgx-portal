@@ -60,6 +60,17 @@ vi.mock("../api/studies", async () => {
   };
 });
 
+vi.mock("../auth/AuthProvider", () => ({
+  useAuth: () => ({
+    isLoading: false,
+    isAuthenticated: true,
+    user: {
+      username: "admin",
+      profile: { role: "admin" as const },
+    },
+  }),
+}));
+
 function renderPage() {
   const queryClient = new QueryClient({
     defaultOptions: {

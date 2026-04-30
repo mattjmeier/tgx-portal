@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from pydantic import ValidationError as PydanticValidationError
 from rest_framework import serializers
 
-from .models import Assay, Project, Sample, Study, StudyConfig, UserProfile
+from .models import Assay, PlaneWorkItemSync, Project, Sample, Study, StudyConfig, UserProfile
 from .services import validate_sample_payload
 
 User = get_user_model()
@@ -47,6 +47,7 @@ class StudySerializer(serializers.ModelSerializer):
     config = serializers.SerializerMethodField()
     metadata_mapping = serializers.SerializerMethodField()
     metadata_template = serializers.SerializerMethodField()
+    plane_sync = serializers.SerializerMethodField()
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         instance = getattr(self, "instance", None)
@@ -89,6 +90,7 @@ class StudySerializer(serializers.ModelSerializer):
             "config",
             "metadata_mapping",
             "metadata_template",
+            "plane_sync",
             "sample_count",
             "assay_count",
         ]
@@ -123,6 +125,24 @@ class StudySerializer(serializers.ModelSerializer):
             }
             for selection in obj.metadata_field_selections.select_related("field_definition").filter(is_active=True).order_by("sort_order", "id")
         ]
+
+    def get_plane_sync(self, obj: Study) -> dict[str, Any] | None:
+        request = self.context.get("request")
+        role = getattr(getattr(getattr(request, "user", None), "profile", None), "role", None)
+        if role != UserProfile.Role.ADMIN:
+            return None
+
+        sync: PlaneWorkItemSync | None = getattr(obj, "plane_work_item_sync", None)
+        if sync is None:
+            return None
+        return {
+            "status": sync.status,
+            "attempt_count": sync.attempt_count,
+            "last_error": sync.last_error,
+            "plane_work_item_id": sync.plane_work_item_id,
+            "plane_work_item_url": sync.plane_work_item_url,
+            "updated_at": sync.updated_at.isoformat() if sync.updated_at else None,
+        }
 
 
 class SampleSerializer(serializers.ModelSerializer):
