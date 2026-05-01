@@ -1,28 +1,21 @@
 import react from "@vitejs/plugin-react";
 import http from "node:http";
 import path from "node:path";
+import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
-const djangoDevProxyPath = /^\/(admin|api|static|media)(\/.*)?$/;
+import { shouldProxyToDjango } from "./viteProxy";
 
-function djangoDevProxyPlugin() {
+type ProxyMiddleware = (req: http.IncomingMessage, res: http.ServerResponse, next: () => void) => void;
+type MiddlewareStack = Array<{ route: string; handle: ProxyMiddleware }>;
+
+function djangoDevProxyPlugin(): Plugin {
   return {
     name: "django-dev-proxy",
-    configureServer(server: {
-      middlewares: {
-        stack?: Array<{ route: string; handle: (req: http.IncomingMessage, res: http.ServerResponse, next: () => void) => void }>;
-        use: (
-          handler: (
-            req: http.IncomingMessage,
-            res: http.ServerResponse,
-            next: () => void,
-          ) => void,
-        ) => void;
-      };
-    }) {
-      const middleware = (req: http.IncomingMessage, res: http.ServerResponse, next: () => void) => {
+    configureServer(server) {
+      const middleware: ProxyMiddleware = (req, res, next) => {
         const requestPath = req.url ?? "/";
-        if (!djangoDevProxyPath.test(requestPath)) {
+        if (!shouldProxyToDjango(requestPath)) {
           next();
           return;
         }
@@ -52,8 +45,9 @@ function djangoDevProxyPlugin() {
         req.pipe(proxyRequest, { end: true });
       };
 
-      if (Array.isArray(server.middlewares.stack)) {
-        server.middlewares.stack.unshift({ route: "", handle: middleware });
+      const stack = (server.middlewares as unknown as { stack?: MiddlewareStack }).stack;
+      if (Array.isArray(stack)) {
+        stack.unshift({ route: "", handle: middleware });
         return;
       }
 

@@ -142,4 +142,11 @@ describe("App routes", () => {
     expect(screen.getByText("Study onboarding page")).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/studies/11/onboarding");
   });
+
+  it("serves the admin user management route from the React app", () => {
+    renderApp("/admin/users");
+
+    expect(screen.getByText("Admin page")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/admin/users");
+  });
 });
