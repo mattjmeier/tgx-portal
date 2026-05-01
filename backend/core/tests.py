@@ -2,6 +2,7 @@ import csv
 from io import BytesIO, StringIO
 from zipfile import ZipFile
 
+import yaml
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -469,6 +470,31 @@ class ConfigGenerationApiTests(TestCase):
         self.assertIn("platform: RNA-Seq", config_yaml)
         self.assertIn("sample_ID", metadata_tsv)
         self.assertIn("reference_group\tcomparison_group", contrasts_tsv)
+
+    def test_generated_config_writes_multiple_batch_vars_as_yaml_list(self) -> None:
+        mapping = self.study.metadata_mapping
+        mapping.batch = "plate"
+        mapping.batch_columns = ["plate", "library_batch"]
+        mapping.save()
+        state = self.study.onboarding_state
+        state.metadata_columns = [
+            "sample_ID",
+            "technical_control",
+            "reference_rna",
+            "solvent_control",
+            "group",
+            "dose",
+            "plate",
+            "library_batch",
+        ]
+        state.save(update_fields=["metadata_columns"])
+
+        response = self.client.post(f"/api/projects/{self.project.id}/generate-config/")
+
+        self.assertEqual(response.status_code, 200)
+        with ZipFile(BytesIO(response.content)) as archive:
+            config = yaml.safe_load(archive.read("config_generation_study/config.yaml").decode("utf-8"))
+        self.assertEqual(config["common"]["batch_var"], ["plate", "library_batch"])
 
     def test_generate_config_uses_derived_group_from_onboarding_rows(self) -> None:
         state = self.study.onboarding_state

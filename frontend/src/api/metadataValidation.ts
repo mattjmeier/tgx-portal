@@ -24,6 +24,13 @@ export type ValidateMetadataUploadResponse = {
     reference_group: string;
     comparison_group: string;
   }>;
+  design_warnings?: Array<{
+    code: string;
+    message: string;
+    severity: "warning";
+    columns?: string[];
+    groups?: string[];
+  }>;
 };
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";

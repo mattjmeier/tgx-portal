@@ -646,6 +646,19 @@ def _build_study_config_payload(project: Project, study: Study, assays: list[Ass
     if not platform_label:
         raise ConfigGenerationError(f"Study {study.id} is missing a platform selection for config generation.")
 
+    batch_columns = [
+        str(value).strip()
+        for value in mapping.get("batch_columns", [])
+        if str(value).strip()
+    ] if isinstance(mapping.get("batch_columns"), list) else []
+    batch_var: str | list[str] | None
+    if len(batch_columns) > 1:
+        batch_var = batch_columns
+    elif len(batch_columns) == 1:
+        batch_var = batch_columns[0]
+    else:
+        batch_var = mapping.get("batch") or None
+
     payload["common"].update(
         {
             "projectdir": payload["common"].get("projectdir"),
@@ -654,7 +667,7 @@ def _build_study_config_payload(project: Project, study: Study, assays: list[Ass
             "bioinformatician_name": project.bioinformatician_assigned,
             "project_description": project.description or None,
             "platform": platform_label,
-            "batch_var": mapping.get("batch") or None,
+            "batch_var": batch_var,
             "celltype": study.celltype or "",
         }
     )

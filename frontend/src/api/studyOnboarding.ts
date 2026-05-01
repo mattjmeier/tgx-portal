@@ -11,6 +11,7 @@ export type StudyOnboardingGroupBuilder = {
   primary_column: string;
   additional_columns: string[];
   batch_column: string;
+  batch_columns: string[];
 };
 
 export type StudyTemplateContext = {
@@ -30,6 +31,7 @@ export type StudyOnboardingMappings = {
   treatment_level_4: string;
   treatment_level_5: string;
   batch: string;
+  batch_columns: string[];
   pca_color: string;
   pca_shape: string;
   pca_alpha: string;
@@ -56,6 +58,13 @@ export type StudyOnboardingState = {
   config: StudyOnboardingConfig;
   suggested_contrasts: ContrastPair[];
   selected_contrasts: ContrastPair[];
+  design_warnings: Array<{
+    code: string;
+    message: string;
+    severity: "warning";
+    columns?: string[];
+    groups?: string[];
+  }>;
   analysis_notes: string;
   updated_at: string | null;
   finalized_at: string | null;

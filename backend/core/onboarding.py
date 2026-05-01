@@ -23,6 +23,7 @@ class StudyOnboardingMappingsSchema(BaseModel):
     treatment_level_4: str = ""
     treatment_level_5: str = ""
     batch: str = ""
+    batch_columns: list[str] = Field(default_factory=list)
     pca_color: str = ""
     pca_shape: str = ""
     pca_alpha: str = ""
@@ -31,7 +32,16 @@ class StudyOnboardingMappingsSchema(BaseModel):
 
     def normalized(self) -> dict[str, str]:
         dumped = self.model_dump()
-        return {key: value.strip() for key, value in dumped.items() if isinstance(value, str)}
+        batch = (self.batch or "").strip()
+        batch_columns = _normalize_list(self.batch_columns)
+        if not batch_columns and batch:
+            batch_columns = [batch]
+        if not batch and batch_columns:
+            batch = batch_columns[0]
+        normalized = {key: value.strip() for key, value in dumped.items() if isinstance(value, str)}
+        normalized["batch"] = batch
+        normalized["batch_columns"] = batch_columns
+        return normalized
 
 
 DEFAULT_MAPPINGS: dict[str, str] = StudyOnboardingMappingsSchema().model_dump()
@@ -43,6 +53,7 @@ class StudyGroupBuilderSchema(BaseModel):
     primary_column: str = ""
     additional_columns: list[str] = Field(default_factory=list)
     batch_column: str = ""
+    batch_columns: list[str] = Field(default_factory=list)
 
     def normalized(self) -> dict[str, Any]:
         primary_column = (self.primary_column or "").strip()
@@ -50,10 +61,17 @@ class StudyGroupBuilderSchema(BaseModel):
             value for value in _normalize_list(self.additional_columns)
             if value != primary_column
         ]
+        batch_column = (self.batch_column or "").strip()
+        batch_columns = _normalize_list(self.batch_columns)
+        if not batch_columns and batch_column:
+            batch_columns = [batch_column]
+        if not batch_column and batch_columns:
+            batch_column = batch_columns[0]
         return {
             "primary_column": primary_column,
             "additional_columns": additional_columns,
-            "batch_column": (self.batch_column or "").strip(),
+            "batch_column": batch_column,
+            "batch_columns": batch_columns,
         }
 
 EXPOSURE_LABEL_MODES = {"dose", "concentration", "both", "custom"}
@@ -312,6 +330,11 @@ def validate_final_ready(*, metadata_columns: list[str], mappings: dict[str, str
         )
         if (mappings.get(key) or "").strip()
     ]
+    selected_columns.extend(
+        value
+        for value in _normalize_list(mappings.get("batch_columns", []))
+        if value not in selected_columns
+    )
 
     duplicates: set[str] = {col for col in selected_columns if selected_columns.count(col) > 1}
     for value in sorted(duplicates):
@@ -321,6 +344,120 @@ def validate_final_ready(*, metadata_columns: list[str], mappings: dict[str, str
         errors.append({"field": "mappings", "message": f"Mapping column '{value}' is not present in the last uploaded metadata."})
 
     return errors
+
+
+def _matrix_rank(matrix: list[list[float]]) -> int:
+    if not matrix:
+        return 0
+    rows = [row[:] for row in matrix]
+    row_count = len(rows)
+    column_count = len(rows[0]) if rows[0] else 0
+    rank = 0
+    tolerance = 1e-9
+
+    for column in range(column_count):
+        pivot = None
+        for row in range(rank, row_count):
+            if abs(rows[row][column]) > tolerance:
+                pivot = row
+                break
+        if pivot is None:
+            continue
+        rows[rank], rows[pivot] = rows[pivot], rows[rank]
+        pivot_value = rows[rank][column]
+        rows[rank] = [value / pivot_value for value in rows[rank]]
+        for row in range(row_count):
+            if row == rank:
+                continue
+            factor = rows[row][column]
+            if abs(factor) <= tolerance:
+                continue
+            rows[row] = [
+                value - factor * pivot_value
+                for value, pivot_value in zip(rows[row], rows[rank], strict=False)
+            ]
+        rank += 1
+        if rank == row_count:
+            break
+    return rank
+
+
+def _categorical_design_columns(rows: list[dict[str, Any]], column: str) -> list[list[float]]:
+    values = sorted({str(row.get(column) or "").strip() for row in rows if str(row.get(column) or "").strip()})
+    if len(values) <= 1:
+        return []
+    encoded_values = values[1:]
+    return [
+        [1.0 if str(row.get(column) or "").strip() == value else 0.0 for row in rows]
+        for value in encoded_values
+    ]
+
+
+def _transpose(columns: list[list[float]]) -> list[list[float]]:
+    if not columns:
+        return []
+    return [list(row) for row in zip(*columns, strict=False)]
+
+
+def detect_batch_confounding_warnings(
+    rows: list[dict[str, Any]],
+    *,
+    group_column: str,
+    batch_columns: list[str],
+) -> list[dict[str, Any]]:
+    normalized_batch_columns = _normalize_list(batch_columns)
+    if not rows or not group_column or not normalized_batch_columns:
+        return []
+
+    usable_rows = [
+        row for row in rows
+        if str(row.get(group_column) or "").strip()
+        and all(str(row.get(column) or "").strip() for column in normalized_batch_columns)
+    ]
+    groups = sorted({str(row.get(group_column) or "").strip() for row in usable_rows})
+    if len(usable_rows) < 2 or len(groups) < 2:
+        return []
+
+    design_columns: list[list[float]] = [[1.0 for _row in usable_rows]]
+    for batch_column in normalized_batch_columns:
+        design_columns.extend(_categorical_design_columns(usable_rows, batch_column))
+    design_columns.extend(_categorical_design_columns(usable_rows, group_column))
+
+    matrix = _transpose(design_columns)
+    rank = _matrix_rank(matrix)
+    if rank == len(design_columns):
+        return []
+
+    column_label = ", ".join(normalized_batch_columns)
+    group_label = ", ".join(groups)
+    return [
+        {
+            "code": "batch_confounding",
+            "severity": "warning",
+            "columns": normalized_batch_columns,
+            "groups": groups,
+            "message": (
+                f"Batch covariate {column_label} is confounded with experimental group "
+                f"({group_label}). DESeq2 may not be able to separate batch effects from treatment effects."
+            ),
+        }
+    ]
+
+
+def get_design_warnings(
+    rows: list[dict[str, Any]],
+    group_builder: dict[str, Any],
+) -> list[dict[str, Any]]:
+    normalized_builder = normalize_group_builder(group_builder)
+    preview_rows = build_group_preview_rows(rows, normalized_builder)
+    batch_columns = normalized_builder.get("batch_columns") or (
+        [normalized_builder["batch_column"]] if normalized_builder.get("batch_column") else []
+    )
+    return detect_batch_confounding_warnings(
+        preview_rows,
+        group_column="group",
+        batch_columns=batch_columns,
+    )
 
 
 def validate_template_context_for_finalize(

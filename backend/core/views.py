@@ -63,6 +63,7 @@ from .onboarding import (
     build_group_preview_rows,
     build_compatibility_summary,
     get_effective_metadata_columns,
+    get_design_warnings,
     get_design_selected_field_keys,
     normalize_contrast_pairs,
     normalize_group_builder,
@@ -925,6 +926,7 @@ class MetadataValidationViewSet(viewsets.ViewSet):
         state = _get_or_create_onboarding_state(study)
         derived_preview_rows = build_group_preview_rows(preview_rows, state.group_builder)
         suggested_contrasts = suggest_contrasts_from_rows(derived_preview_rows)
+        design_warnings = get_design_warnings(preview_rows, state.group_builder)
         state.metadata_columns = columns
         state.validated_rows = preview_rows
         state.suggested_contrasts = suggested_contrasts
@@ -938,6 +940,7 @@ class MetadataValidationViewSet(viewsets.ViewSet):
                 "columns": columns,
                 "validated_rows": preview_rows,
                 "suggested_contrasts": suggested_contrasts,
+                "design_warnings": design_warnings,
             }
         )
 
@@ -1356,6 +1359,7 @@ class StudyViewSet(viewsets.ModelViewSet):
 
         mapping_model = _get_or_create_metadata_mapping(study)
         config = _get_or_create_study_config(study)
+        design_warnings = get_design_warnings(state.validated_rows, state.group_builder)
         return Response(
             {
                 "study_id": study.id,
@@ -1367,6 +1371,7 @@ class StudyViewSet(viewsets.ModelViewSet):
                 "template_context": normalize_template_context(state.template_context),
                 "suggested_contrasts": state.suggested_contrasts,
                 "selected_contrasts": mapping_model.selected_contrasts,
+                "design_warnings": design_warnings,
                 "analysis_notes": state.analysis_notes,
                 "template_columns": get_study_template_columns(study),
                 "config": {
@@ -1455,6 +1460,7 @@ class StudyViewSet(viewsets.ModelViewSet):
                 "template_context": template_context,
                 "suggested_contrasts": state.suggested_contrasts,
                 "selected_contrasts": mapping_model.selected_contrasts,
+                "design_warnings": get_design_warnings(state.validated_rows, group_builder),
                 "analysis_notes": state.analysis_notes,
                 "updated_at": state.updated_at.isoformat(),
                 "finalized_at": state.finalized_at.isoformat(),

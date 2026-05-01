@@ -4,7 +4,7 @@ from rest_framework.test import APIClient
 
 from profiling.models import ProfilingPlatform
 
-from .onboarding import build_group_preview_rows, suggest_contrasts_from_rows
+from .onboarding import build_group_preview_rows, detect_batch_confounding_warnings, suggest_contrasts_from_rows
 from .models import Assay, MetadataFieldDefinition, Project, Sample, Study, StudyMetadataFieldSelection, UserProfile
 
 
@@ -62,6 +62,54 @@ def test_suggest_contrasts_from_rows_matches_controls_with_shared_context() -> N
     ]
 
 
+def test_detect_batch_confounding_warnings_allows_balanced_batches() -> None:
+    rows = [
+        {"group": "control", "plate": "plate-1", "library_batch": "lib-a"},
+        {"group": "treated", "plate": "plate-1", "library_batch": "lib-b"},
+        {"group": "control", "plate": "plate-2", "library_batch": "lib-a"},
+        {"group": "treated", "plate": "plate-2", "library_batch": "lib-b"},
+    ]
+
+    assert detect_batch_confounding_warnings(rows, group_column="group", batch_columns=["plate"]) == []
+
+
+def test_detect_batch_confounding_warnings_flags_perfect_confounding() -> None:
+    rows = [
+        {"group": "control", "plate": "plate-1"},
+        {"group": "control", "plate": "plate-1"},
+        {"group": "treated", "plate": "plate-2"},
+        {"group": "treated", "plate": "plate-2"},
+    ]
+
+    warnings = detect_batch_confounding_warnings(rows, group_column="group", batch_columns=["plate"])
+
+    assert len(warnings) == 1
+    assert warnings[0]["severity"] == "warning"
+    assert warnings[0]["code"] == "batch_confounding"
+    assert "plate" in warnings[0]["message"]
+    assert "control" in warnings[0]["message"]
+    assert "treated" in warnings[0]["message"]
+
+
+def test_detect_batch_confounding_warnings_reports_multiple_batch_columns() -> None:
+    rows = [
+        {"group": "control", "plate": "plate-1", "library_batch": "lib-a"},
+        {"group": "treated", "plate": "plate-2", "library_batch": "lib-b"},
+        {"group": "control", "plate": "plate-1", "library_batch": "lib-a"},
+        {"group": "treated", "plate": "plate-2", "library_batch": "lib-b"},
+    ]
+
+    warnings = detect_batch_confounding_warnings(
+        rows,
+        group_column="group",
+        batch_columns=["plate", "library_batch"],
+    )
+
+    assert len(warnings) == 1
+    assert warnings[0]["columns"] == ["plate", "library_batch"]
+    assert "plate, library_batch" in warnings[0]["message"]
+
+
 @pytest.mark.django_db
 def test_metadata_validation_returns_columns_and_contrast_suggestions() -> None:
     client = APIClient()
@@ -98,6 +146,66 @@ def test_metadata_validation_returns_columns_and_contrast_suggestions() -> None:
     assert payload["valid"] is True
     assert payload["columns"] == ["group", "reference_rna", "sample_ID", "solvent_control", "technical_control"]
     assert payload["suggested_contrasts"] == [{"reference_group": "control", "comparison_group": "treated"}]
+
+
+@pytest.mark.django_db
+def test_metadata_validation_returns_batch_confounding_warnings() -> None:
+    client = APIClient()
+    user = User.objects.create_user(username="admin", password="admin123")
+    user.profile.role = UserProfile.Role.ADMIN
+    user.profile.save()
+    client.force_authenticate(user=user)
+
+    project = Project.objects.create(
+        owner=user,
+        pi_name="Dr. Curie",
+        researcher_name="Researcher A",
+        bioinformatician_assigned="Bioinfo",
+        title="Mercury tox study",
+        description="",
+    )
+    study = Study.objects.create(project=project, title="Confounded study", species=Study.Species.HUMAN, celltype="Hepatocyte")
+    MetadataFieldDefinition.objects.create(
+        key="plate",
+        label="Plate",
+        group="Study design",
+        description="Batch plate.",
+        system_key="plate",
+        data_type="string",
+        kind="standard",
+    )
+    _select_fields(study, "sample_ID", "technical_control", "reference_rna", "solvent_control", "group", "plate")
+    client.patch(
+        f"/api/studies/{study.id}/onboarding-state/",
+        {
+            "group_builder": {
+                "primary_column": "group",
+                "additional_columns": [],
+                "batch_column": "plate",
+                "batch_columns": ["plate"],
+            },
+            "mappings": {"treatment_level_1": "group", "batch": "plate", "batch_columns": ["plate"]},
+        },
+        format="json",
+    )
+
+    response = client.post(
+        "/api/metadata-validation/",
+        {
+            "study_id": study.id,
+            "rows": [
+                {"sample_ID": "sample-1", "technical_control": "F", "reference_rna": "F", "solvent_control": "T", "group": "control", "plate": "plate-1"},
+                {"sample_ID": "sample-2", "technical_control": "F", "reference_rna": "F", "solvent_control": "F", "group": "treated", "plate": "plate-2"},
+            ],
+        },
+        format="json",
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["valid"] is True
+    assert payload["design_warnings"][0]["code"] == "batch_confounding"
+    assert payload["design_warnings"][0]["columns"] == ["plate"]
 
 
 @pytest.mark.django_db

@@ -40,6 +40,7 @@ let mockOnboardingState = {
     treatment_level_4: "",
     treatment_level_5: "",
     batch: "",
+    batch_columns: [] as string[],
     pca_color: "",
     pca_shape: "",
     pca_alpha: "",
@@ -50,6 +51,7 @@ let mockOnboardingState = {
     primary_column: "",
     additional_columns: [] as string[],
     batch_column: "",
+    batch_columns: [] as string[],
   },
   template_context: {
     study_design_elements: [] as string[],
@@ -80,6 +82,7 @@ let mockOnboardingState = {
   },
   suggested_contrasts: [{ reference_group: "control", comparison_group: "treated" }],
   selected_contrasts: [] as Array<{ reference_group: string; comparison_group: string }>,
+  design_warnings: [] as Array<{ code: string; message: string; severity: "warning"; columns?: string[] }>,
   analysis_notes: "",
   updated_at: "2026-04-08T00:00:00.000Z",
   finalized_at: null as string | null,
@@ -124,7 +127,7 @@ vi.mock("../../api/studyOnboarding", async () => {
         ...mockOnboardingState,
         ...(payload.template_context ? { template_context: payload.template_context } : {}),
         ...(payload.mappings ? { mappings: { ...mockOnboardingState.mappings, ...payload.mappings } } : {}),
-        ...(payload.group_builder ? { group_builder: payload.group_builder as typeof mockOnboardingState.group_builder } : {}),
+        ...(payload.group_builder ? { group_builder: { ...mockOnboardingState.group_builder, ...(payload.group_builder as typeof mockOnboardingState.group_builder) } } : {}),
         ...(payload.selected_contrasts ? { selected_contrasts: payload.selected_contrasts as typeof mockOnboardingState.selected_contrasts } : {}),
         ...(typeof payload.analysis_notes === "string" ? { analysis_notes: payload.analysis_notes } : {}),
         ...(payload.config
@@ -161,6 +164,7 @@ vi.mock("../../api/studyOnboarding", async () => {
         ...mockOnboardingState.mappings,
         treatment_level_1: mockOnboardingState.template_context.treatment_vars[0] ?? "",
         batch: mockOnboardingState.template_context.batch_vars[0] ?? "",
+        batch_columns: mockOnboardingState.template_context.batch_vars,
       },
       finalized_at: "2026-04-08T00:00:00.000Z",
     })),
@@ -341,6 +345,26 @@ vi.mock("../../api/lookups", async () => {
           description: "Primary batch grouping.",
           scope: "sample",
           system_key: "plate",
+          data_type: "string",
+          kind: "standard",
+          required: false,
+          is_core: false,
+          allow_null: true,
+          choices: [],
+          regex: "",
+          min_value: null,
+          max_value: null,
+          auto_include_keys: [],
+          wizard_featured: false,
+          wizard_featured_order: 0,
+        },
+        {
+          key: "operator",
+          label: "Operator",
+          group: "Study design",
+          description: "Library preparation operator.",
+          scope: "sample",
+          system_key: "operator",
           data_type: "string",
           kind: "standard",
           required: false,
@@ -746,6 +770,7 @@ describe("StudyOnboardingWizard", () => {
         treatment_level_4: "",
         treatment_level_5: "",
         batch: "",
+        batch_columns: [],
         pca_color: "",
         pca_shape: "",
         pca_alpha: "",
@@ -756,6 +781,7 @@ describe("StudyOnboardingWizard", () => {
         primary_column: "",
         additional_columns: [],
         batch_column: "",
+        batch_columns: [],
       },
       template_context: {
         study_design_elements: [],
@@ -786,6 +812,7 @@ describe("StudyOnboardingWizard", () => {
       },
       suggested_contrasts: [{ reference_group: "control", comparison_group: "treated" }],
       selected_contrasts: [],
+      design_warnings: [],
       analysis_notes: "",
       updated_at: "2026-04-08T00:00:00.000Z",
       finalized_at: null,
@@ -1068,6 +1095,19 @@ describe("StudyOnboardingWizard", () => {
     expect(screen.getByText("operator")).toBeInTheDocument();
   });
 
+  it("adds suggested batch variables as chips when the suggestion is selected", async () => {
+    renderWizard("/studies/11/onboarding?step=design");
+
+    fireEvent.click(await screen.findByRole("button", { name: /Batch/i }));
+    const batchInput = screen.getByLabelText("Batch vars");
+
+    fireEvent.change(batchInput, { target: { value: "plate" } });
+
+    expect(screen.getByText("plate")).toBeInTheDocument();
+    expect(batchInput).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+  });
+
   it("shows blocking design guidance inside the relevant cards", async () => {
     renderWizard("/studies/11/onboarding?step=design");
 
@@ -1159,6 +1199,26 @@ describe("StudyOnboardingWizard", () => {
     expect(screen.queryByTestId("template-field-checkbox-CASN")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add custom field/i })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Custom field name")).toBeInTheDocument();
+  });
+
+  it("shows all template batch variables as checked and locked metadata fields", async () => {
+    mockOnboardingState.template_context = {
+      study_design_elements: ["batch"],
+      exposure_label_mode: null,
+      exposure_custom_label: "",
+      treatment_vars: [],
+      batch_vars: ["plate", "operator"],
+      optional_field_keys: [],
+      custom_field_keys: [],
+    };
+
+    renderWizard("/studies/11/onboarding?step=metadata");
+
+    expect(await screen.findByRole("heading", { name: "Finalize and download template" })).toBeInTheDocument();
+    expect(await screen.findByTestId("template-field-checkbox-plate")).toHaveAttribute("data-state", "checked");
+    expect(screen.getByTestId("template-field-checkbox-plate")).toBeDisabled();
+    expect(screen.getByTestId("template-field-checkbox-operator")).toHaveAttribute("data-state", "checked");
+    expect(screen.getByTestId("template-field-checkbox-operator")).toBeDisabled();
   });
 
   it("shows only backend-featured custom chips ordered by featured order", async () => {
@@ -1305,7 +1365,7 @@ describe("StudyOnboardingWizard", () => {
     expect(await screen.findByRole("heading", { name: "Review & finalize" })).toBeInTheDocument();
     expect(await screen.findByText("Primary grouping variable")).toBeInTheDocument();
     expect(await screen.findByText("Computed group = group")).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Batch column" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Batch columns" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Save draft/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Generate outputs/i })).not.toBeInTheDocument();
@@ -1319,10 +1379,12 @@ describe("StudyOnboardingWizard", () => {
           group_builder: expect.objectContaining({
             primary_column: "group",
             batch_column: "plate",
+            batch_columns: ["plate"],
           }),
           mappings: expect.objectContaining({
             treatment_level_1: "group",
             batch: "plate",
+            batch_columns: ["plate"],
           }),
         }),
       ),
@@ -1335,6 +1397,88 @@ describe("StudyOnboardingWizard", () => {
       }),
     );
     expect(await screen.findByTestId("location")).toHaveTextContent("/studies/11");
+  });
+
+  it("allows multiple final-review batch columns and persists them", async () => {
+    mockOnboardingState.template_context = {
+      study_design_elements: ["treatment", "batch"],
+      exposure_label_mode: null,
+      exposure_custom_label: "",
+      treatment_vars: ["group"],
+      batch_vars: ["plate"],
+      optional_field_keys: [],
+      custom_field_keys: [],
+    };
+    mockOnboardingState.metadata_columns = ["group", "plate", "operator", "sample_ID", "technical_control", "reference_rna", "solvent_control"];
+
+    renderWizard("/studies/11/onboarding?step=finalize");
+
+    fireEvent.click(await screen.findByRole("combobox", { name: "Batch columns" }));
+    fireEvent.click(await screen.findByText("operator"));
+    expect(screen.getByText("plate, operator")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Finalize onboarding/i }));
+
+    await waitFor(() =>
+      expect(patchStudyOnboardingState).toHaveBeenCalledWith(
+        11,
+        expect.objectContaining({
+          group_builder: expect.objectContaining({
+            batch_columns: ["plate", "operator"],
+          }),
+          mappings: expect.objectContaining({
+            batch: "plate",
+            batch_columns: ["plate", "operator"],
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("shows design warnings and confirms before finalizing confounded batches", async () => {
+    mockOnboardingState.template_context = {
+      study_design_elements: ["treatment", "batch"],
+      exposure_label_mode: null,
+      exposure_custom_label: "",
+      treatment_vars: ["group"],
+      batch_vars: ["plate"],
+      optional_field_keys: [],
+      custom_field_keys: [],
+    };
+    mockOnboardingState.metadata_columns = ["group", "plate", "sample_ID", "technical_control", "reference_rna", "solvent_control"];
+    mockOnboardingState.validated_rows = [
+      { sample_ID: "sample-1", group: "control", plate: "plate-1", solvent_control: true },
+      { sample_ID: "sample-2", group: "treated", plate: "plate-2", solvent_control: false },
+    ];
+    mockOnboardingState.design_warnings = [
+      {
+        code: "batch_confounding",
+        severity: "warning",
+        columns: ["plate"],
+        message: "Batch covariate plate is confounded with experimental group.",
+      },
+    ];
+
+    renderWizard("/studies/11/onboarding?step=finalize");
+
+    expect(await screen.findByText("Design warning")).toBeInTheDocument();
+    expect(screen.getByText(/confounded with experimental group/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Finalize onboarding/i }));
+
+    expect(await screen.findByRole("dialog", { name: /Finalize with design warning/i })).toBeInTheDocument();
+    expect(finalizeStudyOnboardingState).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Finalize anyway/i }));
+
+    await waitFor(() => expect(finalizeStudyOnboardingState).toHaveBeenCalledWith(11));
+    await waitFor(() =>
+      expect(patchStudyOnboardingState).toHaveBeenCalledWith(
+        11,
+        expect.objectContaining({
+          analysis_notes: expect.stringContaining("Batch covariate plate is confounded with experimental group."),
+        }),
+      ),
+    );
   });
 
   it("saves final-review analysis notes for the bioinformatician", async () => {

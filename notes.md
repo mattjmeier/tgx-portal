@@ -2,8 +2,7 @@
 
 - contrasts - order them? buttons to shortcut ordering 
 
-- free form notes for bioinformatician input
-- 
+- if config bundle not yet available, grey out options to download
 
 - improve landing page
 
@@ -13,15 +12,13 @@
 
 - IMPORT DATA IN ADMIN
 
-- review & finalize page: 
-    - "blocking issues" should be more apparent
-    - "Additional grouping columns" - it's too busy to show all of them; we need a way to limit, like using a dropdown menu and adding chips of additional columns. 
-
 
 See https://reui.io/components/data-grid and other examples; very nice react components.
 https://www.kibo-ui.com/components/gantt advanced components too here
 
-Collapsible sidebar - only mobile?
+ISO data management plan
+
+Collapsible sidebar - only mobile? maybe also drag to resize.
 
 - EVENTUALLY...
     - Results page on sidebar

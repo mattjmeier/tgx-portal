@@ -312,6 +312,7 @@ function createEmptyGroupBuilder(): StudyOnboardingGroupBuilder {
     primary_column: "",
     additional_columns: [],
     batch_column: "",
+    batch_columns: [],
   };
 }
 
@@ -370,6 +371,7 @@ function createDefaultDraft(studyId: number): OnboardingDraftV8 {
       treatment_level_4: "",
       treatment_level_5: "",
       batch: "",
+      batch_columns: [],
       pca_color: "",
       pca_shape: "",
       pca_alpha: "",
@@ -405,10 +407,14 @@ function normalizeExposureCustomLabel(value: string): string {
 function normalizeGroupBuilder(groupBuilder: Partial<StudyOnboardingGroupBuilder> | null | undefined): StudyOnboardingGroupBuilder {
   const primary = String(groupBuilder?.primary_column ?? "").trim();
   const additional = normalizeValueList(groupBuilder?.additional_columns ?? []).filter((value) => value !== primary);
+  const batchColumns = normalizeValueList(groupBuilder?.batch_columns ?? []);
+  const legacyBatch = String(groupBuilder?.batch_column ?? "").trim();
+  const resolvedBatchColumns = batchColumns.length ? batchColumns : normalizeValueList(legacyBatch ? [legacyBatch] : []);
   return {
     primary_column: primary,
     additional_columns: additional,
-    batch_column: String(groupBuilder?.batch_column ?? "").trim(),
+    batch_column: legacyBatch || resolvedBatchColumns[0] || "",
+    batch_columns: resolvedBatchColumns,
   };
 }
 
@@ -711,6 +717,8 @@ function areMappingsEqual(
   right: StudyOnboardingMappings,
   selectedContrasts: ContrastPair[],
 ): boolean {
+  const leftBatchColumns = normalizeValueList(left.batch_columns ?? []);
+  const rightBatchColumns = normalizeValueList(right.batch_columns ?? []);
   return (
     left.treatment_level_1 === right.treatment_level_1 &&
     left.treatment_level_2 === right.treatment_level_2 &&
@@ -718,6 +726,7 @@ function areMappingsEqual(
     left.treatment_level_4 === right.treatment_level_4 &&
     left.treatment_level_5 === right.treatment_level_5 &&
     left.batch === right.batch &&
+    areStringListsEqual(leftBatchColumns, rightBatchColumns) &&
     left.pca_color === right.pca_color &&
     left.pca_shape === right.pca_shape &&
     left.pca_alpha === right.pca_alpha &&
@@ -977,7 +986,16 @@ function ChipSelectOrAdd({
           list={`${inputId}-suggestions`}
           value={draftValue}
           placeholder={addLabel}
-          onChange={(event) => setDraftValue(event.target.value)}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            const normalizedSuggestion = nextValue.trim().replace(/\s+/g, "_");
+            if (suggestions.includes(normalizedSuggestion)) {
+              onChange(normalizeValueList([...values, normalizedSuggestion]));
+              setDraftValue("");
+              return;
+            }
+            setDraftValue(nextValue);
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
@@ -1137,6 +1155,7 @@ export function StudyOnboardingWizard() {
   const [onboardingFinalizeError, setOnboardingFinalizeError] = useState<string | null>(null);
   const [deleteStudyError, setDeleteStudyError] = useState<string | null>(null);
   const [templateDownloadWarningOpen, setTemplateDownloadWarningOpen] = useState(false);
+  const [designWarningConfirmOpen, setDesignWarningConfirmOpen] = useState(false);
 
   const [draft, setDraft] = useState<OnboardingDraftV8 | null>(() => {
     if (studyId === null) {
@@ -1207,6 +1226,7 @@ export function StudyOnboardingWizard() {
     const hasLocalMappings =
       Boolean(draft.mappings.treatment_level_1) ||
       Boolean(draft.mappings.batch) ||
+      (draft.mappings.batch_columns ?? []).length > 0 ||
       draft.mappings.selected_contrasts.length > 0;
     const hasLocalTemplateContext = !isTemplateContextEmpty(draft.template.context);
     const hasLocalGroupBuilder =
@@ -1260,6 +1280,7 @@ export function StudyOnboardingWizard() {
           : {
               ...current.mappings,
               ...onboardingStateQuery.data.mappings,
+              batch_columns: normalizeValueList(onboardingStateQuery.data.mappings.batch_columns ?? []),
               selected_contrasts: onboardingStateQuery.data.selected_contrasts ?? [],
             },
       };
@@ -1474,13 +1495,21 @@ export function StudyOnboardingWizard() {
       : (templateContext.batch_vars[0] && derivedMetadataColumns.includes(templateContext.batch_vars[0])
         ? templateContext.batch_vars[0]
         : "");
+  const defaultBatchColumns = normalizeValueList(
+    groupBuilder.batch_columns.length > 0
+      ? groupBuilder.batch_columns.filter((column) => derivedMetadataColumns.includes(column))
+      : templateContext.batch_vars.filter((column) => derivedMetadataColumns.includes(column)),
+  );
   const effectivePrimaryTreatmentMapping = draft.mappings.treatment_level_1 || defaultTreatmentMapping;
-  const effectivePrimaryBatchMapping = draft.mappings.batch || defaultBatchMapping;
+  const effectiveBatchColumns = normalizeValueList(
+    (draft.mappings.batch_columns ?? []).length > 0 ? draft.mappings.batch_columns : defaultBatchColumns,
+  );
+  const effectivePrimaryBatchMapping = draft.mappings.batch || effectiveBatchColumns[0] || defaultBatchMapping;
   const additionalTreatmentMappings = groupBuilder.additional_columns;
   const finalizeTemplateContext = normalizeTemplateContext({
     ...templateContext,
     treatment_vars: groupBuilder.primary_column ? ["group"] : templateContext.treatment_vars,
-    batch_vars: groupBuilder.batch_column ? [groupBuilder.batch_column] : templateContext.batch_vars,
+    batch_vars: effectiveBatchColumns.length ? effectiveBatchColumns : templateContext.batch_vars,
     optional_field_keys: normalizeValueList([
       ...templateContext.optional_field_keys,
       ...(groupBuilder.primary_column ? ["group"] : []),
@@ -1558,6 +1587,7 @@ export function StudyOnboardingWizard() {
       treatment_level_4: "",
       treatment_level_5: "",
       batch: "",
+      batch_columns: [],
       pca_color: "",
       pca_shape: "",
       pca_alpha: "",
@@ -1590,9 +1620,33 @@ export function StudyOnboardingWizard() {
     ...Array.from(COMMON_OPTIONAL_FIELD_KEYS),
     ...derivedOptionalFieldKeys,
   ]);
-  const commonFields = optionalStandardFields.filter(
+  const baseCommonFields = optionalStandardFields.filter(
     (field) => !sequencingFieldKeySet.has(field.key) && commonFieldKeys.has(field.key),
   );
+  const baseCommonFieldKeys = new Set(baseCommonFields.map((field) => field.key));
+  const syntheticBatchFields: MetadataFieldDefinition[] = templateContext.batch_vars
+    .filter((key) => !baseCommonFieldKeys.has(key))
+    .map((key) => fieldDefinitionsByKey.get(key) ?? {
+      key,
+      label: key,
+      group: "Study design",
+      description: "Batch variable selected during template design.",
+      scope: "sample",
+      system_key: key,
+      data_type: "string",
+      kind: "custom",
+      required: false,
+      is_core: false,
+      allow_null: true,
+      choices: [],
+      regex: "",
+      min_value: null,
+      max_value: null,
+      auto_include_keys: [],
+      wizard_featured: false,
+      wizard_featured_order: 0,
+    });
+  const commonFields = [...baseCommonFields, ...syntheticBatchFields];
   const selectedCustomFieldKeys = templateContext.custom_field_keys;
   const selectedOptionalFieldKeySet = new Set(templateContext.optional_field_keys);
   const selectedCustomFieldKeySet = new Set(templateContext.custom_field_keys);
@@ -1606,10 +1660,11 @@ export function StudyOnboardingWizard() {
     groupBuilder.primary_column && suggestedContrasts.length === 0
       ? "No control groups could be identified from solvent_control."
       : null,
-    finalizeTemplateContext.study_design_elements.includes("batch") && !effectivePrimaryBatchMapping
-      ? "Batch was marked as part of the study design, but no batch column is resolved yet."
+    finalizeTemplateContext.study_design_elements.includes("batch") && effectiveBatchColumns.length === 0
+      ? "Batch was marked as part of the study design, but no batch columns are resolved yet."
       : null,
   ].filter((message): message is string => Boolean(message));
+  const designWarnings = onboardingStateQuery.data?.design_warnings ?? [];
 
   useEffect(() => {
     if (!autoSelectableProfilingPlatform) {
@@ -1635,7 +1690,12 @@ export function StudyOnboardingWizard() {
     const suggestedPrimary = metadataColumns.includes("group")
       ? "group"
       : ["chemical", "dose", "concentration", "timepoint"].find((column) => metadataColumns.includes(column)) ?? "";
-    const nextBatch = groupBuilder.batch_column || (templateContext.batch_vars[0] ?? "");
+    const nextBatchColumns = normalizeValueList(
+      groupBuilder.batch_columns.length > 0
+        ? groupBuilder.batch_columns
+        : templateContext.batch_vars.filter((column) => metadataColumns.includes(column)),
+    );
+    const nextBatch = groupBuilder.batch_column || nextBatchColumns[0] || "";
     const defaultAdditionalGroupingColumn = templateContext.treatment_vars.find(
       (column) =>
         metadataColumns.includes(column) &&
@@ -1685,20 +1745,22 @@ export function StudyOnboardingWizard() {
     if (nextBatch && !draft.groupBuilder.batch_column && metadataColumns.includes(nextBatch)) {
       updateDraft((current) => ({
         ...current,
-        groupBuilder: {
+        groupBuilder: normalizeGroupBuilder({
           ...current.groupBuilder,
           batch_column: nextBatch,
-        },
+          batch_columns: nextBatchColumns.length ? nextBatchColumns : [nextBatch],
+        }),
       }));
       return;
     }
 
-    if (nextBatch && !draft.mappings.batch && availableColumns.has(nextBatch)) {
+    if ((nextBatch || nextBatchColumns.length > 0) && !draft.mappings.batch && availableColumns.has(nextBatch)) {
       updateDraft((current) => ({
         ...current,
         mappings: {
           ...current.mappings,
           batch: nextBatch,
+          batch_columns: nextBatchColumns.length ? nextBatchColumns : [nextBatch],
         },
       }));
     }
@@ -1711,6 +1773,7 @@ export function StudyOnboardingWizard() {
     groupBuilder.primary_column,
     groupBuilder.additional_columns.join("|"),
     groupBuilder.batch_column,
+    groupBuilder.batch_columns.join("|"),
     draft.additionalGroupingColumnsTouched,
   ]);
 
@@ -1777,6 +1840,7 @@ export function StudyOnboardingWizard() {
           ...mappingsPayload,
           treatment_level_1: groupBuilder.primary_column ? "group" : effectivePrimaryTreatmentMapping,
           batch: effectivePrimaryBatchMapping,
+          batch_columns: effectiveBatchColumns,
         },
         selected_contrasts,
         group_builder: groupBuilder,
@@ -1903,13 +1967,32 @@ export function StudyOnboardingWizard() {
     }
   }
 
-  async function handleFinalizeOnboarding() {
+  function buildAnalysisNotesWithDesignWarnings(currentNotes: string) {
+    if (designWarnings.length === 0) {
+      return currentNotes;
+    }
+    const warningText = designWarnings.map((warning) => warning.message).join(" ");
+    if (currentNotes.includes(warningText)) {
+      return currentNotes;
+    }
+    const prefix = currentNotes.trim();
+    return [prefix, `Design warning acknowledged: ${warningText}`].filter(Boolean).join("\n\n");
+  }
+
+  async function handleFinalizeOnboarding(acknowledgeDesignWarnings = false) {
     const currentDraft = draft;
     if (!currentDraft) {
       return;
     }
+    if (designWarnings.length > 0 && !acknowledgeDesignWarnings) {
+      setDesignWarningConfirmOpen(true);
+      return;
+    }
     const { selected_contrasts, ...mappingsPayload } = currentDraft.mappings;
     setOnboardingFinalizeError(null);
+    const analysisNotes = acknowledgeDesignWarnings
+      ? buildAnalysisNotesWithDesignWarnings(currentDraft.analysisNotes)
+      : currentDraft.analysisNotes;
 
     try {
       await saveOnboardingDraftMutation.mutateAsync({
@@ -1917,12 +2000,14 @@ export function StudyOnboardingWizard() {
           ...mappingsPayload,
           treatment_level_1: groupBuilder.primary_column ? "group" : effectivePrimaryTreatmentMapping,
           batch: effectivePrimaryBatchMapping,
+          batch_columns: effectiveBatchColumns,
         },
         selected_contrasts,
         group_builder: groupBuilder,
         config: currentDraft.config,
-        analysis_notes: currentDraft.analysisNotes,
+        analysis_notes: analysisNotes,
       });
+      setDesignWarningConfirmOpen(false);
       markStepAttempted("finalize");
       await finalizeOnboardingMutation.mutateAsync();
       navigate(studyWorkspacePath(studyId as number), {
@@ -1965,6 +2050,7 @@ export function StudyOnboardingWizard() {
           ...mappingsPayload,
           treatment_level_1: groupBuilder.primary_column ? "group" : effectivePrimaryTreatmentMapping,
           batch: effectivePrimaryBatchMapping,
+          batch_columns: effectiveBatchColumns,
         },
         selected_contrasts,
         group_builder: groupBuilder,
@@ -1981,6 +2067,7 @@ export function StudyOnboardingWizard() {
     draft.analysisNotes,
     draft.config,
     draft.mappings,
+    effectiveBatchColumns,
     effectivePrimaryBatchMapping,
     effectivePrimaryTreatmentMapping,
     finalizePending,
@@ -2976,6 +3063,7 @@ export function StudyOnboardingWizard() {
                         metadata_columns: result.columns ?? [],
                         validated_rows: result.validated_rows ?? [],
                         suggested_contrasts: result.suggested_contrasts ?? [],
+                        design_warnings: result.design_warnings ?? current.design_warnings ?? [],
                       }
                     : current,
                 );
@@ -3026,31 +3114,28 @@ export function StudyOnboardingWizard() {
                     </div>
 
                     <div className="grid gap-2">
-                      <Label htmlFor="batch-column">Batch column</Label>
-                      <Select
-                        value={groupBuilder.batch_column || "__none__"}
-                        onValueChange={(value) =>
+                      <Label>Batch columns</Label>
+                      <MultiSelect
+                        aria-label="Batch columns"
+                        options={metadataColumns.map((column) => ({ label: column, value: column }))}
+                        selected={effectiveBatchColumns}
+                        onChange={(selected) =>
                           updateDraft((current) => ({
                             ...current,
                             groupBuilder: normalizeGroupBuilder({
                               ...current.groupBuilder,
-                              batch_column: value === "__none__" ? "" : value,
+                              batch_column: selected[0] ?? "",
+                              batch_columns: selected,
                             }),
+                            mappings: {
+                              ...current.mappings,
+                              batch: selected[0] ?? "",
+                              batch_columns: selected,
+                            },
                           }))
                         }
-                      >
-                        <SelectTrigger id="batch-column" aria-label="Batch column">
-                          <SelectValue placeholder="Optional batch column" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">Optional batch column</SelectItem>
-                          {metadataColumns.map((column) => (
-                            <SelectItem key={column} value={column}>
-                              {column}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        placeholder="Optional batch columns"
+                      />
                     </div>
                       </div>
 
@@ -3308,6 +3393,17 @@ export function StudyOnboardingWizard() {
                     </div>
                   ) : null}
 
+                  {designWarnings.length > 0 ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-amber-800">Design warning</p>
+                      <ul className="mt-2 space-y-2 text-sm text-amber-900">
+                        {designWarnings.map((warning) => (
+                          <li key={`${warning.code}:${warning.message}`}>{warning.message}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
                   <div className="space-y-3 rounded-lg border border-border/70 bg-background/80 p-3 text-muted-foreground">
                     <p className="font-medium text-foreground">Study summary</p>
                     {[
@@ -3346,8 +3442,8 @@ export function StudyOnboardingWizard() {
                       <span>{additionalTreatmentMappings.join(", ") || "—"}</span>
                     </div>
                     <div className="grid gap-1">
-                      <span className="text-xs font-medium uppercase tracking-wide text-foreground">Batch column</span>
-                      <span>{effectivePrimaryBatchMapping || "—"}</span>
+                      <span className="text-xs font-medium uppercase tracking-wide text-foreground">Batch columns</span>
+                      <span>{effectiveBatchColumns.join(", ") || effectivePrimaryBatchMapping || "—"}</span>
                     </div>
                   </div>
 
@@ -3481,6 +3577,37 @@ export function StudyOnboardingWizard() {
               }}
             >
               Download template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={designWarningConfirmOpen} onOpenChange={setDesignWarningConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Finalize with design warning</DialogTitle>
+            <DialogDescription>
+              The selected batch covariates may be confounded with experimental groups. DESeq2 may not be able to separate batch effects from treatment effects.
+            </DialogDescription>
+          </DialogHeader>
+          <Alert>
+            <AlertCircle aria-hidden="true" />
+            <AlertTitle>Design warning</AlertTitle>
+            <AlertDescription>
+              {designWarnings.map((warning) => warning.message).join(" ")}
+            </AlertDescription>
+          </Alert>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDesignWarningConfirmOpen(false)}>
+              Review setup
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                void handleFinalizeOnboarding(true);
+              }}
+            >
+              Finalize anyway
             </Button>
           </DialogFooter>
         </DialogContent>

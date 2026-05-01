@@ -201,6 +201,7 @@ class StudyMetadataMapping(models.Model):
     treatment_level_4 = models.CharField(max_length=100, blank=True)
     treatment_level_5 = models.CharField(max_length=100, blank=True)
     batch = models.CharField(max_length=100, blank=True)
+    batch_columns = models.JSONField(default=list, blank=True)
     pca_color = models.CharField(max_length=100, blank=True)
     pca_shape = models.CharField(max_length=100, blank=True)
     pca_alpha = models.CharField(max_length=100, blank=True)
@@ -214,6 +215,13 @@ class StudyMetadataMapping(models.Model):
         verbose_name_plural = "study metadata mappings"
 
     def as_dict(self) -> dict[str, Any]:
+        batch_columns = [
+            str(value).strip()
+            for value in (self.batch_columns or [])
+            if str(value).strip()
+        ]
+        if not batch_columns and self.batch:
+            batch_columns = [self.batch]
         return {
             "treatment_level_1": self.treatment_level_1,
             "treatment_level_2": self.treatment_level_2,
@@ -221,6 +229,7 @@ class StudyMetadataMapping(models.Model):
             "treatment_level_4": self.treatment_level_4,
             "treatment_level_5": self.treatment_level_5,
             "batch": self.batch,
+            "batch_columns": batch_columns,
             "pca_color": self.pca_color,
             "pca_shape": self.pca_shape,
             "pca_alpha": self.pca_alpha,
