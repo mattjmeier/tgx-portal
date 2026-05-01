@@ -80,6 +80,7 @@ let mockOnboardingState = {
   },
   suggested_contrasts: [{ reference_group: "control", comparison_group: "treated" }],
   selected_contrasts: [] as Array<{ reference_group: string; comparison_group: string }>,
+  analysis_notes: "",
   updated_at: "2026-04-08T00:00:00.000Z",
   finalized_at: null as string | null,
 };
@@ -125,6 +126,7 @@ vi.mock("../../api/studyOnboarding", async () => {
         ...(payload.mappings ? { mappings: { ...mockOnboardingState.mappings, ...payload.mappings } } : {}),
         ...(payload.group_builder ? { group_builder: payload.group_builder as typeof mockOnboardingState.group_builder } : {}),
         ...(payload.selected_contrasts ? { selected_contrasts: payload.selected_contrasts as typeof mockOnboardingState.selected_contrasts } : {}),
+        ...(typeof payload.analysis_notes === "string" ? { analysis_notes: payload.analysis_notes } : {}),
         ...(payload.config
           ? {
               config: {
@@ -784,6 +786,7 @@ describe("StudyOnboardingWizard", () => {
       },
       suggested_contrasts: [{ reference_group: "control", comparison_group: "treated" }],
       selected_contrasts: [],
+      analysis_notes: "",
       updated_at: "2026-04-08T00:00:00.000Z",
       finalized_at: null,
     };
@@ -1334,6 +1337,25 @@ describe("StudyOnboardingWizard", () => {
     expect(await screen.findByTestId("location")).toHaveTextContent("/studies/11");
   });
 
+  it("saves final-review analysis notes for the bioinformatician", async () => {
+    renderWizard("/studies/11/onboarding?step=finalize");
+
+    const notesInput = await screen.findByLabelText(
+      "Other comments or notes that the bioinformatician might find helpful during analysis",
+    );
+    fireEvent.change(notesInput, { target: { value: "Please check the high-dose outlier before DESeq2." } });
+    fireEvent.click(screen.getByRole("button", { name: /Finalize onboarding/i }));
+
+    await waitFor(() =>
+      expect(patchStudyOnboardingState).toHaveBeenCalledWith(
+        11,
+        expect.objectContaining({
+          analysis_notes: "Please check the high-dose outlier before DESeq2.",
+        }),
+      ),
+    );
+  });
+
   it("keeps template steps checked after final review autosaves mappings", async () => {
     mockOnboardingState.template_context = {
       study_design_elements: ["chemical", "exposure"],
@@ -1428,6 +1450,98 @@ describe("StudyOnboardingWizard", () => {
     expect(screen.getAllByText("2uM_3D").length).toBeGreaterThan(0);
     expect(screen.getByText("1uM_2D vs C_2D")).toBeInTheDocument();
     expect(screen.getByText("2uM_3D vs C_3D")).toBeInTheDocument();
+  });
+
+  it("defaults the treatment variable into additional grouping columns and selects all suggested contrasts", async () => {
+    mockOnboardingState.template_context = {
+      study_design_elements: ["chemical", "treatment"],
+      exposure_label_mode: null,
+      exposure_custom_label: "",
+      treatment_vars: ["dose"],
+      batch_vars: [],
+      optional_field_keys: [],
+      custom_field_keys: [],
+    };
+    mockOnboardingState.metadata_columns = [
+      "sample_ID",
+      "chemical",
+      "dose",
+      "solvent_control",
+      "technical_control",
+      "reference_rna",
+    ];
+    mockOnboardingState.validated_rows = [
+      {
+        sample_ID: "sample-1",
+        chemical: "DMSO",
+        dose: "0",
+        solvent_control: true,
+        technical_control: false,
+        reference_rna: false,
+      },
+      {
+        sample_ID: "sample-2",
+        chemical: "BAP",
+        dose: "1uM",
+        solvent_control: false,
+        technical_control: false,
+        reference_rna: false,
+      },
+    ];
+
+    renderWizard("/studies/11/onboarding?step=finalize");
+
+    expect(await screen.findByText("Computed group = chemical + dose")).toBeInTheDocument();
+    expect(screen.getAllByText("DMSO_0").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("BAP_1uM").length).toBeGreaterThan(0);
+    expect(await screen.findByRole("checkbox", { name: "BAP_1uM vs DMSO_0" })).toHaveAttribute("data-state", "checked");
+  });
+
+  it("keeps suggested contrasts unchecked after the user clears the default selection", async () => {
+    mockOnboardingState.template_context = {
+      study_design_elements: ["chemical", "treatment"],
+      exposure_label_mode: null,
+      exposure_custom_label: "",
+      treatment_vars: ["dose"],
+      batch_vars: [],
+      optional_field_keys: [],
+      custom_field_keys: [],
+    };
+    mockOnboardingState.metadata_columns = [
+      "sample_ID",
+      "chemical",
+      "dose",
+      "solvent_control",
+      "technical_control",
+      "reference_rna",
+    ];
+    mockOnboardingState.validated_rows = [
+      {
+        sample_ID: "sample-1",
+        chemical: "DMSO",
+        dose: "0",
+        solvent_control: true,
+        technical_control: false,
+        reference_rna: false,
+      },
+      {
+        sample_ID: "sample-2",
+        chemical: "BAP",
+        dose: "1uM",
+        solvent_control: false,
+        technical_control: false,
+        reference_rna: false,
+      },
+    ];
+
+    renderWizard("/studies/11/onboarding?step=finalize");
+
+    const contrast = await screen.findByRole("checkbox", { name: "BAP_1uM vs DMSO_0" });
+    expect(contrast).toHaveAttribute("data-state", "checked");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+
+    await waitFor(() => expect(contrast).toHaveAttribute("data-state", "unchecked"));
   });
 
   it("downloads the finalized metadata template from the dedicated metadata step", async () => {

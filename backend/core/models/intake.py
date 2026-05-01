@@ -180,6 +180,7 @@ class StudyOnboardingState(models.Model):
     template_context = models.JSONField(default=dict, blank=True)
     suggested_contrasts = models.JSONField(default=list, blank=True)
     selected_contrasts = models.JSONField(default=list, blank=True)
+    analysis_notes = models.TextField(blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     finalized_at = models.DateTimeField(null=True, blank=True)
 

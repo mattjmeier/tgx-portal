@@ -56,12 +56,13 @@ export type StudyOnboardingState = {
   config: StudyOnboardingConfig;
   suggested_contrasts: ContrastPair[];
   selected_contrasts: ContrastPair[];
+  analysis_notes: string;
   updated_at: string | null;
   finalized_at: string | null;
 };
 
 export type PatchStudyOnboardingStatePayload = Partial<
-  Pick<StudyOnboardingState, "mappings" | "selected_contrasts" | "template_context" | "config" | "group_builder">
+  Pick<StudyOnboardingState, "mappings" | "selected_contrasts" | "template_context" | "config" | "group_builder" | "analysis_notes">
 >;
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";

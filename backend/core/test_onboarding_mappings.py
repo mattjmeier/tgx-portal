@@ -136,6 +136,7 @@ def test_onboarding_state_persists_template_mappings_and_config_before_finalize(
                 "custom_field_keys": [],
             },
             "mappings": {"treatment_level_1": "group", "batch": ""},
+            "analysis_notes": "Please review the high-dose outlier before DESeq2.",
             "config": {
                 "common": {
                     "dose": "dose",
@@ -164,6 +165,7 @@ def test_onboarding_state_persists_template_mappings_and_config_before_finalize(
     assert patch_response.json()["config"]["common"]["instrument_model"] == "Illumina NovaSeq 6000"
     assert patch_response.json()["config"]["common"]["sequenced_by"] == "HC Genomics lab"
     assert patch_response.json()["config"]["pipeline"]["mode"] == "se"
+    assert patch_response.json()["analysis_notes"] == "Please review the high-dose outlier before DESeq2."
 
     client.post(
         "/api/metadata-validation/",

@@ -3,13 +3,10 @@
 - contrasts - order them? buttons to shortcut ordering 
 
 - free form notes for bioinformatician input
+- 
 
-- fix landing page
+- improve landing page
 
-- scroll bug
-
-
-- SET UP PLANE SIDECAR
 
 - EXPORT PREPOPULATED GEO
 - EXPORT ILLUMINA SAMPLESHEET

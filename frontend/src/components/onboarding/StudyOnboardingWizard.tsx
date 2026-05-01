@@ -154,6 +154,9 @@ type OnboardingDraftV8 = Omit<OnboardingDraftV7, "version"> & {
   version: 8;
   metadataDefaultsInitialized: boolean;
   templateDownloadSignature?: string;
+  analysisNotes: string;
+  additionalGroupingColumnsTouched: boolean;
+  contrastSelectionTouched: boolean;
   groupBuilder: StudyOnboardingGroupBuilder;
   upload: OnboardingDraftV7["upload"] & {
     validatedRows: Array<Record<string, unknown>>;
@@ -320,6 +323,9 @@ function createDefaultDraft(studyId: number): OnboardingDraftV8 {
     attempts: {},
     metadataDefaultsInitialized: false,
     templateDownloadSignature: undefined,
+    analysisNotes: "",
+    additionalGroupingColumnsTouched: false,
+    contrastSelectionTouched: false,
     details: {
       title: "",
       piName: "",
@@ -558,6 +564,9 @@ function migrateDraftV7ToV8(draft: OnboardingDraftV7): OnboardingDraftV8 {
     metadataDefaultsInitialized:
       draft.template.context.optional_field_keys.length > 0,
     templateDownloadSignature: undefined,
+    analysisNotes: "",
+    additionalGroupingColumnsTouched: false,
+    contrastSelectionTouched: false,
     details: draft.details,
     template: {
       ...draft.template,
@@ -591,6 +600,9 @@ function loadDraft(studyId: number): OnboardingDraftV8 {
         metadataDefaultsInitialized:
           draft.metadataDefaultsInitialized ?? draft.template.context.optional_field_keys.length > 0,
         templateDownloadSignature: draft.templateDownloadSignature,
+        analysisNotes: draft.analysisNotes ?? "",
+        additionalGroupingColumnsTouched: draft.additionalGroupingColumnsTouched ?? false,
+        contrastSelectionTouched: draft.contrastSelectionTouched ?? false,
         template: {
           ...draft.template,
           context: normalizeTemplateContext(draft.template.context),
@@ -772,6 +784,10 @@ function buildDerivedGroupRows(
       ...(context ? { __group_context: context } : {}),
     };
   });
+}
+
+function areContrastPairsEqual(left: ContrastPair[], right: ContrastPair[]): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function normalizeBoolean(value: unknown): boolean {
@@ -1200,6 +1216,7 @@ export function StudyOnboardingWizard() {
     const hasLocalConfig =
       JSON.stringify(normalizeManagedConfig(draft.config)) !==
       JSON.stringify(normalizeManagedConfig(onboardingStateQuery.data.config));
+    const hasLocalAnalysisNotes = draft.analysisNotes.trim().length > 0;
 
     updateDraft((current) => {
       const resolvedTemplateContext = hasLocalTemplateContext
@@ -1225,6 +1242,7 @@ export function StudyOnboardingWizard() {
           ? normalizeGroupBuilder(current.groupBuilder)
           : normalizeGroupBuilder(onboardingStateQuery.data.group_builder),
         config: hasLocalConfig ? current.config : onboardingStateQuery.data.config,
+        analysisNotes: hasLocalAnalysisNotes ? current.analysisNotes : onboardingStateQuery.data.analysis_notes ?? "",
         upload: {
           ...current.upload,
           metadataColumns: current.upload.metadataColumns.length
@@ -1256,6 +1274,7 @@ export function StudyOnboardingWizard() {
       template_context?: StudyTemplateContext;
       config?: StudyOnboardingConfig;
       group_builder?: StudyOnboardingGroupBuilder;
+      analysis_notes?: string;
     }) => patchStudyOnboardingState(studyId as number, payload),
     onSuccess: async (result) => {
       setOnboardingSaveError(null);
@@ -1617,6 +1636,12 @@ export function StudyOnboardingWizard() {
       ? "group"
       : ["chemical", "dose", "concentration", "timepoint"].find((column) => metadataColumns.includes(column)) ?? "";
     const nextBatch = groupBuilder.batch_column || (templateContext.batch_vars[0] ?? "");
+    const defaultAdditionalGroupingColumn = templateContext.treatment_vars.find(
+      (column) =>
+        metadataColumns.includes(column) &&
+        column !== groupBuilder.primary_column &&
+        !groupBuilder.additional_columns.includes(column),
+    );
 
     if (!draft.groupBuilder.primary_column && suggestedPrimary) {
       updateDraft((current) => ({
@@ -1637,6 +1662,24 @@ export function StudyOnboardingWizard() {
           treatment_level_1: "group",
         },
       }));
+    }
+
+    if (
+      defaultAdditionalGroupingColumn &&
+      groupBuilder.primary_column &&
+      !draft.additionalGroupingColumnsTouched
+    ) {
+      updateDraft((current) => ({
+        ...current,
+        groupBuilder: normalizeGroupBuilder({
+          ...current.groupBuilder,
+          additional_columns: [
+            ...current.groupBuilder.additional_columns,
+            defaultAdditionalGroupingColumn,
+          ],
+        }),
+      }));
+      return;
     }
 
     if (nextBatch && !draft.groupBuilder.batch_column && metadataColumns.includes(nextBatch)) {
@@ -1660,7 +1703,16 @@ export function StudyOnboardingWizard() {
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [metadataColumns.join("|"), derivedMetadataColumns.join("|"), templateContext.batch_vars.join("|"), groupBuilder.primary_column, groupBuilder.batch_column]);
+  }, [
+    metadataColumns.join("|"),
+    derivedMetadataColumns.join("|"),
+    templateContext.treatment_vars.join("|"),
+    templateContext.batch_vars.join("|"),
+    groupBuilder.primary_column,
+    groupBuilder.additional_columns.join("|"),
+    groupBuilder.batch_column,
+    draft.additionalGroupingColumnsTouched,
+  ]);
 
   useEffect(() => {
     if (!draft) {
@@ -1670,18 +1722,26 @@ export function StudyOnboardingWizard() {
     const nextSelected = draft.mappings.selected_contrasts.filter((item) =>
       validKeys.has(`${item.reference_group}::${item.comparison_group}`),
     );
-    if (nextSelected.length === draft.mappings.selected_contrasts.length) {
+    const shouldDefaultAllContrasts =
+      !draft.contrastSelectionTouched &&
+      suggestedContrasts.length > 0 &&
+      !areContrastPairsEqual(nextSelected, suggestedContrasts);
+
+    if (nextSelected.length === draft.mappings.selected_contrasts.length && !shouldDefaultAllContrasts) {
       return;
     }
     updateDraft((current) => ({
       ...current,
       mappings: {
         ...current.mappings,
-        selected_contrasts: nextSelected,
+        selected_contrasts: shouldDefaultAllContrasts ? suggestedContrasts : nextSelected,
       },
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suggestedContrasts.map((item) => `${item.reference_group}::${item.comparison_group}`).join("|")]);
+  }, [
+    suggestedContrasts.map((item) => `${item.reference_group}::${item.comparison_group}`).join("|"),
+    draft.contrastSelectionTouched,
+  ]);
 
   async function persistTemplateContext() {
     await saveOnboardingDraftMutation.mutateAsync({
@@ -1721,6 +1781,7 @@ export function StudyOnboardingWizard() {
         selected_contrasts,
         group_builder: groupBuilder,
         config: currentDraft.config,
+        analysis_notes: currentDraft.analysisNotes,
       });
       markStepAttempted(stepKey);
     }
@@ -1860,6 +1921,7 @@ export function StudyOnboardingWizard() {
         selected_contrasts,
         group_builder: groupBuilder,
         config: currentDraft.config,
+        analysis_notes: currentDraft.analysisNotes,
       });
       markStepAttempted("finalize");
       await finalizeOnboardingMutation.mutateAsync();
@@ -1890,7 +1952,8 @@ export function StudyOnboardingWizard() {
 
     const configSaved =
       JSON.stringify(normalizeManagedConfig(draft.config)) === JSON.stringify(normalizeManagedConfig(onboardingStateQuery.data?.config));
-    if (mappingsStepSaved && templateStepSaved && configSaved) {
+    const analysisNotesSaved = draft.analysisNotes === (onboardingStateQuery.data?.analysis_notes ?? "");
+    if (mappingsStepSaved && templateStepSaved && configSaved && analysisNotesSaved) {
       return;
     }
 
@@ -1906,6 +1969,7 @@ export function StudyOnboardingWizard() {
         selected_contrasts,
         group_builder: groupBuilder,
         config: draft.config,
+        analysis_notes: draft.analysisNotes,
       });
     }, 500);
 
@@ -1914,6 +1978,7 @@ export function StudyOnboardingWizard() {
     };
   }, [
     activeStep,
+    draft.analysisNotes,
     draft.config,
     draft.mappings,
     effectivePrimaryBatchMapping,
@@ -1921,6 +1986,7 @@ export function StudyOnboardingWizard() {
     finalizePending,
     groupBuilder,
     mappingsStepSaved,
+    onboardingStateQuery.data?.analysis_notes,
     onboardingStatus,
     onboardingStateQuery.data?.config,
     saveOnboardingDraftMutation,
@@ -2921,15 +2987,16 @@ export function StudyOnboardingWizard() {
           {activeStep === "finalize" ? (
             <div className="space-y-6">
               <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-                <div className="space-y-4 rounded-xl border border-border/70 bg-muted/20 p-4 text-sm">
-                  <div className="space-y-1">
-                    <p className="font-medium text-foreground">Analysis setup</p>
-                    <p className="text-xs text-muted-foreground">
-                      Define how uploaded metadata should be combined into the final analysis `group` column.
-                    </p>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
+                <div className="flex flex-col gap-4 text-sm">
+                  <Card>
+                    <CardHeader className="p-4 pb-3">
+                      <CardTitle className="text-base">Analysis setup</CardTitle>
+                      <CardDescription className="text-xs">
+                        Define how uploaded metadata should be combined into the final analysis `group` column.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4 p-4 pt-0">
+                      <div className="grid gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
                       <Label htmlFor="primary-grouping">Primary grouping variable</Label>
                       <Select
@@ -2985,9 +3052,9 @@ export function StudyOnboardingWizard() {
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
+                      </div>
 
-                  <div className="grid gap-2">
+                      <div className="grid gap-2">
                     <Label>Additional grouping columns</Label>
                     <MultiSelect
                       aria-label="Additional grouping columns"
@@ -2998,6 +3065,7 @@ export function StudyOnboardingWizard() {
                       onChange={(selected) =>
                         updateDraft((current) => ({
                           ...current,
+                          additionalGroupingColumnsTouched: true,
                           groupBuilder: normalizeGroupBuilder({
                             ...current.groupBuilder,
                             additional_columns: selected,
@@ -3015,10 +3083,10 @@ export function StudyOnboardingWizard() {
                         ? `Computed group = ${[groupBuilder.primary_column, ...groupBuilder.additional_columns].join(" + ")}`
                         : "Choose a primary grouping variable to start building derived analysis groups."}
                     </p>
-                  </div>
+                      </div>
 
-                  <div className="space-y-3 rounded-lg border border-border/70 bg-background/80 p-3">
-                    <div className="space-y-1">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex flex-col gap-1">
                       <p className="font-medium text-foreground">Preview of computed group labels</p>
                       <p className="text-xs text-muted-foreground">
                         Previewing the uploaded metadata with the derived `group` values that will feed the workflow.
@@ -3052,14 +3120,17 @@ export function StudyOnboardingWizard() {
                         </table>
                       </div>
                     )}
-                  </div>
+                      </div>
+                    </CardContent>
+                  </Card>
 
-                  <div className="space-y-3 rounded-lg border border-border/70 bg-background/80 p-3">
-                    <div className="space-y-1">
-                      <p className="font-medium text-foreground">Experimental groups discovered</p>
-                      <p className="text-xs text-muted-foreground">Unique derived group labels available for contrast selection.</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
+                  <Card>
+                    <CardHeader className="p-4 pb-3">
+                      <CardTitle className="text-base">Experimental groups discovered</CardTitle>
+                      <CardDescription className="text-xs">Unique derived group labels available for contrast selection.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-5 p-4 pt-0">
+                      <div className="flex flex-wrap gap-2">
                       {Array.from(new Set(derivedGroupRows.map((row) => String(row.group ?? "").trim()).filter(Boolean))).length === 0 ? (
                         <span className="text-sm text-muted-foreground">No derived groups available yet.</span>
                       ) : (
@@ -3069,12 +3140,11 @@ export function StudyOnboardingWizard() {
                           </Badge>
                         ))
                       )}
-                    </div>
-                  </div>
+                      </div>
 
-                  <div className="space-y-3 rounded-lg border border-border/70 bg-background/80 p-3">
+                      <div className="flex flex-col gap-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="space-y-1">
+                      <div className="flex flex-col gap-1">
                         <p className="font-medium text-foreground">Suggested contrasts</p>
                         <p className="text-xs text-muted-foreground">
                           Derived from computed groups and `solvent_control`.
@@ -3088,6 +3158,7 @@ export function StudyOnboardingWizard() {
                           onClick={() =>
                             updateDraft((current) => ({
                               ...current,
+                              contrastSelectionTouched: true,
                               mappings: { ...current.mappings, selected_contrasts: suggestedContrasts },
                             }))
                           }
@@ -3101,6 +3172,7 @@ export function StudyOnboardingWizard() {
                           onClick={() =>
                             updateDraft((current) => ({
                               ...current,
+                              contrastSelectionTouched: true,
                               mappings: { ...current.mappings, selected_contrasts: [] },
                             }))
                           }
@@ -3113,7 +3185,7 @@ export function StudyOnboardingWizard() {
                     {suggestedContrasts.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No contrast suggestions available yet.</p>
                     ) : (
-                      <ul className="space-y-2">
+                      <ul className="flex flex-col gap-2">
                         {suggestedContrasts.map((pair, index) => {
                           const key = `${pair.reference_group}:${pair.comparison_group}`;
                           const inputId = `contrast-${index}`;
@@ -3137,6 +3209,7 @@ export function StudyOnboardingWizard() {
                                     );
                                     return {
                                       ...current,
+                                      contrastSelectionTouched: true,
                                       mappings: {
                                         ...current.mappings,
                                         selected_contrasts: nextChecked === true
@@ -3161,7 +3234,36 @@ export function StudyOnboardingWizard() {
                         })}
                       </ul>
                     )}
-                  </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="p-4 pb-3">
+                      <CardTitle className="text-base">Analysis notes</CardTitle>
+                      <CardDescription className="text-xs">
+                        Add context that should travel with the final review for staff handoff.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0">
+                      <div className="grid gap-2">
+                        <Label htmlFor="analysis-notes">
+                          Other comments or notes that the bioinformatician might find helpful during analysis
+                        </Label>
+                        <Textarea
+                          id="analysis-notes"
+                          value={draft.analysisNotes}
+                          onChange={(event) =>
+                            updateDraft((current) => ({
+                              ...current,
+                              analysisNotes: event.target.value,
+                            }))
+                          }
+                          placeholder="Add sample handling notes, expected caveats, or analysis preferences."
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
 
                 <div className="space-y-4 rounded-xl border border-border/70 bg-muted/20 p-4 text-sm">

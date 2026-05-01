@@ -5,6 +5,7 @@ All endpoints must support DRF `PageNumberPagination` to integrate seamlessly wi
 
 * `GET/POST /api/projects/` (Filtered by `request.user` role)
 * `GET/POST /api/studies/`
+  * `GET/PATCH /api/studies/{id}/onboarding-state/` includes final-review `analysis_notes` alongside mappings, group builder, selected contrasts, template context, and config sections.
 * `GET/POST /api/samples/`
   * Requires support for bulk creation (for spreadsheet ingestion).
   * `GET` must support query params for exporting data: `?study_id=X&has_raw_data=true`.

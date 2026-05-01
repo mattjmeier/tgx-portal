@@ -44,7 +44,7 @@ Before a `Sample` sheet is ingested into Django models, it must pass through a `
 * **`MetadataFieldDefinition`**: Admin-managed typed field catalog for intake templates.
   * Fields include `key`, `label`, `group`, `scope`, `system_key`, `data_type`, `required`, `is_core`, `allow_null`, `choices`, `regex`, min/max bounds, and wizard display metadata.
 * **`StudyMetadataFieldSelection`**: Study-specific set of selected metadata fields.
-* **`StudyMetadataMapping`**, **`StudyOnboardingState`**, and **`StudyConfig`**: Store onboarding state, selected treatment/batch mappings, contrasts, and generated config blocks.
+* **`StudyMetadataMapping`**, **`StudyOnboardingState`**, and **`StudyConfig`**: Store onboarding state, selected treatment/batch mappings, contrasts, final-review analysis notes, and generated config blocks.
 
 ### 6. Chemical Registry (`chemicals`)
 * **`ChemicalSample`**: Canonical chemical/environmental sample identity corresponding to UL `tgx_samples`.

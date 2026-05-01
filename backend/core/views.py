@@ -1285,6 +1285,7 @@ class StudyViewSet(viewsets.ModelViewSet):
             template_context_payload = request.data.get("template_context", None)
             config_payload = request.data.get("config", None)
             group_builder_payload = request.data.get("group_builder", None)
+            analysis_notes_payload = request.data.get("analysis_notes", None)
 
             mapping_model = _get_or_create_metadata_mapping(study)
             normalized_template_context = normalize_template_context(state.template_context)
@@ -1320,6 +1321,8 @@ class StudyViewSet(viewsets.ModelViewSet):
             if group_builder_payload is not None:
                 normalized_group_builder = normalize_group_builder(group_builder_payload)
                 state.group_builder = normalized_group_builder
+            if analysis_notes_payload is not None:
+                state.analysis_notes = str(analysis_notes_payload).strip()
             if config_payload is not None:
                 normalized_config_payload = _normalize_config_sections_from_platform(config_payload)
                 config = _get_or_create_study_config(study)
@@ -1342,6 +1345,7 @@ class StudyViewSet(viewsets.ModelViewSet):
                     "group_builder",
                     "template_context",
                     "selected_contrasts",
+                    "analysis_notes",
                     "suggested_contrasts",
                     "validated_rows",
                     "status",
@@ -1363,6 +1367,7 @@ class StudyViewSet(viewsets.ModelViewSet):
                 "template_context": normalize_template_context(state.template_context),
                 "suggested_contrasts": state.suggested_contrasts,
                 "selected_contrasts": mapping_model.selected_contrasts,
+                "analysis_notes": state.analysis_notes,
                 "template_columns": get_study_template_columns(study),
                 "config": {
                     "common": config.common,
@@ -1450,6 +1455,7 @@ class StudyViewSet(viewsets.ModelViewSet):
                 "template_context": template_context,
                 "suggested_contrasts": state.suggested_contrasts,
                 "selected_contrasts": mapping_model.selected_contrasts,
+                "analysis_notes": state.analysis_notes,
                 "updated_at": state.updated_at.isoformat(),
                 "finalized_at": state.finalized_at.isoformat(),
             }
