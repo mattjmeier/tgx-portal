@@ -4,7 +4,8 @@ from typing import Any
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
+from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 from pydantic import BaseModel, ConfigDict, ValidationError as PydanticValidationError
 
@@ -29,9 +30,13 @@ class Project(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["owner", "-created_at"], name="project_owner_created_idx"),
+        ]
 
     def __str__(self) -> str:
         return self.title
@@ -49,19 +54,27 @@ class Study(models.Model):
         HAMSTER = "hamster", "Hamster"
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="studies")
-    title = models.CharField(max_length=255, unique=True)
+    title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
-    species = models.CharField(max_length=20, choices=Species.choices, null=True, blank=True)
-    celltype = models.CharField(max_length=255, null=True, blank=True)
-    treatment_var = models.CharField(max_length=255, null=True, blank=True)
-    batch_var = models.CharField(max_length=255, null=True, blank=True)
+    species = models.CharField(max_length=20, choices=Species.choices, blank=True, default="")
+    celltype = models.CharField(max_length=255, blank=True, default="")
+    treatment_var = models.CharField(max_length=255, blank=True, default="")
+    batch_var = models.CharField(max_length=255, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["id"]
         verbose_name = "study"
         verbose_name_plural = "studies"
+        indexes = [
+            models.Index(fields=["project", "title"], name="study_project_title_idx"),
+        ]
         constraints = [
+            models.UniqueConstraint(
+                fields=["project", "title"],
+                name="unique_study_title_per_project",
+            ),
             models.UniqueConstraint(
                 fields=["project", "species", "celltype", "treatment_var", "batch_var"],
                 name="unique_study_per_project_metadata",
@@ -320,9 +333,14 @@ class Sample(models.Model):
     reference_rna = models.BooleanField(default=False)
     solvent_control = models.BooleanField(default=False)
     metadata = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["id"]
+        indexes = [
+            models.Index(fields=["study", "sample_ID"], name="sample_study_sample_id_idx"),
+            GinIndex(fields=["metadata"], name="sample_metadata_gin_idx"),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["study", "sample_ID"],
@@ -340,6 +358,7 @@ class SequencingRun(models.Model):
     instrument_name = models.CharField(max_length=255)
     date_run = models.DateField()
     raw_data_path = models.CharField(max_length=1024)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-date_run", "run_id"]
@@ -358,9 +377,19 @@ class Assay(models.Model):
     genome_version = models.CharField(max_length=255)
     quantification_method = models.CharField(max_length=255)
     sequencing_runs = models.ManyToManyField(SequencingRun, blank=True, related_name="assays")
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["id"]
+        indexes = [
+            models.Index(fields=["sample", "platform"], name="assay_sample_platform_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sample", "platform", "genome_version", "quantification_method"],
+                name="unique_assay_per_sample_config",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.sample.sample_ID} - {self.get_platform_display()}"
@@ -371,17 +400,39 @@ class SamplePlating(models.Model):
     plate_number = models.CharField(max_length=100)
     batch = models.CharField(max_length=100)
     plate_well = models.CharField(max_length=20)
-    row = models.CharField(max_length=5)
-    column = models.PositiveIntegerField()
+    row = models.CharField(max_length=1)
+    column = models.PositiveIntegerField(validators=[MinValueValidator(1), MaxValueValidator(24)])
     index_I7 = models.CharField(max_length=100, blank=True)
     I7_Index_ID = models.CharField(max_length=100, blank=True)
     index2 = models.CharField(max_length=100, blank=True)
     I5_Index_ID = models.CharField(max_length=100, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["sample_id"]
         verbose_name = "sample plating"
         verbose_name_plural = "sample plating records"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["batch", "plate_number", "plate_well"],
+                name="unique_sample_plating_position",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(column__gte=1) & models.Q(column__lte=24),
+                name="sample_plating_column_1_24",
+            ),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        normalized_row = (self.row or "").strip().upper()
+        if normalized_row and normalized_row not in "ABCDEFGHIJKLMNOP":
+            raise ValidationError({"row": ["row must be a letter from A through P."]})
+        if normalized_row:
+            self.row = normalized_row
+        expected_plate_well = f"{self.row}{self.column:02d}" if self.row and self.column else ""
+        if self.plate_well and expected_plate_well and self.plate_well.upper() != expected_plate_well:
+            raise ValidationError({"plate_well": [f"plate_well must match row/column ({expected_plate_well})."]})
 
     def __str__(self) -> str:
         return f"{self.sample.sample_ID} @ {self.plate_well}"

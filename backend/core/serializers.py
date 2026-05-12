@@ -57,6 +57,14 @@ class StudySerializer(serializers.ModelSerializer):
         treatment_var = attrs.get("treatment_var", getattr(instance, "treatment_var", None))
         batch_var = attrs.get("batch_var", getattr(instance, "batch_var", None))
 
+        for field in ("species", "celltype", "treatment_var", "batch_var"):
+            if attrs.get(field) is None:
+                attrs[field] = ""
+        species = species or ""
+        celltype = celltype or ""
+        treatment_var = treatment_var or ""
+        batch_var = batch_var or ""
+
         if all([project, species, celltype, treatment_var, batch_var]):
             duplicate_queryset = Study.objects.filter(
                 project=project,

@@ -1440,8 +1440,8 @@ class StudyViewSet(viewsets.ModelViewSet):
             state.updated_at = now
             state.save(update_fields=["status", "finalized_at", "updated_at"])
             study.status = Study.Status.ACTIVE
-            study.treatment_var = build_compatibility_summary(template_context.get("treatment_vars", []))
-            study.batch_var = build_compatibility_summary(template_context.get("batch_vars", []))
+            study.treatment_var = build_compatibility_summary(template_context.get("treatment_vars", [])) or ""
+            study.batch_var = build_compatibility_summary(template_context.get("batch_vars", [])) or ""
             study.save(update_fields=["status", "treatment_var", "batch_var"])
             existing_sync = getattr(study, "plane_work_item_sync", None)
             has_successful_sync = (

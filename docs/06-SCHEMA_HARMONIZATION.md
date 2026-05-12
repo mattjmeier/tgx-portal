@@ -76,6 +76,15 @@ The UL plan separates shared cross-domain tables from domain-specific tables:
 - The portal stores summary/warehouse data, but large raw and intermediate matrices should remain external and be linked from metadata.
 - UL uses compact database column names such as `desc`, `refs`, `ver`, `tech_type`, `trt_cond`, `exp_all`, and `sw_ver`. Portal models intentionally use more explicit Django names such as `description`, `references`, `version`, `technology_type`, `treatment_condition`, `exposure_values`, and `software_version`. Historical import code must maintain a clear alias map rather than renaming model fields to UL abbreviations.
 
+## UL Schema Caveats
+
+- UL relies heavily on arrays and JSON for study metadata, exposure values, references, and gene lists. This keeps imports flexible, but weakens referential integrity, query optimization, and database-level validation.
+- `tgx_samples` intentionally combines chemical, mixture, and environmental sample identity. The portal may need a normalized identifier/alias table once ROC IDs and multiple external identifiers become authoritative.
+- The HTTr, HTPP, and TGx domain split is pragmatic, but shared concepts such as well/profile metadata, active features, and series membership may duplicate logic across domain tables.
+- Some array fields imply ordering and length contracts, such as `tgx_series.exp_all` and `httr_sig_cr.resp`, but those relationships are not enforceable with the proposed table definitions alone.
+- Signature catalog tables store gene-symbol arrays directly. That is easy to load, but it is weak for gene identity versioning, aliases, and cross-species mapping.
+- The one-platform-per-study rule is clear and useful for central reporting, but multi-platform studies need a documented split/linking convention to avoid duplicated study metadata.
+
 ## Proposed App And Model Roadmap
 
 - `core`: keep operational intake, projects, studies, samples, onboarding state, config generation, RBAC, and existing APIs.

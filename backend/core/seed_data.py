@@ -1065,6 +1065,7 @@ def _seed_warehouse_demo(study: Study) -> None:
     series = Series.objects.create(
         study_metadata=warehouse_metadata,
         chemical_sample=chemical_sample,
+        series_name="afb1_24h_demo",
         treatment_condition="24h",
         exposure_lower=Decimal("0.01"),
         exposure_upper=Decimal("1.00"),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from core.models import Study
@@ -68,6 +69,16 @@ class StudyWarehouseMetadata(models.Model):
     def __str__(self) -> str:
         return self.study_name
 
+    def clean(self) -> None:
+        super().clean()
+        if self.platform_id and self.study_id:
+            platform_species = self.platform.species
+            study_species = self.study.species
+            if platform_species and study_species and platform_species != study_species:
+                raise ValidationError(
+                    {"platform": ["Platform species must match the linked study species when both are set."]}
+                )
+
 
 class StudyDataResource(models.Model):
     class ResourceType(models.TextChoices):
@@ -129,15 +140,25 @@ class StudyDataResource(models.Model):
             models.Index(fields=["study_metadata", "resource_type"], name="resource_study_type_idx"),
         ]
         constraints = [
-            models.UniqueConstraint(fields=["study_metadata", "uri"], name="unique_resource_uri_per_study"),
+            models.UniqueConstraint(
+                fields=["study_metadata", "uri"],
+                condition=models.Q(study_metadata__isnull=False),
+                name="unique_resource_uri_per_study",
+            ),
+            models.UniqueConstraint(
+                fields=["uri"],
+                condition=models.Q(study_metadata__isnull=True),
+                name="unique_draft_resource_uri",
+            ),
             models.CheckConstraint(
-                check=models.Q(size_bytes__isnull=True) | models.Q(size_bytes__gte=0),
+                condition=models.Q(size_bytes__isnull=True) | models.Q(size_bytes__gte=0),
                 name="study_resource_size_non_negative",
             ),
         ]
 
     def __str__(self) -> str:
-        return f"{self.study_metadata.study_name}: {self.display_name}"
+        study_name = self.study_metadata.study_name if self.study_metadata_id else "Draft resource"
+        return f"{study_name}: {self.display_name}"
 
 
 class ImportBatch(models.Model):
@@ -215,6 +236,10 @@ class ImportAliasMap(models.Model):
                 fields=["import_batch", "file_role", "source_column"],
                 name="unique_alias_source_per_batch_role",
             ),
+            models.UniqueConstraint(
+                fields=["import_batch", "file_role", "canonical_target"],
+                name="unique_alias_target_per_batch",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -277,6 +302,7 @@ class ImportBatchResource(models.Model):
 class Series(models.Model):
     study_metadata = models.ForeignKey(StudyWarehouseMetadata, on_delete=models.CASCADE, related_name="series")
     chemical_sample = models.ForeignKey("chemicals.ChemicalSample", on_delete=models.PROTECT, related_name="series")
+    series_name = models.CharField(max_length=255)
     treatment_condition = models.CharField(max_length=255, blank=True)
     exposure_lower = models.DecimalField(max_digits=18, decimal_places=6, null=True, blank=True)
     exposure_upper = models.DecimalField(max_digits=18, decimal_places=6, null=True, blank=True)
@@ -296,10 +322,44 @@ class Series(models.Model):
         indexes = [
             models.Index(fields=["study_metadata", "chemical_sample"], name="series_study_chem_idx"),
         ]
+        constraints = [
+            models.UniqueConstraint(fields=["study_metadata", "series_name"], name="unique_series_name_per_study"),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(exposure_lower__isnull=True)
+                    | models.Q(exposure_upper__isnull=True)
+                    | models.Q(exposure_lower__lte=models.F("exposure_upper"))
+                ),
+                name="series_exposure_bounds_order",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(exposure_group_count__isnull=True) | models.Q(exposure_group_count__gte=1),
+                name="series_exposure_group_count",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(exposure_lower__isnull=True, exposure_upper__isnull=True)
+                    | ~models.Q(exposure_unit="")
+                ),
+                name="series_exposure_unit_required",
+            ),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        if (
+            self.exposure_lower is not None
+            and self.exposure_upper is not None
+            and self.exposure_lower > self.exposure_upper
+        ):
+            raise ValidationError({"exposure_upper": ["exposure_upper must be greater than or equal to exposure_lower."]})
+        if self.exposure_group_count is not None and self.exposure_group_count < 1:
+            raise ValidationError({"exposure_group_count": ["exposure_group_count must be at least 1 when set."]})
+        if (self.exposure_lower is not None or self.exposure_upper is not None) and not self.exposure_unit:
+            raise ValidationError({"exposure_unit": ["exposure_unit is required when exposure bounds are set."]})
 
     def __str__(self) -> str:
-        condition = f" ({self.treatment_condition})" if self.treatment_condition else ""
-        return f"{self.study_metadata.study_name}: {self.chemical_sample.chemical_sample_id}{condition}"
+        return f"{self.study_metadata.study_name}: {self.series_name}"
 
 
 class Metric(models.Model):
@@ -336,7 +396,22 @@ class Pod(models.Model):
         verbose_name_plural = "PODs"
         constraints = [
             models.UniqueConstraint(fields=["series", "metric"], name="unique_pod_per_series_metric"),
+            models.CheckConstraint(
+                condition=models.Q(pod__isnull=True) | models.Q(pod__gte=0),
+                name="pod_value_non_negative",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(active=False) | models.Q(pod__isnull=False),
+                name="active_pod_requires_value",
+            ),
         ]
+
+    def clean(self) -> None:
+        super().clean()
+        if self.pod is not None and self.pod < 0:
+            raise ValidationError({"pod": ["pod must be non-negative when set."]})
+        if self.active and self.pod is None:
+            raise ValidationError({"pod": ["pod is required when active is true."]})
 
     def __str__(self) -> str:
         return f"{self.series_id}: {self.metric.metric_name}"
@@ -407,10 +482,28 @@ class HTTrWell(models.Model):
                 name="unique_httr_well_position_per_study",
             ),
             models.CheckConstraint(
-                check=models.Q(well_column__gte=1) & models.Q(well_column__lte=24),
+                condition=models.Q(well_column__gte=1) & models.Q(well_column__lte=24),
                 name="httr_well_column_between_1_and_24",
             ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(is_blank=False)
+                    | (
+                        models.Q(is_reference=False)
+                        & models.Q(is_control=False)
+                        & models.Q(is_treated=False)
+                    )
+                ),
+                name="httr_blank_well_state",
+            ),
         ]
+
+    def clean(self) -> None:
+        super().clean()
+        if self.is_blank and (self.is_reference or self.is_control or self.is_treated):
+            raise ValidationError({"is_blank": ["Blank wells cannot also be reference, control, or treated wells."]})
+        if self.is_blank and (self.chemical_sample_id or self.exposure_concentration is not None):
+            raise ValidationError({"is_blank": ["Blank wells cannot have chemical sample or exposure concentration."]})
 
     def __str__(self) -> str:
         return f"{self.plate_id}:{self.well_row}{self.well_column:02d}"
@@ -429,6 +522,15 @@ class HTTrSeriesWell(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["series", "well"], name="unique_httr_series_well"),
         ]
+
+    def clean(self) -> None:
+        super().clean()
+        if self.series_id and self.well_id and self.series.study_metadata_id != self.well.study_metadata_id:
+            raise ValidationError({"well": ["Series and well must belong to the same warehouse study."]})
+        if self.is_control and self.dose_level != 0:
+            raise ValidationError({"dose_level": ["Control wells must use dose_level 0."]})
+        if not self.is_control and self.dose_level == 0:
+            raise ValidationError({"dose_level": ["Non-control wells must use a positive dose_level."]})
 
     def __str__(self) -> str:
         return f"{self.series_id} -> {self.well_id}"

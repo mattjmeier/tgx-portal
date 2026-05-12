@@ -7,11 +7,13 @@ from io import StringIO
 from pathlib import Path
 from typing import Any
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils import timezone
+from pydantic import ValidationError as PydanticValidationError
 
 from core.models import Project, Sample, Study, StudyConfig, StudyMetadataMapping, StudyOnboardingState, default_study_config
-from core.services import normalize_spreadsheet_boolean
+from core.services import normalize_spreadsheet_boolean, validate_sample_payload
 
 from .models import ImportAliasMap, ImportBatch, ImportBatchResource, ImportStagedRow, ProfilingPlatform, StudyDataResource, StudyWarehouseMetadata
 
@@ -540,9 +542,9 @@ def commit_import(import_batch: ImportBatch) -> dict[str, Any]:
             project=project,
             title=draft["title"],
             description=draft.get("description") or "",
-            species=draft.get("species"),
+            species=draft.get("species") or "",
             celltype=draft.get("celltype") or "",
-            treatment_var="group" if any("group" in row.normalized_payload for row in metadata_rows) else None,
+            treatment_var="group" if any("group" in row.normalized_payload for row in metadata_rows) else "",
         )
         StudyConfig.objects.create(study=study, **default_study_config())
         StudyMetadataMapping.objects.create(
@@ -579,15 +581,37 @@ def commit_import(import_batch: ImportBatch) -> dict[str, Any]:
                 for key, value in payload.items()
                 if key not in CORE_SAMPLE_FIELDS and key != "sample_ID"
             }
+            validation_payload = {
+                "study": study.id,
+                "sample_ID": str(payload.get("sample_ID") or ""),
+                "sample_name": str(payload.get("sample_name") or ""),
+                "description": str(payload.get("description") or ""),
+                "technical_control": bool(payload.get("technical_control") or False),
+                "reference_rna": bool(payload.get("reference_rna") or False),
+                "solvent_control": bool(payload.get("solvent_control") or False),
+                "metadata": {},
+            }
+            try:
+                validated = validate_sample_payload(validation_payload)
+            except (DjangoValidationError, PydanticValidationError) as exc:
+                message_dict = getattr(exc, "message_dict", None)
+                if message_dict:
+                    details = "; ".join(
+                        f"{field}: {', '.join(str(message) for message in messages)}"
+                        for field, messages in message_dict.items()
+                    )
+                else:
+                    details = str(exc)
+                raise ValueError(f"Sample row {row.source_row_index + 1} failed validation: {details}") from exc
             samples.append(
                 Sample(
                     study=study,
-                    sample_ID=str(payload.get("sample_ID") or ""),
-                    sample_name=str(payload.get("sample_name") or ""),
-                    description=str(payload.get("description") or ""),
-                    technical_control=bool(payload.get("technical_control") or False),
-                    reference_rna=bool(payload.get("reference_rna") or False),
-                    solvent_control=bool(payload.get("solvent_control") or False),
+                    sample_ID=validated["sample_ID"],
+                    sample_name=validated["sample_name"],
+                    description=validated["description"],
+                    technical_control=validated["technical_control"],
+                    reference_rna=validated["reference_rna"],
+                    solvent_control=validated["solvent_control"],
                     metadata=metadata,
                 )
             )

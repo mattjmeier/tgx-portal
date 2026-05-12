@@ -220,3 +220,32 @@ class StudyImportApiTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertFalse(Study.objects.filter(title="Curated Mercury Study").exists())
+
+    def test_commit_rejects_invalid_sample_ids_from_historical_import(self) -> None:
+        import_id = self.create_import()
+        self.client.post(
+            f"/api/profiling/study-imports/{import_id}/metadata-preview/",
+            {
+                "filename": "metadata.tsv",
+                "content": "sample_ID\tgroup\nbad sample\tcontrol\ntrt_1\ttreated\n",
+                "mappings": [
+                    {"source_column": "sample_ID", "target_field": "sample_ID", "transforms": ["trim"]},
+                    {"source_column": "group", "target_field": "group", "transforms": ["trim", "lowercase"]},
+                ],
+            },
+            format="json",
+        )
+        self.client.post(
+            f"/api/profiling/study-imports/{import_id}/contrasts-preview/",
+            {
+                "filename": "contrasts.tsv",
+                "content": "reference_group\tcomparison_group\ncontrol\ttreated\n",
+            },
+            format="json",
+        )
+
+        response = self.client.post(f"/api/profiling/study-imports/{import_id}/commit/", {}, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("sample_ID", response.json()["detail"])
+        self.assertFalse(Study.objects.filter(title="Curated Mercury Study").exists())

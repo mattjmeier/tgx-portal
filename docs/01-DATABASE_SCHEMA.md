@@ -83,3 +83,13 @@ The current scaffold covers the cross-domain warehouse foundation and HTTr wells
 * HTPP-specific well metadata and active-feature/result tables.
 * TGx-specific non-HTTr well/profile metadata tables.
 * Explicit import alias maps and staged historical import tables.
+
+### 9. UL Schema Design Caveats
+The portal aligns with UL concepts without adopting every UL naming or modeling choice directly. Known caveats in the UL approach:
+
+* Arrays and JSON fields keep study-specific metadata flexible, but they reduce database-level validation and make indexed search harder.
+* `tgx_samples` mixes chemical, mixture, and environmental sample identity; a normalized identifier/alias layer may be needed once ROC IDs and multiple external IDs are active.
+* Separate HTTr, HTPP, and TGx domain tables avoid premature over-generalization, but may duplicate shared well/profile and active-feature concepts.
+* Ordered array contracts such as exposure values and modeled response values are not fully enforceable in PostgreSQL without additional validation.
+* Gene-symbol arrays in signature tables are weak for gene identity versioning, aliases, and cross-species mapping.
+* Multi-platform studies require a documented split/linking convention because the central warehouse model intentionally allows one platform per study.
