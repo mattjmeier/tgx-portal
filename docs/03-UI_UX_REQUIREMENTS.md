@@ -32,6 +32,23 @@
 ## Admin Capabilities
 * Provide an "Admin Dashboard" that bypasses standard client limits.
 * Admins need a view to assign users to roles, manage lookup tables (e.g., adding a new `genome_version` or `biospyder_db` option to the dropdowns without requiring a code deploy).
+* Provide a dedicated admin study import workspace for profiling-study curation instead of extending the client-facing onboarding wizard.
+
+### Component: Admin Study Import Workspace
+* Use one continuous page with section cards for:
+  * study shell
+  * metadata mapping / preview
+  * contrasts preview
+  * count resource registration
+  * commit
+* Keep a persistent review panel visible with unresolved validation issues, count-resource status, and commit readiness.
+* Metadata import must support CSV/TSV parsing, canonical field mapping, and lightweight transforms:
+  * trim
+  * lowercase
+  * uppercase
+  * replace whitespace with `_`
+* Contrasts and count-data uploads may use stricter expected shapes in MVP, but must still surface validation and readiness in the same workspace.
+* Highlight validation issues inline at row/cell level before commit.
 
 ## Frontend Structure Conventions
 * `frontend/src/components/ui`: Reserved for `shadcn/ui` primitives and light local wrappers around those primitives.

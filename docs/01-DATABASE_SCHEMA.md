@@ -62,10 +62,17 @@ Before a `Sample` sheet is ingested into Django models, it must pass through a `
 * **`ImportBatch`** and **`ImportBatchResource`**: Lightweight provenance layer for manual or historical import attempts and their source/output resources.
   * Import batches track source system/name, status, timestamps, initiating user, notes, and summary counts.
   * Import-batch resources link batches to `StudyDataResource` rows with roles such as input, output, reference, and QA.
+* **`ImportAliasMap`** and **`ImportStagedRow`**: Admin import staging for profiling study curation.
+  * Alias maps store source-column to canonical-target mappings plus simple transforms for each uploaded file role.
+  * Staged rows store parsed source payloads, normalized payloads, and validation errors before commit.
 * **`Series`**, **`Metric`**, and **`Pod`**: Concentration/dose-response series, global metric definitions, and global POD values corresponding to UL `tgx_series`, `tgx_metrics`, and `tgx_pods`.
 * **`HTTrWell`** and **`HTTrSeriesWell`**: HTTr well metadata and series-well bridge corresponding to UL `httr_wells` and `httr_series_wells`.
 
 Existing operational file/path fields are not a durable provenance layer. `SequencingRun.raw_data_path` describes sequencing-run data, onboarding `validated_rows` preserves the latest uploaded sample metadata rows, and sample metadata fields such as `raw_file` are export/intake values. Historical warehouse imports should use `StudyDataResource` and `ImportBatch` instead.
+
+Admin study import MVP notes:
+* Metadata and contrasts are validated in staging first, then committed into canonical `Study`, `StudyWarehouseMetadata`, and `Sample` records.
+* Count matrices remain external resources in MVP. PostgreSQL stores provenance, checksum, format, and annotation hints, not feature-level count rows.
 
 ### 8. Known UL Schema Gaps
 The current scaffold covers the cross-domain warehouse foundation and HTTr wells. The following UL concepts are not implemented yet:

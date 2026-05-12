@@ -42,8 +42,8 @@ o	Related publications
 •	Chemical sample-level mappings – simply maps chemical sample identifiers to the corresponding chemical ID(s) for all domains
 o	Chemical Sample ID (must be unique across all studies)
 o	ROCID (future)
-o	Standard IDs, e.g. ROCID, DTXSID, CASRN
-o	Preferred name
+o	Standard IDs, e.g. ROCID, DTXSID, CASRN?
+o	Preferred name? Or should we defer to ROC DB for this?
 •	Chemical-level summary values (each determined by one or potentially multiple standardized methods) – covering all domains
 o	Chemical ID (will initially by DTXSID, then changeover to ROCID)
 o	Chemical Sample ID
@@ -73,21 +73,22 @@ o	Could consider capturing feature-level data in the central DB as well, since m
 o	A primary example would be “null chemicals” simulated for each study to calibrate false positive rate of activity calls.
 
 Cross-Domain Data
-This section details the tables that will capture data across all three domains.
+This section details the tables that will capture that will cross all three domains.
 tgx_study Table:
 One row per study with high-level information. One major restriction is that each study can only use a single platform (e.g. a specific TempO-seq probe set; a specific HTPP feature extraction set; a specific gene set for RNA-seq alignment). When a study covers multiple platforms, it should be split into multiple studies for the purposes of this data architecture.
 •	study_id [SERIAL, primary key] – automated primary key linked to most other tables
 •	study_name [TEXT] – A unique string identifier for the study, e.g. “epa_httr_u2os_screen”; will use this to link to larger data objects on disk for now
 •	title [TEXT] – A short phrase describing the study, e.g. “HTTr Screen of 1500 Chemicals in U-2 OS Cells”
 •	desc [TEXT] – A longer narrative description summarizing the study design (this can be several paragraphs, generally would pull from similar field on GEO or paper abstract)
-•	source [TEXT] – Where this study was performed, e.g. “EPA”, “ULRI”, “Unilever”, etc.  
+•	source [TEXT] – Where this study was performed, e.g. “EPA”, “ULRI”, “Unilever”, etc.
 •	study_type [ENUM] – one of: HTTr, HTPP, TGx; indicates which domain the study is in
 •	in_vitro [BOOLEAN] – Boolean indicating if study was in vitro or in vivo
-•	species [ENUM   ]  – What species the study was performed in, e.g. “human”, “rat”, etc.
+•	species [ENUM]  – What species the study was performed in, e.g. “human”, “rat”, etc.
 •	platform_id [INTEGER, foreign key] – ID of the profiling platform/associated feature set used (references same column in tgx_platforms)
-•	cell_types [TEXT ARRAY] – One or more cell types or tissues  used for primary screening in the study (does not include QC controls)
+•	cell_types [TEXT ARRAY] – One or more cell types or tissues used for primary screening in the study (does not include QC controls)
 •	culture_cond [TEXT ARRAY] – List of one or more descriptors for the culture condition(s) tested (e.g. different media or +/-AIME)
-•	exposure_cond [TEXT ARRAY] – List of one or more descriptors for the exposure condition(s) tested other than concentration (e.g. different vehicles; different exposure times) 
+•	exposure_cond [TEXT ARRAY] – List of one or more descriptors for the exposure condition(s) tested other than concentration (e.g. different vehicles; different exposure times)
+•	is_public [BOOLEAN] – True/False indicating whether data should be surfaced on data platform/Navigator UI
 •	refs [TEXT ARRAY] – List of one or more DOIs to publications describing this study; will eventually link this to other CIRI database for tracking publications
 •	ext [JSON, optional] – Additional meta-data about the study (e.g. could capture similar info as desc, but in a more structured way)
 tgx_samples Table:
@@ -112,13 +113,14 @@ tgx_series Table:
 Each row describes a unique series of wells/profiles used for concentration/dose-response modeling. The actual mapping from tgx_series to individual wells is handled in domain-specific bridge tables, e.g. httr_series_wells
 •	series_id [SERIAL, primary key]
 •	study_id [INTEGER, foreign key]– references study_id in tgx_study
+•	series_name [TEXT] – a short text identifier for this series (e.g. MCF7_Fulvestrant). These should at least be unique within a study, if not the whole DB.
 •	chsamp_id [INTEGER]– what chemical/environmental sample does this conc-response series correspond to, references tgx_samples
 •	trt_cond [TEXT, optional] – brief description/code for the condition of this particular series (e.g. “AIME+” or “AIME-”). Can be blank for studies with only one culture and exposure condition
 •	exp_lower [NUMERIC] – the lowest exposure conc/dose in the series
 •	exp_upper [NUMERIC] – the highest exposure conc/dose in the series
-•	exp_unit [TEXT] – the unit of measurement for the exposure conc or dose, e.g. “uM”, “mg/kg/d”, “mg/ml”  
+•	exp_unit [TEXT] – the unit of measurement for the exposure conc or dose, e.g. “uM”, “mg/kg/d”, “mg/ml”
 •	exp_n [SMALLINT] – the number of exposure conc/dose groups in the series
-•	exp_all [NUMERIC ARRAY] – the list of all exposure conc/doses in the series
+•	exp_all [NUMERIC ARRAY] – the list of all exposure conc/doses in the series, should always be in ascending order
 •	ctrl_type [TEXT] – the type of vehicle control used, e.g. “DMSO”
 •	factors [TEXT ARRAY] – list of any additional factors aside from conc/dose that were used in the conc-response model, e.g. “plate_id” for most HTTr/HTPP screening studies
 
@@ -143,7 +145,7 @@ At least at the level of this centralized database, we will only surface values 
 •	ver [TEXT, optional] – Where appropriate, the specific version of the platform, e.g. for TempO-seq this would be the version of the probe set used; for RNA-seq it could be the version of the reference gene set used; for Cell Painting this could be 1 to start, but could increase if feature extraction software changed to include new features
 •	tech_type [TEXT] – short string denoting the technology type, e.g. “TempO-seq”, “RNA-seq”, “Cell Painting”
 •	study_type [ENUM] – One of “HTTr”, “HTPP”, or “TGx” denoting the domain where this platform is primarily used. To reduce redundancy here, this type does not have to match the type of all studies linked to this platform. Here it is used to point to the correct table of features associated with this platform. For example, some studies with type = “TGx” may use the same TempO-seq platforms as “HTTr” studies, and we don’t want to duplicate the feature information across 2 separate tables. In general, all TempO-seq platforms (and maybe other transcriptomic platforms) will have type = “HTTr” because the httr_features table will have the most appropriate schema for describing these types of platforms
-•	species [ENUM, optional] – The target species for this platform; can be NA/Null for platforms that are not species specific, such as Cell Painting or metabolomics platforms
+•	species [ ENUM, optional] – The target species for this platform; can be NA/Null for platforms that are not species specific, such as Cell Painting or metabolomics platforms
 •	url [TEXT, optional] – When available, URL to the primary source of information for this platform, e.g. for TempO-seq, this would point to the specific probe manifest on BioSpyder website.
 •	ext [JSON, optional] – JSON capturing additional fields for certain types of platforms, e.g. for TempO-seq this might be the attenuation type or version
 HTTr Domain Data
@@ -167,6 +169,7 @@ Each row captures meta-data for an individual well from a specific HTTr study, a
 •	trt_cond [TEXT, optional] – A standardized string summarizing different treatment condition types within a study, e.g. ‘AIME+’ or ‘AIME-‘. This is primarily meant to differentiate conditions that are intended to be analyzed separately, especially for conc-response curve-fitting.
 •	culture_batch [TEXT, optional] – An identifier for the cell culture “batch”, mainly needs to be specified when multiple plates were used to assay cells from the same batch
 •	chsamp_id [INTEGER, foreign key] – Identifier for the chemical or environmental sample, references tgx_samples, can be Null for untreated wells
+•	solvent [TEXT]  – Identifier for the solvent type used as the vehicle for the chemical sample
 •	exp_time_h [SMALLINT] – The length of the exposure in hours
 •	exp_conc [NUMERIC] – The concentration of the chemical sample used for the exposure
 •	exp_veh [TEXT, optional] – The type of vehicle used for the exposure – when missing, can infer if there is only 1 type of vehicle control on the plate
@@ -203,10 +206,19 @@ This table serves as a bridge between tgx_platforms and httr_features, allowing 
 •	index_order [INTEGER, optional] – The order this feature appears in the primary index for the platform, allows rebuilding alignment indexes directly from the database
 •	attenuation [SMALLINT, optional] – The fold attenuation for this probe in the specific platform
 httr_sig_cat Table:
-One row per signature in the original gene set catalog, with associated meta-data needed for UI visualization.
+One row per signature in the original gene set catalog, with associated meta-data needed for UI visualization .
 •	sig_id [SERIAL, primary key]
 •	sig_name [TEXT] – Text identifier for the signature, typically comes from the source catalog
-•	Other fields will mirror the existing schema from HTTr study Mongo DBs, with focus on fields needed for surfacing signature-level results thru Navigator UI.
+•	sig_desc [TEXT] – Longer or alternate description of the signature (this one is meant to be more intuitive and human readable)
+•	source [ENUM] – Which source catalog did this signature come from? Currently one of: MSigDB, DisGeNET, Bioplanet, Random, Ryan, CMAP (may need to add more later)
+•	subsource [ENUM, optional] – Specifies the subsource (currently for MSigDB only), current values: C2_Biocarta, C2_Canonicalm C2_Perturb, C2_KEGG, C2_REACTOME, C3_Targets, C5_GOBP, C5_GOMF, C7_Immune, Hallmark
+•	is_dir [BOOLEAN] – True for signatures where direction of expected response for genes is known, False for signatures where it is not
+•	target [TEXT, optional] – When the signature can be linked to a specific target (e.g. Estrogen Receptor), that will be indicated here. This will initially be a cleaned-up version of the “super_target” column, but in future versions it may make sense to create a separate table for these target categories, and a bridge table to link signatures to (potentially multiple) categories.
+•	up_genes [TEXT ARRAY] – List of gene symbols corresponding to this signature. If is_dir = True, then only the genes expected to go up are listed here, otherwise all genes in the signature are listed here. Duplicate symbols should be removed.
+•	up_n [SMALLINT] – Number of unique genes in up_genes (useful for searching for signatures above or below a certain size; signatures with more than a few thousand genes would not be useful so limited range is fine).
+•	dn_genes [TEXT ARRAY, optional] – List of gene symbols that are expected to go down when this signature is activated. Should only have entries when is_dir = True, otherwise should be blank.
+•	dn_n [SMALLINT] – Number of unique genes in dn_genes (useful for searching for signatures above or below a certain size), should be 0 when is_dir = False.
+
 httr_sig_sets Table:
 Each row summarizes a particular signature set (subset of the full catalog in httr_sig_cat) that was used for concentration-response analysis.
 •	sig_set_id [SERIAL, primary key]
@@ -223,7 +235,21 @@ httr_sig_cr Table:
 Each row is a distinct signature (gene set) concentration-response modeling result for a specific series in tgx_series. The combination of sig_id and series_id should be unique to a single row and can be treated as the primary key for this table. In the centralized database we would only store “active” (conc-responsive) signatures that are meant to be visualized in the Navigator UI, and only the fields necessary for that UI.
 •	sig_id [INTEGER, foreign key] – references httr_sig_cat
 •	series_id [INTEGER, foreign key] – references tgx_series
-•	Other fields will mirror the existing schema from HTTr study Mongo DBs, with focus on fields needed for surfacing signature-level results thru Navigator UI.
+•	resp [NUMERIC ARRAY] – The response values that were modeled. Each value of resp should correspond to a value in exp_all for the corresponding row in tgx_series, assuming the exp_all values are in ascending order.
+•	cutoff [NUMERIC] – The cutoff value used for this signature in this study (should always be positive)
+•	top [NUMERIC] – The top of the curve (can be positive or negative)
+•	top_over_cutoff [NUMERIC] – Is equal to abs(top/cutoff) (always positive)
+•	n_gt_cutoff [SMALLINT] – The number of response values that were above the cutoff (always positive)
+•	hitcall [NUMERIC] – The hitcall value, always between 0 and 1 inclusive
+•	fit_method [ENUM] – What was the winning model? Must be one of 8 models currently used (hill, power, poly1-2, exp2-5), can add other types of model fits in tcplfit2 for completeness (gain loss?).
+•	fit_params [JSON] – All parameter values for the winning model, encoded in a JSON string.
+•	rmse [NUMERIC] – The root mean squared error of the best model fit
+•	er [NUMERIC] – This was in our previous schema, need to look up how it differs from rmse
+•	bmr [NUMERIC] – The benchmark response computed for the best model fit
+•	bmd [NUMERIC] – The benchmark dose/conc computed from the best model fit
+•	bmdl [NUMERIC] – The lower bound of the 90% confidence interval for the BMD
+•	bmdu [NUMERIC] – The upper bound of the 90% confidence interval for the BMD
+•	ac50 [NUMERIC] – The AC50 value from the best model fit
 
 Individual Study Data Architecture
 TBD – This level of data will live outside central DB

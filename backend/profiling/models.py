@@ -96,7 +96,13 @@ class StudyDataResource(models.Model):
         MISSING = "missing", "Missing"
         UNKNOWN = "unknown", "Unknown"
 
-    study_metadata = models.ForeignKey(StudyWarehouseMetadata, on_delete=models.CASCADE, related_name="data_resources")
+    study_metadata = models.ForeignKey(
+        StudyWarehouseMetadata,
+        on_delete=models.CASCADE,
+        related_name="data_resources",
+        null=True,
+        blank=True,
+    )
     resource_type = models.CharField(max_length=30, choices=ResourceType.choices)
     storage_kind = models.CharField(max_length=30, choices=StorageKind.choices)
     display_name = models.CharField(max_length=255)
@@ -142,7 +148,13 @@ class ImportBatch(models.Model):
         FAILED = "failed", "Failed"
         SUPERSEDED = "superseded", "Superseded"
 
-    study_metadata = models.ForeignKey(StudyWarehouseMetadata, on_delete=models.CASCADE, related_name="import_batches")
+    study_metadata = models.ForeignKey(
+        StudyWarehouseMetadata,
+        on_delete=models.CASCADE,
+        related_name="import_batches",
+        null=True,
+        blank=True,
+    )
     source_system = models.CharField(max_length=255, blank=True)
     source_name = models.CharField(max_length=255)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.PLANNED)
@@ -174,6 +186,67 @@ class ImportBatch(models.Model):
 
     def __str__(self) -> str:
         return f"{self.source_name} ({self.status})"
+
+
+class ImportAliasMap(models.Model):
+    class FileRole(models.TextChoices):
+        METADATA = "metadata", "Metadata"
+        CONTRASTS = "contrasts", "Contrasts"
+        COUNT = "count", "Count data"
+
+    class Scope(models.TextChoices):
+        STUDY = "study", "Study"
+        SAMPLE = "sample", "Sample"
+        RESOURCE = "resource", "Resource"
+
+    import_batch = models.ForeignKey(ImportBatch, on_delete=models.CASCADE, related_name="alias_maps")
+    file_role = models.CharField(max_length=30, choices=FileRole.choices)
+    scope = models.CharField(max_length=30, choices=Scope.choices, default=Scope.SAMPLE)
+    canonical_target = models.CharField(max_length=255)
+    source_column = models.CharField(max_length=255)
+    transforms = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["import_batch_id", "file_role", "canonical_target", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["import_batch", "file_role", "source_column"],
+                name="unique_alias_source_per_batch_role",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.import_batch_id}:{self.file_role}:{self.source_column}->{self.canonical_target}"
+
+
+class ImportStagedRow(models.Model):
+    class FileRole(models.TextChoices):
+        METADATA = "metadata", "Metadata"
+        CONTRASTS = "contrasts", "Contrasts"
+
+    import_batch = models.ForeignKey(ImportBatch, on_delete=models.CASCADE, related_name="staged_rows")
+    file_role = models.CharField(max_length=30, choices=FileRole.choices)
+    source_row_index = models.PositiveIntegerField()
+    source_payload = models.JSONField(default=dict, blank=True)
+    normalized_payload = models.JSONField(default=dict, blank=True)
+    validation_errors = models.JSONField(default=list, blank=True)
+    is_valid = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["import_batch_id", "file_role", "source_row_index", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["import_batch", "file_role", "source_row_index"],
+                name="unique_staged_row_per_batch_role_index",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.import_batch_id}:{self.file_role}:row-{self.source_row_index}"
 
 
 class ImportBatchResource(models.Model):

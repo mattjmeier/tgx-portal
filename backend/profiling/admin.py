@@ -4,8 +4,10 @@ from unfold.admin import ModelAdmin
 from .models import (
     HTTrSeriesWell,
     HTTrWell,
+    ImportAliasMap,
     ImportBatch,
     ImportBatchResource,
+    ImportStagedRow,
     Metric,
     Pod,
     ProfilingPlatform,
@@ -123,6 +125,22 @@ class ImportBatchResourceAdmin(ModelAdmin):
     search_fields = ("import_batch__source_name", "data_resource__display_name", "data_resource__uri")
     list_filter = ("role",)
     autocomplete_fields = ("import_batch", "data_resource")
+
+
+@admin.register(ImportAliasMap)
+class ImportAliasMapAdmin(ModelAdmin):
+    list_display = ("import_batch", "file_role", "scope", "source_column", "canonical_target")
+    search_fields = ("import_batch__source_name", "source_column", "canonical_target")
+    list_filter = ("file_role", "scope")
+    autocomplete_fields = ("import_batch",)
+
+
+@admin.register(ImportStagedRow)
+class ImportStagedRowAdmin(ModelAdmin):
+    list_display = ("import_batch", "file_role", "source_row_index", "is_valid")
+    search_fields = ("import_batch__source_name",)
+    list_filter = ("file_role", "is_valid")
+    autocomplete_fields = ("import_batch",)
 
 
 @admin.register(Series)

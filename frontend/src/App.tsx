@@ -4,6 +4,7 @@ import { RequireAuth } from "./auth/RequireAuth";
 import { RequireRole } from "./auth/RequireRole";
 import { AppLayout } from "./components/AppLayout";
 import {
+  adminStudyImportCreatePath,
   collaborationCreatePath,
   collaborationRegistryPath,
   globalStudyCreateRoute,
@@ -11,6 +12,7 @@ import {
   studiesIndexPath,
 } from "./lib/routes";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
+import { AdminStudyImportPage } from "./pages/AdminStudyImportPage";
 import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ProjectCreatePage } from "./pages/ProjectCreatePage";
@@ -56,6 +58,7 @@ export default function App() {
           <Route path="/projects/*" element={<LegacyProjectRedirect />} />
           <Route element={<RequireRole allowedRoles={["admin"]} />}>
             <Route path="/admin/users" element={<AdminUsersPage />} />
+            <Route path={adminStudyImportCreatePath} element={<AdminStudyImportPage />} />
           </Route>
         </Route>
       </Route>

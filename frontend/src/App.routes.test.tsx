@@ -38,6 +38,10 @@ vi.mock("./pages/AdminUsersPage", () => ({
   AdminUsersPage: () => <div>Admin page</div>,
 }));
 
+vi.mock("./pages/AdminStudyImportPage", () => ({
+  AdminStudyImportPage: () => <div>Admin study import page</div>,
+}));
+
 vi.mock("./pages/LoginPage", () => ({
   LoginPage: () => <div>Login page</div>,
 }));
@@ -148,5 +152,12 @@ describe("App routes", () => {
 
     expect(screen.getByText("Admin page")).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/admin/users");
+  });
+
+  it("serves the admin study import route from the React app", () => {
+    renderApp("/admin/study-imports/new");
+
+    expect(screen.getByText("Admin study import page")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/admin/study-imports/new");
   });
 });

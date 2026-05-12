@@ -109,6 +109,12 @@ Implemented import-provenance foundation: `StudyDataResource`, `ImportBatch`, an
 
 Recommended next scaffold: explicit import alias and staging models. Those should map legacy source columns into canonical warehouse fields and hold row-level validation results before committing rows into chemical, platform, series, POD, well, feature, or signature tables.
 
+Current admin import MVP implementation:
+- `ImportAliasMap` stores per-file mappings from uploaded columns into canonical fields plus transform chains.
+- `ImportStagedRow` stores parsed metadata/contrast rows with normalized payloads and validation errors.
+- `ImportBatch` is the draft/commit audit root for the workflow.
+- `StudyDataResource` stores metadata, contrasts, and count files as provenance-backed inputs. Count matrices remain external resources only in MVP.
+
 ## Historical Import Strategy And Open Questions
 
 - Build imports as staged transformations: `StudyDataResource` source pointer -> `ImportBatch` audit record -> alias map -> typed staging rows -> canonical warehouse models.
@@ -121,6 +127,9 @@ Recommended next scaffold: explicit import alias and staging models. Those shoul
   - Do historical Health Canada studies already have stable chemical sample IDs, or do we need a deterministic generation rule?
   - Which POD metrics should be seeded first for R-ODAF/TGx studies?
   - Which historical imports require HTTr signatures/features versus POD-only storage?
+  - Which canonical feature-identity layer should come first for feature-level ingestion: probes, gene symbols, transcripts, or a combined alias model?
+
+Gene-identity work remains deferred for this cycle. The import flow now reserves count-resource metadata such as `feature_id_kind`, `annotation_source`, and `annotation_version`, but does not yet add probe/gene/transcript alias tables.
 
 ## Exploring The Backend Schema
 

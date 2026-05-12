@@ -8,6 +8,7 @@ import { deleteStudy, fetchStudiesIndex, fetchStudy, syncStudyToPlane, type Stud
 import { useAuth } from "../auth/AuthProvider";
 import { StudyActionsMenu } from "./StudyActionsMenu";
 import {
+  adminStudyImportCreatePath,
   collaborationCreatePath,
   collaborationPath,
   collaborationRegistryPath,
@@ -431,14 +432,24 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               {isAdmin ? (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location.pathname.startsWith("/admin")}>
-                    <NavLink to="/admin/users">
-                      <ShieldCheck className={sidebarIconClassName} />
-                      <span>Admin</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={location.pathname === adminStudyImportCreatePath}>
+                      <NavLink to={adminStudyImportCreatePath}>
+                        <ClipboardList className={sidebarIconClassName} />
+                        <span>Study import</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={location.pathname === "/admin/users"}>
+                      <NavLink to="/admin/users">
+                        <ShieldCheck className={sidebarIconClassName} />
+                        <span>Admin users</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </>
               ) : null}
             </SidebarMenu>
           </SidebarGroupContent>
