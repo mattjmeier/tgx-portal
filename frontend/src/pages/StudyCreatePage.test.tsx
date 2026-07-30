@@ -83,6 +83,10 @@ describe("StudyCreatePage", () => {
     renderPage("/studies/new");
 
     expect(await screen.findByRole("combobox", { name: /collaboration/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /create a new collaboration/i })).toHaveAttribute(
+      "href",
+      "/collaborations/new",
+    );
     expect(screen.getByRole("heading", { name: /choose a collaboration first/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /enter the onboarding wizard/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /definitions/i })).toBeInTheDocument();

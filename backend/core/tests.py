@@ -1,4 +1,5 @@
 import csv
+from datetime import timedelta
 from io import BytesIO, StringIO
 from zipfile import ZipFile
 
@@ -7,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from .models import (
@@ -167,6 +169,19 @@ class StudyApiTests(TestCase):
         study = Study.objects.get()
         self.assertTrue(hasattr(study, "metadata_mapping"))
         self.assertTrue(hasattr(study, "config"))
+
+    def test_list_studies_supports_recent_update_ordering_and_page_size(self) -> None:
+        older = Study.objects.create(project=self.project_alpha, title="Older study", celltype="older")
+        newer = Study.objects.create(project=self.project_alpha, title="Newer study", celltype="newer")
+        Study.objects.filter(pk=older.pk).update(updated_at=timezone.now() - timedelta(days=2))
+
+        response = self.client.get("/api/studies/?ordering=-updated_at&page_size=1")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual([study["id"] for study in payload["results"]], [newer.id])
+        self.assertIn("updated_at", payload["results"][0])
 
     def test_explorer_summary_returns_operational_readiness(self) -> None:
         study = Study.objects.create(

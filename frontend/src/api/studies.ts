@@ -12,6 +12,7 @@ export type Study = {
   celltype: string | null;
   treatment_var: string | null;
   batch_var: string | null;
+  updated_at: string;
   sample_count?: number;
   assay_count?: number;
   plane_sync?: PlaneSync | null;

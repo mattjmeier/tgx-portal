@@ -31,8 +31,8 @@ function getShellCopy(pathname: string, projectId?: number | null, projectTitle?
       breadcrumbs: [],
       eyebrow: "Home",
       titleHelp: null,
-      title: "Portal overview",
-      description: "Start from the portal home, then jump into collaborations, studies, or shared reference data.",
+      title: null,
+      description: null,
       badge: null,
     };
   }
@@ -183,6 +183,7 @@ export function AppLayout() {
   const studiesIndexQuery = useQuery({
     queryKey: ["studies-index", "resume-banner"],
     queryFn: () => fetchStudiesIndex({ pageSize: 100 }),
+    enabled: pathname !== "/",
   });
 
   const selectedStudy =
@@ -222,7 +223,7 @@ export function AppLayout() {
             </div>
           </header>
 
-          {draftStudies.length > 0 && !isStudyOnboardingRoute ? <DraftStudyShelf studies={draftStudies} /> : null}
+          {draftStudies.length > 0 && !isStudyOnboardingRoute && pathname !== "/" ? <DraftStudyShelf studies={draftStudies} /> : null}
 
           <main className="flex-1 px-4 py-5 md:px-6 md:py-6">
             <FlashBanner />

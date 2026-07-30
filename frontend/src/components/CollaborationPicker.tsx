@@ -1,3 +1,6 @@
+import { Link } from "react-router-dom";
+
+import { collaborationCreatePath } from "../lib/routes";
 import { cn } from "../lib/utils";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -11,6 +14,7 @@ type CollaborationPickerProps = {
   isDisabled?: boolean;
   isRequired?: boolean;
   className?: string;
+  showCreateCollaboration?: boolean;
   projects: CollaborationOption[];
   selectedProjectId: number | null;
   onProjectChange: (projectId: number) => void;
@@ -20,6 +24,7 @@ export function CollaborationPicker({
   isDisabled = false,
   isRequired = false,
   className,
+  showCreateCollaboration = false,
   projects,
   selectedProjectId,
   onProjectChange,
@@ -57,6 +62,17 @@ export function CollaborationPicker({
           </SelectContent>
         </Select>
         {isRequired ? <p className="text-xs font-medium text-primary">Choose a collaboration to continue.</p> : null}
+        {showCreateCollaboration ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Can’t find the appropriate collaboration?{" "}
+            <Link
+              className="font-medium text-foreground underline underline-offset-4 hover:text-primary focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              to={collaborationCreatePath}
+            >
+              Create a new collaboration.
+            </Link>
+          </p>
+        ) : null}
       </div>
     </section>
   );

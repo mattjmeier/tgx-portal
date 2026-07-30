@@ -1043,7 +1043,7 @@ class StudyViewSet(viewsets.ModelViewSet):
     serializer_class = StudySerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["title", "celltype", "project__title"]
-    ordering_fields = ["id", "project__title", "title", "species", "celltype"]
+    ordering_fields = ["id", "project__title", "title", "species", "celltype", "updated_at"]
     ordering = ["project__title", "title", "id"]
 
     def get_queryset(self):

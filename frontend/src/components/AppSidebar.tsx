@@ -54,6 +54,14 @@ function isActiveCollaborationPath(pathname: string, projectId: number) {
   return pathname === collaborationPath(projectId) || pathname.startsWith(`${collaborationPath(projectId)}/`);
 }
 
+function isActiveCollaborationsBrowsePath(pathname: string) {
+  return pathname === collaborationRegistryPath || /^\/collaborations\/\d+(?:\/|$)/.test(pathname);
+}
+
+function isActiveStudiesBrowsePath(pathname: string) {
+  return pathname === studiesIndexPath || /^\/studies\/\d+(?:\/|$)/.test(pathname);
+}
+
 type SidebarBrowseBranchProps = {
   icon: React.ComponentType<{ className?: string }>;
   isActive: boolean;
@@ -284,7 +292,7 @@ export function AppSidebar() {
                 <SidebarMenuItem>
                   <SidebarBrowseBranch
                     icon={ClipboardList}
-                    isActive={location.pathname.startsWith(collaborationRegistryPath)}
+                    isActive={isActiveCollaborationsBrowsePath(location.pathname)}
                     label="Collaborations"
                     open={collaborationsOpen}
                     routeTarget={collaborationRegistryPath}
@@ -338,7 +346,7 @@ export function AppSidebar() {
                 <SidebarMenuItem>
                   <SidebarBrowseBranch
                     icon={FlaskConical}
-                    isActive={location.pathname.startsWith(studiesIndexPath) || activeStudyId !== null}
+                    isActive={isActiveStudiesBrowsePath(location.pathname) || activeStudyId !== null}
                     label="Studies"
                     open={studiesOpen}
                     routeTarget={studiesIndexPath}

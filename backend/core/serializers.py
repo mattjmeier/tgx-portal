@@ -95,6 +95,7 @@ class StudySerializer(serializers.ModelSerializer):
             "celltype",
             "treatment_var",
             "batch_var",
+            "updated_at",
             "config",
             "metadata_mapping",
             "metadata_template",
@@ -102,7 +103,7 @@ class StudySerializer(serializers.ModelSerializer):
             "sample_count",
             "assay_count",
         ]
-        read_only_fields = ["id", "status"]
+        read_only_fields = ["id", "status", "updated_at"]
         validators = []
 
     def get_config(self, obj: Study) -> dict[str, Any] | None:

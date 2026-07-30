@@ -19,6 +19,24 @@
 * Build the intake form from `shadcn/ui` form primitives and shared field wrappers so validation, spacing, and error presentation stay consistent across the app.
 * **Spreadsheet Upload**: Provide a drag-and-drop zone. Use `Papaparse` to parse the CSV/TSV locally. Display a preview grid. If Pydantic/DRF returns validation errors, highlight the exact cell/row in the UI. Allow copy-pasting from Excel directly into the UI (consider `react-datasheet-grid` or TanStack implementation).
 
+## Landing Page: Study Workspace
+
+The authenticated landing page is a task-oriented study workspace:
+
+* The page header presents `Create study` as the single primary action and `New collaboration` as a secondary action.
+* The dominant panel lists up to five studies the authenticated user may access, ordered by `updated_at` descending on the server.
+* Each recent-study row shows the study, its collaboration, current status, last update, and an open action. Loading, retryable error, populated, and empty states are required.
+* The empty state explains the Collaboration-to-Study relationship and offers both study and collaboration creation.
+* A compact `Getting started` panel is secondary to recent work. It may be dismissed, with the preference stored in `localStorage` under a key scoped to the authenticated user.
+* At desktop widths, recent studies and onboarding use an approximately 2:1 layout. At smaller widths they stack. Once onboarding is dismissed, recent studies use the full content width.
+* The landing page does not duplicate sidebar utilities or expose admin controls as primary actions.
+
+### Collaboration and Study Terminology
+
+A Collaboration is the user-facing umbrella record corresponding to the operational project context. A Collaboration may contain one or more Studies. User-facing interfaces should use “Collaboration” consistently unless referring specifically to an external project identifier.
+
+Study creation must always select a Collaboration. If the appropriate Collaboration does not exist, the selection UI links to collaboration creation; the existing post-creation flow then provides the action to add a Study under the newly created Collaboration.
+
 ## Component: Data Explorer Tables (Bioinformatician UI)
 * Use **TanStack Table v8**.
 * **CRITICAL**: The database will eventually hold hundreds of thousands of sample/gene rows. *All data grid implementations must be Server-Side.*

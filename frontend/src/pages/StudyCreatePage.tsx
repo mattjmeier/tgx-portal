@@ -68,6 +68,7 @@ export function StudyCreatePage() {
             isRequired={requiresCollaborationSelection}
             projects={projects}
             selectedProjectId={selectedProjectId}
+            showCreateCollaboration={!hasPinnedCollaboration}
             onProjectChange={handleProjectChange}
           />
           <StudyForm className="h-full" isSubmitDisabled={requiresCollaborationSelection} projectId={selectedProject?.id ?? null} />

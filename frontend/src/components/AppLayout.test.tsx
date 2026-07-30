@@ -269,13 +269,11 @@ describe("AppLayout", () => {
     expect(screen.queryByText(/active collaboration/i)).not.toBeInTheDocument();
   });
 
-  it("shows a home-shell header for the workspace overview route", () => {
+  it("leaves the home page hierarchy to the landing-page header", () => {
     renderLayout("/");
 
-    expect(screen.getByText("Portal overview")).toBeInTheDocument();
-    expect(
-      screen.getByText("Start from the portal home, then jump into collaborations, studies, or shared reference data."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Home")).toBeInTheDocument();
+    expect(screen.queryByText("Portal overview")).not.toBeInTheDocument();
     expect(screen.getByText("Home overview page")).toBeInTheDocument();
   });
 
@@ -287,7 +285,7 @@ describe("AppLayout", () => {
 
     expect(footer).not.toBeNull();
     expect(within(footer as HTMLElement).getByRole("link", { name: /reference library/i })).toBeInTheDocument();
-    expect(within(footer as HTMLElement).getByRole("link", { name: /^admin$/i })).toBeInTheDocument();
+    expect(within(footer as HTMLElement).getByRole("link", { name: /^admin users$/i })).toBeInTheDocument();
     expect(within(footer as HTMLElement).getByText(/signed in/i)).toBeInTheDocument();
   });
 
@@ -652,6 +650,15 @@ describe("AppLayout", () => {
     renderLayout("/collaborations/new");
 
     expect(screen.getByText("New collaboration page")).toBeInTheDocument();
+    const applicationNav = screen.getByRole("navigation", { name: /application/i });
+    expect(within(applicationNav).getByRole("link", { name: /^new collaboration$/i })).toHaveAttribute(
+      "data-active",
+      "true",
+    );
+    expect(within(applicationNav).getByRole("link", { name: /^collaborations$/i })).toHaveAttribute(
+      "data-active",
+      "false",
+    );
     const breadcrumb = screen.getByRole("navigation", { name: /breadcrumb/i });
     expect(within(breadcrumb).getByRole("link", { name: /^collaborations$/i })).toHaveAttribute("href", "/collaborations");
     expect(screen.getByRole("heading", { name: /new collaboration/i })).toBeInTheDocument();
@@ -666,6 +673,9 @@ describe("AppLayout", () => {
     const breadcrumb = screen.getByRole("navigation", { name: /breadcrumb/i });
     expect(within(breadcrumb).getByRole("link", { name: /^studies$/i })).toHaveAttribute("href", "/studies");
     expect(screen.getByRole("heading", { name: /new study/i })).toBeInTheDocument();
+    const applicationNav = screen.getByRole("navigation", { name: /application/i });
+    expect(within(applicationNav).getByRole("link", { name: /^new study$/i })).toHaveAttribute("data-active", "true");
+    expect(within(applicationNav).getByRole("link", { name: /^studies$/i })).toHaveAttribute("data-active", "false");
     expect(screen.queryByRole("link", { name: /back to studies/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/add a study/i)).not.toBeInTheDocument();
   });
