@@ -113,7 +113,7 @@ describe("LandingPage", () => {
   it("renders the study workspace hierarchy and requests five recent studies from the server", async () => {
     renderPage();
 
-    expect(screen.getByRole("heading", { name: "Study workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Toxicogenomics data portal" })).toBeInTheDocument();
     expect(screen.getByText("Create, continue, and review toxicogenomics studies.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Create study" })).toHaveAttribute("href", "/studies/new");
     expect(screen.getByRole("link", { name: "New collaboration" })).toHaveAttribute("href", "/collaborations/new");

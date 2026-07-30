@@ -19,7 +19,7 @@ export function LandingPage() {
     <section className="mx-auto grid w-full max-w-6xl gap-6">
       <header className="flex flex-col gap-4 border-b border-border/70 pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Study workspace</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Toxicogenomics data portal</h1>
           <p className="mt-1 text-sm text-muted-foreground">Create, continue, and review toxicogenomics studies.</p>
         </div>
         <div className="flex flex-wrap gap-2">
