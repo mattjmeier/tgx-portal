@@ -2,6 +2,9 @@ from django.contrib import admin
 from unfold.admin import ModelAdmin
 
 from .models import (
+    CountMatrixColumn,
+    CountMatrixProfile,
+    DataExport,
     HTTrSeriesWell,
     HTTrWell,
     ImportAliasMap,
@@ -18,6 +21,31 @@ from .models import (
     StudyDataResource,
     StudyWarehouseMetadata,
 )
+
+
+class CountMatrixColumnInline(admin.TabularInline):
+    model = CountMatrixColumn
+    extra = 0
+    fields = ("original_name", "ordinal", "samples")
+    autocomplete_fields = ("samples",)
+
+
+@admin.register(CountMatrixProfile)
+class CountMatrixProfileAdmin(ModelAdmin):
+    list_display = ("resource", "value_type", "feature_id_kind", "annotation_source", "annotation_version", "validation_status", "feature_count", "matrix_column_count")
+    search_fields = ("resource__display_name", "resource__study_metadata__study_name", "feature_id_kind", "annotation_source")
+    list_filter = ("value_type", "validation_status", "annotation_source", "annotation_version")
+    autocomplete_fields = ("resource",)
+    readonly_fields = ("schema_fingerprint", "validated_at", "created_at", "updated_at")
+    inlines = (CountMatrixColumnInline,)
+
+
+@admin.register(DataExport)
+class DataExportAdmin(ModelAdmin):
+    list_display = ("id", "requested_by", "status", "feature_count", "output_size_bytes", "created_at", "expires_at")
+    list_filter = ("status", "created_at", "expires_at")
+    search_fields = ("requested_by__username", "output_filename", "output_checksum")
+    readonly_fields = ("matrix_ids", "request_snapshot", "compatibility_key", "source_checksums", "output_checksum", "created_at", "updated_at")
 
 
 class SeriesInline(admin.TabularInline):

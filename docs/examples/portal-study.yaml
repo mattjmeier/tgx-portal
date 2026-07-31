@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 study_key: pilot-study-2026
 curation_status: lineage_curated
 lineage_status: partial
@@ -41,6 +41,11 @@ artifacts:
   - key: gene-counts
     role: counts
     path: counts.tsv.gz
+    matrix:
+      value_type: raw_counts
+      feature_id_kind: ensembl_gene_id
+      annotation_source: Ensembl
+      annotation_version: "110"
     checksum_algorithm: sha256
     checksum: REPLACE_WITH_SHA256
     sample_column_map:

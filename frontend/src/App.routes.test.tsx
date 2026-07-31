@@ -66,6 +66,10 @@ vi.mock("./pages/StudiesPage", () => ({
   StudiesPage: () => <div>Studies page</div>,
 }));
 
+vi.mock("./pages/DataBrowserPage", () => ({
+  DataBrowserPage: () => <div>Data browser page</div>,
+}));
+
 vi.mock("./pages/ProjectWorkspacePage", () => ({
   ProjectWorkspacePage: () => <div>Collaboration workspace page</div>,
 }));
@@ -114,6 +118,13 @@ describe("App routes", () => {
 
     expect(screen.getByText("Studies page")).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/studies");
+  });
+
+  it("serves the admin data browser route", () => {
+    renderApp("/data");
+
+    expect(screen.getByText("Data browser page")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/data");
   });
 
   it("redirects legacy project registry URLs to collaboration URLs", () => {

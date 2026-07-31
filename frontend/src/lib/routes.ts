@@ -2,6 +2,7 @@ export const homePath = "/";
 export const collaborationRegistryPath = "/collaborations";
 export const collaborationCreatePath = "/collaborations/new";
 export const studiesIndexPath = "/studies";
+export const dataBrowserPath = "/data";
 export const globalStudyCreateRoute = "/studies/new";
 export const adminStudyImportCreatePath = "/admin/study-imports/new";
 export const adminBackupsPath = "/admin/backups";

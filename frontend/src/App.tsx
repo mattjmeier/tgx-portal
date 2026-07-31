@@ -8,6 +8,7 @@ import {
   adminBackupsPath,
   collaborationCreatePath,
   collaborationRegistryPath,
+  dataBrowserPath,
   globalStudyCreateRoute,
   legacyProjectPathToCollaborationPath,
   studiesIndexPath,
@@ -22,6 +23,7 @@ import { ProjectsPage } from "./pages/ProjectsPage";
 import { ProjectWorkspacePage } from "./pages/ProjectWorkspacePage";
 import { ReferenceLibraryPage } from "./pages/ReferenceLibraryPage";
 import { StudiesPage } from "./pages/StudiesPage";
+import { DataBrowserPage } from "./pages/DataBrowserPage";
 import { StudyOnboardingPage } from "./pages/StudyOnboardingPage";
 import { StudyCreatePage } from "./pages/StudyCreatePage";
 import { StudyWorkspacePage } from "./pages/StudyWorkspacePage";
@@ -59,6 +61,7 @@ export default function App() {
           <Route path={globalStudyCreateRoute} element={<StudyCreatePage />} />
           <Route path="/projects/*" element={<LegacyProjectRedirect />} />
           <Route element={<RequireRole allowedRoles={["admin"]} />}>
+            <Route path={dataBrowserPath} element={<DataBrowserPage />} />
             <Route path="/admin/users" element={<AdminUsersPage />} />
             <Route path={adminStudyImportCreatePath} element={<AdminStudyImportPage />} />
             <Route path={adminBackupsPath} element={<AdminBackupsPage />} />

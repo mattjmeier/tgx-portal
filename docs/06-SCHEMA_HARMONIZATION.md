@@ -123,6 +123,11 @@ Current admin import MVP implementation:
 - `ImportStagedRow` stores parsed metadata/contrast rows with normalized payloads and validation errors.
 - `ImportBatch` is the draft/commit audit root for the workflow.
 - `StudyDataResource` stores metadata, contrasts, and count files as provenance-backed inputs. Count matrices remain external resources only in MVP.
+- `CountMatrixProfile` and ordered sample-column mappings make external count
+  resources searchable, previewable, and safely combinable without storing
+  feature-level values in PostgreSQL. Compatibility is deliberately strict:
+  canonical platform, species, value type, feature namespace, and annotation
+  identity must match exactly.
 
 Read-only archive import is now also implemented. Stable collaboration, study,
 resource, library, run, and FASTQ keys drive replay-safe upserts.

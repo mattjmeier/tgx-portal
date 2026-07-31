@@ -13,7 +13,7 @@ import yaml
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from core.models import (
     Project,
@@ -27,6 +27,7 @@ from core.models import (
 )
 from core.services import normalize_spreadsheet_boolean, validate_sample_payload
 
+from .matrix_io import upsert_count_matrix_profile
 from .models import (
     ImportBatch,
     ProfilingPlatform,
@@ -103,6 +104,15 @@ class MetadataMappingManifest(BaseModel):
     ] = Field(default_factory=lambda: ["trim"])
 
 
+class CountMatrixManifest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value_type: Literal["raw_counts", "normalized_counts", "abundance", "other"]
+    feature_id_kind: str = Field(min_length=1, max_length=100)
+    annotation_source: str = Field(min_length=1, max_length=255)
+    annotation_version: str = Field(min_length=1, max_length=100)
+
+
 class ArtifactManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -124,6 +134,7 @@ class ArtifactManifest(BaseModel):
     version: str = ""
     input_resource_keys: list[str] = Field(default_factory=list)
     sample_column_map: dict[str, str | list[str]] = Field(default_factory=dict)
+    matrix: CountMatrixManifest | None = None
 
     @field_validator("checksum")
     @classmethod
@@ -134,7 +145,7 @@ class ArtifactManifest(BaseModel):
 class StudyImportManifestV1(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     study_key: str = Field(min_length=1, max_length=255)
     curation_status: Literal["inventory", "metadata_curated", "lineage_curated"] = "inventory"
     lineage_status: Literal["unknown", "partial", "complete"] = "unknown"
@@ -165,6 +176,14 @@ class StudyImportManifestV1(BaseModel):
         if len(targets) != len(set(targets)):
             raise ValueError("Metadata mapping target fields must be unique.")
         return mappings
+
+    @model_validator(mode="after")
+    def require_v2_count_metadata(self):
+        if self.schema_version == 2:
+            missing = [artifact.key for artifact in self.artifacts if artifact.role == "counts" and artifact.matrix is None]
+            if missing:
+                raise ValueError(f"Schema v2 count artifacts require matrix metadata: {', '.join(missing)}")
+        return self
 
 
 @dataclass(frozen=True)
@@ -1092,6 +1111,21 @@ def apply_study_manifest(
                 resources_by_key[artifact.manifest.key] = resource
                 created += int(resource_created)
                 updated += int(resource_updated)
+                if artifact.manifest.role == "counts":
+                    matrix_metadata = artifact.manifest.matrix
+                    profile = upsert_count_matrix_profile(
+                        resource=resource,
+                        value_type=matrix_metadata.value_type if matrix_metadata else "other",
+                        feature_id_kind=matrix_metadata.feature_id_kind if matrix_metadata else "",
+                        annotation_source=matrix_metadata.annotation_source if matrix_metadata else "",
+                        annotation_version=matrix_metadata.annotation_version if matrix_metadata else "",
+                        sample_column_map=artifact.manifest.sample_column_map,
+                        samples_by_id=samples_by_id,
+                        allowed_sample_ids=set(samples_by_id),
+                    )
+                    if profile.validation_status == profile.ValidationStatus.VALID and warehouse.primary_count_resource_id is None:
+                        warehouse.primary_count_resource = resource
+                        warehouse.save(update_fields=["primary_count_resource", "updated_at"])
             fastq_created, fastq_updated, fastq_keys, fastq_warnings = _upsert_fastq_rows(
                 inspection=inspection,
                 warehouse=warehouse,

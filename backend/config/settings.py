@@ -134,6 +134,7 @@ PLANE_WEB_BASE_URL = os.environ.get("PLANE_WEB_BASE_URL", "http://localhost").rs
 TGX_PORTAL_BASE_URL = os.environ.get("TGX_PORTAL_BASE_URL", "http://localhost:5173").rstrip("/")
 
 STUDY_ARCHIVE_ROOT = os.environ.get("STUDY_ARCHIVE_ROOT", "/data")
+DATA_EXPORT_ROOT = os.environ.get("DATA_EXPORT_ROOT", "/exports")
 DATABASE_BACKUP_ROOT = os.environ.get("DATABASE_BACKUP_ROOT", "/backups")
 DATABASE_BACKUP_AGE_RECIPIENT = os.environ.get("DATABASE_BACKUP_AGE_RECIPIENT", "")
 DATABASE_BACKUP_AGE_IDENTITY = os.environ.get("DATABASE_BACKUP_AGE_IDENTITY", "")

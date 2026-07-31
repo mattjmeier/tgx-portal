@@ -5,6 +5,7 @@ import uuid
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 from core.models import Study
 
@@ -76,6 +77,13 @@ class StudyWarehouseMetadata(models.Model):
         null=True,
         blank=True,
     )
+    primary_count_resource = models.ForeignKey(
+        "StudyDataResource",
+        on_delete=models.SET_NULL,
+        related_name="primary_for_studies",
+        null=True,
+        blank=True,
+    )
     curation_status = models.CharField(
         max_length=30,
         choices=CurationStatus.choices,
@@ -111,6 +119,15 @@ class StudyWarehouseMetadata(models.Model):
                 raise ValidationError(
                     {"platform": ["Platform species must match the linked study species when both are set."]}
                 )
+        if self.primary_count_resource_id:
+            resource = self.primary_count_resource
+            if resource.study_metadata_id != self.id:
+                raise ValidationError({"primary_count_resource": ["Primary count resource must belong to this study."]})
+            if resource.resource_type != StudyDataResource.ResourceType.FEATURE:
+                raise ValidationError({"primary_count_resource": ["Primary count resource must be feature data."]})
+            profile = getattr(resource, "count_matrix_profile", None)
+            if profile is None or profile.validation_status != CountMatrixProfile.ValidationStatus.VALID:
+                raise ValidationError({"primary_count_resource": ["Primary count resource must have a valid matrix profile."]})
 
 
 class StudyDataResource(models.Model):
@@ -203,6 +220,168 @@ class StudyDataResource(models.Model):
     def __str__(self) -> str:
         study_name = self.study_metadata.study_name if self.study_metadata_id else "Draft resource"
         return f"{study_name}: {self.display_name}"
+
+
+class CountMatrixProfile(models.Model):
+    class ValueType(models.TextChoices):
+        RAW_COUNTS = "raw_counts", "Raw counts"
+        NORMALIZED_COUNTS = "normalized_counts", "Normalized counts"
+        ABUNDANCE = "abundance", "Abundance"
+        OTHER = "other", "Other"
+
+    class ValidationStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        VALID = "valid", "Valid"
+        INVALID = "invalid", "Invalid"
+
+    resource = models.OneToOneField(
+        StudyDataResource,
+        on_delete=models.CASCADE,
+        related_name="count_matrix_profile",
+    )
+    value_type = models.CharField(max_length=30, choices=ValueType.choices)
+    feature_id_kind = models.CharField(max_length=100)
+    annotation_source = models.CharField(max_length=255)
+    annotation_version = models.CharField(max_length=100)
+    feature_column = models.CharField(max_length=255)
+    feature_count = models.PositiveIntegerField(default=0)
+    matrix_column_count = models.PositiveIntegerField(default=0)
+    validation_status = models.CharField(
+        max_length=20,
+        choices=ValidationStatus.choices,
+        default=ValidationStatus.PENDING,
+        db_index=True,
+    )
+    validation_errors = models.JSONField(default=list, blank=True)
+    schema_fingerprint = models.CharField(max_length=64, blank=True, db_index=True)
+    validated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["resource_id"]
+        indexes = [
+            models.Index(fields=["value_type", "validation_status"], name="matrix_value_status_idx"),
+        ]
+
+    @property
+    def compatibility_key(self) -> list[object]:
+        warehouse = self.resource.study_metadata
+        return [
+            warehouse.platform_id if warehouse else None,
+            warehouse.study.species if warehouse else "",
+            self.value_type,
+            self.feature_id_kind,
+            self.annotation_source,
+            self.annotation_version,
+        ]
+
+    @property
+    def mapped_column_count(self) -> int:
+        cached_columns = getattr(self, "_prefetched_objects_cache", {}).get("columns")
+        if cached_columns is None:
+            return self.columns.filter(samples__isnull=False).distinct().count()
+        return sum(
+            1
+            for column in cached_columns
+            if bool(getattr(column, "_prefetched_objects_cache", {}).get("samples", []))
+        )
+
+    @property
+    def is_browser_ready(self) -> bool:
+        resource = self.resource
+        warehouse = resource.study_metadata
+        if not warehouse:
+            return False
+        required = [
+            warehouse.platform_id,
+            warehouse.study.species,
+            self.value_type,
+            self.feature_id_kind,
+            self.annotation_source,
+            self.annotation_version,
+            self.feature_column,
+        ]
+        return bool(
+            self.validation_status == self.ValidationStatus.VALID
+            and resource.availability_status == StudyDataResource.AvailabilityStatus.AVAILABLE
+            and all(required)
+            and self.matrix_column_count > 0
+            and self.mapped_column_count == self.matrix_column_count
+        )
+
+    def __str__(self) -> str:
+        return f"Matrix profile: {self.resource}"
+
+
+class CountMatrixColumn(models.Model):
+    matrix = models.ForeignKey(CountMatrixProfile, on_delete=models.CASCADE, related_name="columns")
+    original_name = models.CharField(max_length=255)
+    ordinal = models.PositiveIntegerField()
+    samples = models.ManyToManyField("core.Sample", related_name="count_matrix_columns", blank=True)
+
+    class Meta:
+        ordering = ["matrix_id", "ordinal", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["matrix", "original_name"], name="unique_matrix_column_name"),
+            models.UniqueConstraint(fields=["matrix", "ordinal"], name="unique_matrix_column_ordinal"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.matrix_id}:{self.original_name}"
+
+
+class DataExport(models.Model):
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Running"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+        EXPIRED = "expired", "Expired"
+
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="profiling_data_exports",
+    )
+    matrix_ids = models.JSONField(default=list)
+    request_snapshot = models.JSONField(default=dict, blank=True)
+    compatibility_key = models.JSONField(default=list, blank=True)
+    source_checksums = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED, db_index=True)
+    output_path = models.TextField(blank=True)
+    output_filename = models.CharField(max_length=255, blank=True)
+    output_checksum = models.CharField(max_length=64, blank=True)
+    output_size_bytes = models.BigIntegerField(null=True, blank=True)
+    feature_count = models.PositiveIntegerField(null=True, blank=True)
+    failure_detail = models.TextField(blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [models.Index(fields=["requested_by", "-created_at"], name="export_user_created_idx")]
+
+    def mark_expired_if_needed(self) -> bool:
+        if self.status == self.Status.COMPLETED and self.expires_at and self.expires_at <= timezone.now():
+            if self.output_path:
+                from pathlib import Path
+
+                export_root = Path(getattr(settings, "DATA_EXPORT_ROOT", "/exports")).resolve()
+                artifact = Path(self.output_path).resolve()
+                try:
+                    artifact.relative_to(export_root)
+                except ValueError:
+                    pass
+                else:
+                    artifact.unlink(missing_ok=True)
+            self.status = self.Status.EXPIRED
+            self.save(update_fields=["status", "updated_at"])
+            return True
+        return False
 
 
 class ImportBatch(models.Model):

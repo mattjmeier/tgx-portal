@@ -12,6 +12,7 @@ Set these host paths before starting the stack:
 ```bash
 export STUDY_ARCHIVE_HOST_PATH=/institution/archive
 export DATABASE_BACKUP_HOST_PATH=/institution/portal-backups
+export DATA_EXPORT_HOST_PATH=/institution/portal-data-exports
 ```
 
 Production also requires `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, and
@@ -21,7 +22,7 @@ Production also requires `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, and
 docker compose -f docker-compose.prod.yml config
 ```
 
-## Descriptor version 1
+## Descriptor versions 1 and 2
 
 Every curated directory must contain `portal-study.yaml`. See
 [`examples/portal-study.yaml`](examples/portal-study.yaml) and
@@ -33,6 +34,9 @@ Important contracts:
 - `collaboration.key` is the immutable parent key used to rebuild a project in
   an empty database.
 - Artifact `key` values are stable within the study.
+- Version 2 count artifacts require `matrix` compatibility metadata: value
+  type, feature identifier kind, annotation source, and annotation version.
+  Version 1 remains replayable but its count matrix stays pending until curated.
 - Artifact paths may be absolute beneath `/data` or relative to the descriptor.
 - Paths and symlinks resolving outside `/data` are rejected.
 - If `artifacts` is omitted or empty, conventional metadata, contrasts, config,
@@ -203,4 +207,3 @@ For each pilot, retain the dry-run JSON and verify:
 - a backup verifies successfully;
 - the catalog can be rebuilt by importing all three descriptors into an empty,
   migrated database.
-

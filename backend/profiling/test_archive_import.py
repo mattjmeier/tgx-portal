@@ -19,6 +19,7 @@ from profiling.archive_import import (
     inspect_study_manifest,
 )
 from profiling.models import (
+    CountMatrixProfile,
     ImportBatch,
     ResourceLineage,
     SequencingFile,
@@ -44,9 +45,10 @@ class ArchiveStudyImportTests(TestCase):
         title: str = "Pilot study",
         curation_status: str = "metadata_curated",
         artifacts: list[dict] | None = None,
+        schema_version: int = 1,
     ) -> Path:
         payload = {
-            "schema_version": 1,
+            "schema_version": schema_version,
             "study_key": "pilot-study",
             "curation_status": curation_status,
             "lineage_status": "unknown",
@@ -264,6 +266,44 @@ class ArchiveStudyImportTests(TestCase):
         self.assertEqual(lineage.parent_resource.resource_key, "sample-metadata")
         self.assertEqual(lineage.child_resource.resource_key, "gene-counts")
         self.assertEqual(lineage.evidence, ResourceLineage.Evidence.DECLARED)
+        self.assertEqual(CountMatrixProfile.objects.get().validation_status, CountMatrixProfile.ValidationStatus.PENDING)
+
+    def test_schema_v2_count_metadata_creates_valid_primary_matrix_profile(self) -> None:
+        (self.study_directory / "metadata.tsv").write_text(
+            "sample\tgroup\nsample_1\tControl\nsample_2\tTreated\n",
+            encoding="utf-8",
+        )
+        (self.study_directory / "counts.tsv").write_text(
+            "gene\tsample_1\tsample_2\nENSG1\t10\t20\n",
+            encoding="utf-8",
+        )
+        manifest_path = self.write_manifest(
+            schema_version=2,
+            artifacts=[
+                {"key": "sample-metadata", "role": "metadata", "path": "metadata.tsv"},
+                {
+                    "key": "gene-counts",
+                    "role": "counts",
+                    "path": "counts.tsv",
+                    "matrix": {
+                        "value_type": "raw_counts",
+                        "feature_id_kind": "ensembl_gene_id",
+                        "annotation_source": "Ensembl",
+                        "annotation_version": "110",
+                    },
+                },
+            ],
+        )
+
+        with override_settings(STUDY_ARCHIVE_ROOT=str(self.archive_root)):
+            apply_study_manifest(manifest_path)
+
+        profile = CountMatrixProfile.objects.get()
+        warehouse = StudyWarehouseMetadata.objects.get()
+        self.assertEqual(profile.validation_status, CountMatrixProfile.ValidationStatus.VALID)
+        self.assertEqual(profile.feature_count, 1)
+        self.assertEqual(profile.columns.count(), 2)
+        self.assertEqual(warehouse.primary_count_resource_id, profile.resource_id)
 
     def test_count_header_rejects_unknown_sample_columns(self) -> None:
         (self.study_directory / "metadata.tsv").write_text(

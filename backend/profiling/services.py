@@ -15,7 +15,8 @@ from pydantic import ValidationError as PydanticValidationError
 from core.models import Project, Sample, Study, StudyConfig, StudyMetadataMapping, StudyOnboardingState, default_study_config
 from core.services import normalize_spreadsheet_boolean, validate_sample_payload
 
-from .models import ImportAliasMap, ImportBatch, ImportBatchResource, ImportStagedRow, ProfilingPlatform, StudyDataResource, StudyWarehouseMetadata
+from .matrix_io import link_count_matrix_samples, upsert_count_matrix_profile
+from .models import CountMatrixProfile, ImportAliasMap, ImportBatch, ImportBatchResource, ImportStagedRow, ProfilingPlatform, StudyDataResource, StudyWarehouseMetadata
 
 IMPORT_STORAGE_ROOT = Path("/tmp/tgx_portal_study_imports")
 CORE_SAMPLE_FIELDS = {
@@ -502,6 +503,14 @@ def register_count_resource(
         for field_name, value in resource_defaults.items():
             setattr(resource, field_name, value)
         resource.save()
+    upsert_count_matrix_profile(
+        resource=resource,
+        value_type=CountMatrixProfile.ValueType.RAW_COUNTS,
+        feature_id_kind=str(feature_id_kind or ""),
+        annotation_source=str(annotation_source or ""),
+        annotation_version=str(annotation_version or ""),
+        allowed_sample_ids=curated_sample_ids,
+    )
     resource_ids = dict(ext.get("resource_ids") or {})
     resource_ids["count"] = resource.id
     ext["resource_ids"] = resource_ids
@@ -679,8 +688,18 @@ def commit_import(import_batch: ImportBatch) -> dict[str, Any]:
             )
         Sample.objects.bulk_create(samples)
 
+        samples_by_id = {sample.sample_ID: sample for sample in Sample.objects.filter(study=study)}
+
         resource_ids = (ext.get("resource_ids") or {}).values()
         StudyDataResource.objects.filter(id__in=list(resource_ids)).update(study_metadata=warehouse)
+        count_resource_id = (ext.get("resource_ids") or {}).get("count")
+        if count_resource_id:
+            count_resource = StudyDataResource.objects.get(id=count_resource_id)
+            profile = count_resource.count_matrix_profile
+            link_count_matrix_samples(profile=profile, samples_by_id=samples_by_id)
+            warehouse.primary_count_resource = count_resource
+            warehouse.full_clean()
+            warehouse.save(update_fields=["primary_count_resource", "updated_at"])
         import_batch.study_metadata = warehouse
         import_batch.status = ImportBatch.Status.COMPLETED
         import_batch.started_at = import_batch.started_at or timezone.now()

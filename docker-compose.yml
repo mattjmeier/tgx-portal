@@ -54,12 +54,14 @@ services:
       PLANE_WEB_BASE_URL: ${PLANE_WEB_BASE_URL:-http://localhost}
       TGX_PORTAL_BASE_URL: ${TGX_PORTAL_BASE_URL:-http://localhost:5173}
       STUDY_ARCHIVE_ROOT: /data
+      DATA_EXPORT_ROOT: /exports
       DATABASE_BACKUP_ROOT: /backups
       DATABASE_BACKUP_AGE_RECIPIENT: ${DATABASE_BACKUP_AGE_RECIPIENT:-}
       DATABASE_BACKUP_AGE_IDENTITY: ${DATABASE_BACKUP_AGE_IDENTITY:-}
     volumes:
       - ./backend:/app
       - ${STUDY_ARCHIVE_HOST_PATH:-./data}:/data:ro
+      - ${DATA_EXPORT_HOST_PATH:-./exports}:/exports
       - ${DATABASE_BACKUP_HOST_PATH:-./backups}:/backups:ro
     ports:
       - "8003:8000"
@@ -97,12 +99,14 @@ services:
       PLANE_WEB_BASE_URL: ${PLANE_WEB_BASE_URL:-http://localhost}
       TGX_PORTAL_BASE_URL: ${TGX_PORTAL_BASE_URL:-http://localhost:5173}
       STUDY_ARCHIVE_ROOT: /data
+      DATA_EXPORT_ROOT: /exports
       DATABASE_BACKUP_ROOT: /backups
       DATABASE_BACKUP_AGE_RECIPIENT: ${DATABASE_BACKUP_AGE_RECIPIENT:-}
       DATABASE_BACKUP_AGE_IDENTITY: ${DATABASE_BACKUP_AGE_IDENTITY:-}
     volumes:
       - ./backend:/app
       - ${STUDY_ARCHIVE_HOST_PATH:-./data}:/data:ro
+      - ${DATA_EXPORT_HOST_PATH:-./exports}:/exports
       - ${DATABASE_BACKUP_HOST_PATH:-./backups}:/backups
     extra_hosts:
       - "host.docker.internal:host-gateway"

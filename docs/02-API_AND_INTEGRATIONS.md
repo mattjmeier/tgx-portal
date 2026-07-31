@@ -19,6 +19,19 @@ The `chemicals` Django app still exposes its models through Django admin only. T
 
 When those APIs are added, they must be additive and must not change the existing project/study/sample/config endpoints. Use `docs/06-SCHEMA_HARMONIZATION.md` as the source of truth for warehouse terminology and UL schema mapping.
 
+The admin-only cross-study browser uses these additive endpoints:
+
+* `GET /api/profiling/data-browser/studies/`
+* `GET /api/profiling/data-browser/studies/{id}/`
+* `GET /api/profiling/data-browser/facets/`
+* `GET /api/profiling/count-matrices/{id}/preview/`
+* `GET/POST /api/profiling/data-exports/`
+* `GET /api/profiling/data-exports/{id}/`
+* `GET /api/profiling/data-exports/{id}/download/`
+
+Browser facets use OR-within/AND-across semantics. Combined exports require an
+exact compatibility key and retain the intersection of feature identifiers.
+
 The `profiling` app now exposes admin-only study import staging endpoints:
 
 * `POST /api/profiling/study-imports/archive-preview/`

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, ClipboardList, DatabaseBackup, FlaskConical, Layers3, LibraryBig, LogOut, PlusCircle, ShieldCheck } from "lucide-react";
+import { ChevronRight, ClipboardList, Database, DatabaseBackup, FlaskConical, Layers3, LibraryBig, LogOut, PlusCircle, ShieldCheck } from "lucide-react";
 import { NavLink, useLocation, useMatch, useNavigate } from "react-router-dom";
 
 import { downloadProjectConfig, fetchProject, fetchProjects } from "../api/projects";
@@ -13,6 +13,7 @@ import {
   collaborationCreatePath,
   collaborationPath,
   collaborationRegistryPath,
+  dataBrowserPath,
   globalStudyCreatePath,
   homePath,
   studiesIndexPath,
@@ -421,6 +422,16 @@ export function AppSidebar() {
                     </SidebarMenuSub>
                   </SidebarBrowseBranch>
                 </SidebarMenuItem>
+                {isAdmin ? (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={location.pathname === dataBrowserPath}>
+                      <NavLink to={dataBrowserPath}>
+                        <Database className={sidebarIconClassName} />
+                        <span>Data browser</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ) : null}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

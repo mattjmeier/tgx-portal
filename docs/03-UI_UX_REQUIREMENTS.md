@@ -42,6 +42,16 @@ Study creation must always select a Collaboration. If the appropriate Collaborat
 * **CRITICAL**: The database will eventually hold hundreds of thousands of sample/gene rows. *All data grid implementations must be Server-Side.*
 * TanStack Table configuration must map `onSortingChange`, `onPaginationChange`, and `onGlobalFilterChange` to state variables, which are then passed as query parameters to TanStack Query (e.g., `?page=2&ordering=-sample_ID&search=M1`).
 * Use `shadcn/ui` table-adjacent primitives for surrounding chrome such as toolbars, filters, dialogs, menus, pagination controls, column selectors, and bulk-action affordances.
+
+### Cross-study data browser
+* Admin staff access `/data` from the Browse group.
+* URL-backed facets show contextual study counts; chemical and sample IDs are
+  searched rather than rendered as unbounded panes.
+* Results show study-level readiness, canonical platform and chemical coverage,
+  with matrix previews capped at 20 features by 10 data columns.
+* A sticky selection tray explains compatibility conflicts and starts the
+  asynchronous feature-intersection export.
+* Narrow layouts move facets into a sheet while retaining active filter chips.
 * **Features Required on Tables**:
   * Global Search.
   * Column toggling (hide/show specific metadata).

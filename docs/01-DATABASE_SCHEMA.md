@@ -81,6 +81,12 @@ Admin study import MVP notes:
 * Count matrices remain external resources in MVP and are registered from a
   contained `/data` path. PostgreSQL stores provenance, checksum, format,
   streamed header summary, and annotation hints, not feature-level count rows.
+* **`CountMatrixProfile`** stores the validated compatibility contract for a
+  feature resource: value type, feature namespace, annotation identity,
+  dimensions, validation state, and schema fingerprint. `CountMatrixColumn`
+  preserves ordered matrix columns and one-to-many mappings to portal samples.
+* **`DataExport`** audits staff cross-study export jobs, source checksums,
+  compatibility metadata, generated artifacts, failures, and expiry.
 
 ### 8. Known UL Schema Gaps
 The current scaffold covers the cross-domain warehouse foundation and HTTr wells. The following UL concepts are not implemented yet:
