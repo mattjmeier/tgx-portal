@@ -5,6 +5,7 @@ import { RequireRole } from "./auth/RequireRole";
 import { AppLayout } from "./components/AppLayout";
 import {
   adminStudyImportCreatePath,
+  adminBackupsPath,
   collaborationCreatePath,
   collaborationRegistryPath,
   globalStudyCreateRoute,
@@ -13,6 +14,7 @@ import {
 } from "./lib/routes";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { AdminStudyImportPage } from "./pages/AdminStudyImportPage";
+import { AdminBackupsPage } from "./pages/AdminBackupsPage";
 import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ProjectCreatePage } from "./pages/ProjectCreatePage";
@@ -59,6 +61,7 @@ export default function App() {
           <Route element={<RequireRole allowedRoles={["admin"]} />}>
             <Route path="/admin/users" element={<AdminUsersPage />} />
             <Route path={adminStudyImportCreatePath} element={<AdminStudyImportPage />} />
+            <Route path={adminBackupsPath} element={<AdminBackupsPage />} />
           </Route>
         </Route>
       </Route>

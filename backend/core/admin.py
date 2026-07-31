@@ -7,6 +7,7 @@ from unfold.admin import ModelAdmin
 from .models import (
     Assay,
     ControlledLookupValue,
+    DatabaseBackup,
     MetadataFieldDefinition,
     PlaneWorkItemSync,
     Project,
@@ -23,11 +24,11 @@ from .models import (
 
 @admin.register(Project)
 class ProjectAdmin(ModelAdmin):
-    list_display = ("title", "owner", "pi_name", "researcher_name", "bioinformatician_assigned", "created_at")
-    search_fields = ("title", "pi_name", "researcher_name", "bioinformatician_assigned", "owner__username")
+    list_display = ("title", "collaboration_key", "owner", "pi_name", "researcher_name", "bioinformatician_assigned", "created_at")
+    search_fields = ("title", "collaboration_key", "pi_name", "researcher_name", "bioinformatician_assigned", "owner__username")
     list_filter = ("created_at",)
     autocomplete_fields = ("owner",)
-    readonly_fields = ("created_at",)
+    readonly_fields = ("collaboration_key", "created_at")
 
 
 @admin.register(Study)
@@ -67,6 +68,36 @@ class SequencingRunAdmin(ModelAdmin):
     list_display = ("run_id", "flowcell_id", "instrument_name", "date_run")
     search_fields = ("run_id", "flowcell_id", "instrument_name")
     list_filter = ("instrument_name", "date_run")
+
+
+@admin.register(DatabaseBackup)
+class DatabaseBackupAdmin(ModelAdmin):
+    list_display = (
+        "filename",
+        "status",
+        "verification_status",
+        "size_bytes",
+        "initiated_by",
+        "created_at",
+    )
+    search_fields = ("filename", "path", "sha256", "error_message")
+    list_filter = ("status", "verification_status", "created_at")
+    autocomplete_fields = ("initiated_by",)
+    readonly_fields = (
+        "status",
+        "verification_status",
+        "path",
+        "filename",
+        "size_bytes",
+        "sha256",
+        "postgres_version",
+        "migration_snapshot",
+        "error_message",
+        "created_at",
+        "started_at",
+        "completed_at",
+        "verified_at",
+    )
 
 
 @admin.register(ControlledLookupValue)

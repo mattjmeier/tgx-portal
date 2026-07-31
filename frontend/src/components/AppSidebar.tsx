@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, ClipboardList, FlaskConical, Layers3, LibraryBig, LogOut, PlusCircle, ShieldCheck } from "lucide-react";
+import { ChevronRight, ClipboardList, DatabaseBackup, FlaskConical, Layers3, LibraryBig, LogOut, PlusCircle, ShieldCheck } from "lucide-react";
 import { NavLink, useLocation, useMatch, useNavigate } from "react-router-dom";
 
 import { downloadProjectConfig, fetchProject, fetchProjects } from "../api/projects";
@@ -9,6 +9,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { StudyActionsMenu } from "./StudyActionsMenu";
 import {
   adminStudyImportCreatePath,
+  adminBackupsPath,
   collaborationCreatePath,
   collaborationPath,
   collaborationRegistryPath,
@@ -454,6 +455,14 @@ export function AppSidebar() {
                       <NavLink to="/admin/users">
                         <ShieldCheck className={sidebarIconClassName} />
                         <span>Admin users</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={location.pathname === adminBackupsPath}>
+                      <NavLink to={adminBackupsPath}>
+                        <DatabaseBackup className={sidebarIconClassName} />
+                        <span>Database backups</span>
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

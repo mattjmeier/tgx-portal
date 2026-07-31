@@ -21,6 +21,8 @@ When those APIs are added, they must be additive and must not change the existin
 
 The `profiling` app now exposes admin-only study import staging endpoints:
 
+* `POST /api/profiling/study-imports/archive-preview/`
+* `POST /api/profiling/study-imports/archive-apply/`
 * `POST /api/profiling/study-imports/`
 * `GET/PATCH /api/profiling/study-imports/{id}/`
 * `POST /api/profiling/study-imports/{id}/metadata-preview/`
@@ -30,8 +32,23 @@ The `profiling` app now exposes admin-only study import staging endpoints:
 
 These endpoints support a metadata-first import workflow:
 * metadata and contrasts are parsed and validated into staging rows
-* count matrices are registered as provenance-backed resources only
+* count matrices are registered by a contained `/data` path as
+  provenance-backed resources; only the header is streamed for validation
 * commit creates the portal study, warehouse metadata, samples, and resource links transactionally
+
+The archive endpoints accept only a server-side path beneath `/data`; they do
+not transfer count matrices through JSON. Preview returns the shared importer
+validation/diff report. Apply performs a transaction per study and records the
+descriptor snapshot and source digest.
+
+Admin-only database recovery endpoints are:
+
+* `GET/POST /api/admin/database-backups/`
+* `POST /api/admin/database-backups/{id}/verify/`
+* `GET /api/admin/database-backups/{id}/download/`
+
+Creation and verification are Celery tasks. There is intentionally no restore
+endpoint; live restoration is guarded and CLI-only.
 
 ## External Integrations
 

@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly TGx Portal PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 02:15:00
+Persistent=true
+RandomizedDelaySec=900
+Unit=tgx-portal-backup.service
+
+[Install]
+WantedBy=timers.target

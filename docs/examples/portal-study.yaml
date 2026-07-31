@@ -1,0 +1,51 @@
+schema_version: 1
+study_key: pilot-study-2026
+curation_status: lineage_curated
+lineage_status: partial
+
+collaboration:
+  key: tox-program-a
+  title: Toxicogenomics program A
+  pi_name: Dr. Example
+  researcher_name: Researcher Example
+  bioinformatician_assigned: Bioinformatician Example
+  description: Stable collaboration metadata used to rebuild the parent.
+
+study:
+  title: Pilot study
+  description: Representative archive-import pilot.
+  study_type: TGx
+  species: human
+  celltype: Hepatocyte
+  in_vitro: true
+  platform: RNA-Seq GRCh38
+
+metadata_mappings:
+  - source_column: sample
+    target_field: sample_ID
+    transforms: [trim]
+  - source_column: treatment_group
+    target_field: group
+    transforms: [trim, lowercase]
+
+artifacts:
+  - key: sample-metadata
+    role: metadata
+    path: metadata.tsv
+  - key: workflow-config
+    role: config
+    path: config.yaml
+  - key: fastq-index
+    role: fastq_manifest
+    path: fastq-manifest.tsv
+  - key: gene-counts
+    role: counts
+    path: counts.tsv.gz
+    checksum_algorithm: sha256
+    checksum: REPLACE_WITH_SHA256
+    sample_column_map:
+      pooled-control: [sample_001, sample_002]
+    input_resource_keys: [fq-s001-r1, fq-s001-r2, fq-s002-r1, fq-s002-r2]
+    description: Gene-level count matrix; lineage is curator-declared.
+
+notes: Update this descriptor and replay it when archive curation changes.

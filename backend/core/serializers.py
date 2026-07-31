@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from pydantic import ValidationError as PydanticValidationError
 from rest_framework import serializers
 
-from .models import Assay, PlaneWorkItemSync, Project, Sample, Study, StudyConfig, UserProfile
+from .models import Assay, DatabaseBackup, PlaneWorkItemSync, Project, Sample, Study, StudyConfig, UserProfile
 from .services import validate_sample_payload
 
 User = get_user_model()
@@ -19,6 +19,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         model = Project
         fields = [
             "id",
+            "collaboration_key",
             "owner",
             "owner_id",
             "pi_name",
@@ -28,7 +29,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "description",
             "created_at",
         ]
-        read_only_fields = ["id", "created_at"]
+        read_only_fields = ["id", "collaboration_key", "created_at"]
 
 
 class StudySerializer(serializers.ModelSerializer):
@@ -50,35 +51,9 @@ class StudySerializer(serializers.ModelSerializer):
     plane_sync = serializers.SerializerMethodField()
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        instance = getattr(self, "instance", None)
-        project = attrs.get("project", getattr(instance, "project", None))
-        species = attrs.get("species", getattr(instance, "species", None))
-        celltype = attrs.get("celltype", getattr(instance, "celltype", None))
-        treatment_var = attrs.get("treatment_var", getattr(instance, "treatment_var", None))
-        batch_var = attrs.get("batch_var", getattr(instance, "batch_var", None))
-
         for field in ("species", "celltype", "treatment_var", "batch_var"):
             if attrs.get(field) is None:
                 attrs[field] = ""
-        species = species or ""
-        celltype = celltype or ""
-        treatment_var = treatment_var or ""
-        batch_var = batch_var or ""
-
-        if all([project, species, celltype, treatment_var, batch_var]):
-            duplicate_queryset = Study.objects.filter(
-                project=project,
-                species=species,
-                celltype=celltype,
-                treatment_var=treatment_var,
-                batch_var=batch_var,
-            )
-            if instance is not None:
-                duplicate_queryset = duplicate_queryset.exclude(pk=instance.pk)
-            if duplicate_queryset.exists():
-                raise serializers.ValidationError(
-                    {"non_field_errors": ["An identical study already exists for this project."]}
-                )
 
         return attrs
 
@@ -265,6 +240,29 @@ class UserRoleUpdateSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         raise NotImplementedError
+
+
+class DatabaseBackupSerializer(serializers.ModelSerializer):
+    initiated_by = serializers.CharField(source="initiated_by.username", read_only=True)
+
+    class Meta:
+        model = DatabaseBackup
+        fields = [
+            "id",
+            "status",
+            "verification_status",
+            "filename",
+            "size_bytes",
+            "sha256",
+            "postgres_version",
+            "error_message",
+            "initiated_by",
+            "created_at",
+            "started_at",
+            "completed_at",
+            "verified_at",
+        ]
+        read_only_fields = fields
 
 
 class ProjectOwnershipUpdateSerializer(serializers.Serializer):

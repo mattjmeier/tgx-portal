@@ -124,6 +124,15 @@ Current admin import MVP implementation:
 - `ImportBatch` is the draft/commit audit root for the workflow.
 - `StudyDataResource` stores metadata, contrasts, and count files as provenance-backed inputs. Count matrices remain external resources only in MVP.
 
+Read-only archive import is now also implemented. Stable collaboration, study,
+resource, library, run, and FASTQ keys drive replay-safe upserts.
+`SequencingLibrary`, `SequencingFile`, and `ResourceLineage` represent split
+FASTQs, multiple runs/flowcells, technical repeats, unknown mappings, and
+evidence-aware artifact lineage. `ImportBatch` stores the descriptor snapshot,
+source digest, schema/tool versions, supersession link, result counts, and
+study-level diff. See
+[`07-ARCHIVE_IMPORT_AND_RECOVERY.md`](07-ARCHIVE_IMPORT_AND_RECOVERY.md).
+
 ## Historical Import Strategy And Open Questions
 
 - Build imports as staged transformations: `StudyDataResource` source pointer -> `ImportBatch` audit record -> alias map -> typed staging rows -> canonical warehouse models.

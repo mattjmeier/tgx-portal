@@ -14,7 +14,7 @@ Do not treat `core.Sample` as equivalent to UL `tgx_samples`. `core.Sample` is a
 
 ### 1. Project Management
 * **`Project`**: Represents the collaboration.
-  * Fields: `id`, `owner`, `pi_name`, `researcher_name`, `bioinformatician_assigned`, `title`, `description`, `created_at`.
+  * Fields: `id`, immutable unique `collaboration_key`, `owner`, `pi_name`, `researcher_name`, `bioinformatician_assigned`, `title`, `description`, `created_at`.
   * *Constraint*: PI Name and title are used to route to Plane PM.
 * **`Study`**: A distinct experiment within a project.
   * Fields: `id`, `project_id`, `title`, `description`, `status`, `species` (Enum: human, mouse, rat, hamster), `celltype`, `treatment_var`, `batch_var`.
@@ -55,24 +55,32 @@ Before a `Sample` sheet is ingested into Django models, it must pass through a `
 * **`ProfilingPlatform`**: Registry for reusable broad-profiling platforms/feature sets corresponding to UL `tgx_platforms`.
   * Fields include `platform_name`, `title`, `description`, `version`, `technology_type`, `study_type`, `species`, `url`, and `ext`.
 * **`StudyWarehouseMetadata`**: One-to-one warehouse metadata for a portal `Study`, corresponding to UL `tgx_study`.
-  * Fields include `study_name`, `source`, `study_type`, `in_vitro`, `platform`, `cell_types`, `culture_conditions`, `exposure_conditions`, `references`, and `ext`.
+  * Fields include unique `study_name`, `source`, `study_type`, optional `platform`, `curation_status`, `lineage_status`, `in_vitro`, `cell_types`, `culture_conditions`, `exposure_conditions`, `references`, and `ext`.
 * **`StudyDataResource`**: Study-level registry of external data objects for historical imports and warehouse review.
-  * Fields include `resource_type`, `storage_kind`, `display_name`, `uri`, `description`, `file_format`, checksum fields, `size_bytes`, `version`, `availability_status`, `notes`, and `ext`.
+  * Fields include stable `resource_key`, `resource_type`, `storage_kind`, `display_name`, `uri`, `description`, `file_format`, checksum fields, `size_bytes`, `version`, `availability_status`, `notes`, and `ext`.
   * This stores pointers and provenance metadata only; raw/intermediate matrices stay outside PostgreSQL.
 * **`ImportBatch`** and **`ImportBatchResource`**: Lightweight provenance layer for manual or historical import attempts and their source/output resources.
-  * Import batches track source system/name, status, timestamps, initiating user, notes, and summary counts.
+  * Import batches track source directory/digest, manifest and tool versions, descriptor snapshot, superseded import, status, timestamps, initiating user, diff, notes, and summary counts.
   * Import-batch resources link batches to `StudyDataResource` rows with roles such as input, output, reference, and QA.
 * **`ImportAliasMap`** and **`ImportStagedRow`**: Admin import staging for profiling study curation.
   * Alias maps store source-column to canonical-target mappings plus simple transforms for each uploaded file role.
   * Staged rows store parsed source payloads, normalized payloads, and validation errors before commit.
 * **`Series`**, **`Metric`**, and **`Pod`**: Concentration/dose-response series, global metric definitions, and global POD values corresponding to UL `tgx_series`, `tgx_metrics`, and `tgx_pods`.
 * **`HTTrWell`** and **`HTTrSeriesWell`**: HTTr well metadata and series-well bridge corresponding to UL `httr_wells` and `httr_series_wells`.
+* **`SequencingLibrary`**, **`SequencingFile`**, and **`ResourceLineage`**:
+  represent stable sample libraries, raw file chunks across zero or more runs,
+  and evidence-aware input/output resource relationships. Unknown mappings are
+  valid and remain explicit.
+* **`DatabaseBackup`** (`core`): audit/status record for logical dump artifacts,
+  SHA-256 metadata, migration snapshots, and disposable-restore verification.
 
 Existing operational file/path fields are not a durable provenance layer. `SequencingRun.raw_data_path` describes sequencing-run data, onboarding `validated_rows` preserves the latest uploaded sample metadata rows, and sample metadata fields such as `raw_file` are export/intake values. Historical warehouse imports should use `StudyDataResource` and `ImportBatch` instead.
 
 Admin study import MVP notes:
 * Metadata and contrasts are validated in staging first, then committed into canonical `Study`, `StudyWarehouseMetadata`, and `Sample` records.
-* Count matrices remain external resources in MVP. PostgreSQL stores provenance, checksum, format, and annotation hints, not feature-level count rows.
+* Count matrices remain external resources in MVP and are registered from a
+  contained `/data` path. PostgreSQL stores provenance, checksum, format,
+  streamed header summary, and annotation hints, not feature-level count rows.
 
 ### 8. Known UL Schema Gaps
 The current scaffold covers the cross-domain warehouse foundation and HTTr wells. The following UL concepts are not implemented yet:
@@ -82,7 +90,6 @@ The current scaffold covers the cross-domain warehouse foundation and HTTr wells
 * HTTr signature catalog, signature sets, set membership, and concentration-response signature hits: `httr_sig_cat`, `httr_sig_sets`, `httr_sig_set_cat`, `httr_sig_cr`.
 * HTPP-specific well metadata and active-feature/result tables.
 * TGx-specific non-HTTr well/profile metadata tables.
-* Explicit import alias maps and staged historical import tables.
 
 ### 9. UL Schema Design Caveats
 The portal aligns with UL concepts without adopting every UL naming or modeling choice directly. Known caveats in the UL approach:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -7,7 +9,12 @@ from django.db import models
 from core.models import Study
 
 
+def default_resource_key() -> str:
+    return f"resource-{uuid.uuid4().hex}"
+
+
 class StudyType(models.TextChoices):
+    UNKNOWN = "unknown", "Unknown"
     HTTR = "HTTr", "High-throughput transcriptomics"
     HTPP = "HTPP", "High-throughput phenotypic profiling"
     TGX = "TGx", "Toxicogenomics"
@@ -45,6 +52,16 @@ class ProfilingPlatform(models.Model):
 
 
 class StudyWarehouseMetadata(models.Model):
+    class CurationStatus(models.TextChoices):
+        INVENTORY = "inventory", "Inventory only"
+        METADATA_CURATED = "metadata_curated", "Metadata curated"
+        LINEAGE_CURATED = "lineage_curated", "Lineage curated"
+
+    class LineageStatus(models.TextChoices):
+        UNKNOWN = "unknown", "Unknown"
+        PARTIAL = "partial", "Partial"
+        COMPLETE = "complete", "Complete"
+
     StudyType = StudyType
 
     study = models.OneToOneField(Study, on_delete=models.CASCADE, related_name="warehouse_metadata")
@@ -52,7 +69,23 @@ class StudyWarehouseMetadata(models.Model):
     source = models.CharField(max_length=255, blank=True)
     study_type = models.CharField(max_length=20, choices=StudyType.choices)
     in_vitro = models.BooleanField(null=True, blank=True)
-    platform = models.ForeignKey(ProfilingPlatform, on_delete=models.PROTECT, related_name="studies")
+    platform = models.ForeignKey(
+        ProfilingPlatform,
+        on_delete=models.PROTECT,
+        related_name="studies",
+        null=True,
+        blank=True,
+    )
+    curation_status = models.CharField(
+        max_length=30,
+        choices=CurationStatus.choices,
+        default=CurationStatus.INVENTORY,
+    )
+    lineage_status = models.CharField(
+        max_length=20,
+        choices=LineageStatus.choices,
+        default=LineageStatus.UNKNOWN,
+    )
     cell_types = models.JSONField(default=list, blank=True)
     culture_conditions = models.JSONField(default=list, blank=True)
     exposure_conditions = models.JSONField(default=list, blank=True)
@@ -114,6 +147,7 @@ class StudyDataResource(models.Model):
         null=True,
         blank=True,
     )
+    resource_key = models.CharField(max_length=255, default=default_resource_key)
     resource_type = models.CharField(max_length=30, choices=ResourceType.choices)
     storage_kind = models.CharField(max_length=30, choices=StorageKind.choices)
     display_name = models.CharField(max_length=255)
@@ -141,6 +175,16 @@ class StudyDataResource(models.Model):
         ]
         constraints = [
             models.UniqueConstraint(
+                fields=["study_metadata", "resource_key"],
+                condition=models.Q(study_metadata__isnull=False),
+                name="unique_resource_key_per_study",
+            ),
+            models.UniqueConstraint(
+                fields=["resource_key"],
+                condition=models.Q(study_metadata__isnull=True),
+                name="unique_draft_resource_key",
+            ),
+            models.UniqueConstraint(
                 fields=["study_metadata", "uri"],
                 condition=models.Q(study_metadata__isnull=False),
                 name="unique_resource_uri_per_study",
@@ -166,6 +210,7 @@ class ImportBatch(models.Model):
         PLANNED = "planned", "Planned"
         RUNNING = "running", "Running"
         COMPLETED = "completed", "Completed"
+        NO_CHANGES = "no_changes", "No changes"
         FAILED = "failed", "Failed"
         SUPERSEDED = "superseded", "Superseded"
 
@@ -178,6 +223,19 @@ class ImportBatch(models.Model):
     )
     source_system = models.CharField(max_length=255, blank=True)
     source_name = models.CharField(max_length=255)
+    source_directory = models.TextField(blank=True)
+    source_digest = models.CharField(max_length=64, blank=True, db_index=True)
+    manifest_schema_version = models.PositiveSmallIntegerField(null=True, blank=True)
+    tool_version = models.CharField(max_length=100, blank=True)
+    applied_manifest = models.JSONField(default=dict, blank=True)
+    diff_summary = models.JSONField(default=dict, blank=True)
+    previous_import = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        related_name="replays",
+        null=True,
+        blank=True,
+    )
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.PLANNED)
     initiated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -207,6 +265,134 @@ class ImportBatch(models.Model):
 
     def __str__(self) -> str:
         return f"{self.source_name} ({self.status})"
+
+
+class SequencingLibrary(models.Model):
+    sample = models.ForeignKey("core.Sample", on_delete=models.CASCADE, related_name="sequencing_libraries")
+    assay = models.ForeignKey(
+        "core.Assay",
+        on_delete=models.SET_NULL,
+        related_name="sequencing_libraries",
+        null=True,
+        blank=True,
+    )
+    library_key = models.CharField(max_length=255)
+    preparation_method = models.CharField(max_length=255, blank=True)
+    ext = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sample_id", "library_key", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sample", "library_key"],
+                name="unique_sequencing_library_per_sample",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.sample.sample_ID}: {self.library_key}"
+
+
+class SequencingFile(models.Model):
+    class ReadRole(models.TextChoices):
+        R1 = "R1", "Read 1"
+        R2 = "R2", "Read 2"
+        I1 = "I1", "Index 1"
+        I2 = "I2", "Index 2"
+        UNKNOWN = "unknown", "Unknown"
+
+    class MappingEvidence(models.TextChoices):
+        DECLARED = "declared", "Declared"
+        INFERRED = "inferred", "Inferred"
+        UNKNOWN = "unknown", "Unknown"
+
+    resource = models.OneToOneField(
+        StudyDataResource,
+        on_delete=models.CASCADE,
+        related_name="sequencing_file",
+    )
+    sample = models.ForeignKey(
+        "core.Sample",
+        on_delete=models.SET_NULL,
+        related_name="sequencing_files",
+        null=True,
+        blank=True,
+    )
+    library = models.ForeignKey(
+        SequencingLibrary,
+        on_delete=models.SET_NULL,
+        related_name="files",
+        null=True,
+        blank=True,
+    )
+    sequencing_run = models.ForeignKey(
+        "core.SequencingRun",
+        on_delete=models.SET_NULL,
+        related_name="sequencing_files",
+        null=True,
+        blank=True,
+    )
+    lane = models.CharField(max_length=50, blank=True)
+    read_role = models.CharField(max_length=20, choices=ReadRole.choices, default=ReadRole.UNKNOWN)
+    chunk = models.CharField(max_length=50, blank=True)
+    mapping_evidence = models.CharField(
+        max_length=20,
+        choices=MappingEvidence.choices,
+        default=MappingEvidence.UNKNOWN,
+    )
+    notes = models.TextField(blank=True)
+    ext = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["resource_id"]
+        indexes = [
+            models.Index(fields=["sample", "read_role"], name="seq_file_sample_read_idx"),
+            models.Index(fields=["sequencing_run", "lane"], name="seq_file_run_lane_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return self.resource.display_name
+
+
+class ResourceLineage(models.Model):
+    class Evidence(models.TextChoices):
+        DECLARED = "declared", "Declared"
+        INFERRED = "inferred", "Inferred"
+        UNKNOWN = "unknown", "Unknown"
+
+    parent_resource = models.ForeignKey(
+        StudyDataResource,
+        on_delete=models.CASCADE,
+        related_name="lineage_outputs",
+    )
+    child_resource = models.ForeignKey(
+        StudyDataResource,
+        on_delete=models.CASCADE,
+        related_name="lineage_inputs",
+    )
+    evidence = models.CharField(max_length=20, choices=Evidence.choices, default=Evidence.UNKNOWN)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["child_resource_id", "parent_resource_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["parent_resource", "child_resource"],
+                name="unique_resource_lineage_edge",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(parent_resource=models.F("child_resource")),
+                name="resource_lineage_not_self",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.parent_resource_id} -> {self.child_resource_id}"
 
 
 class ImportAliasMap(models.Model):

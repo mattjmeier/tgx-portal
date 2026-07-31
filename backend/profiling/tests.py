@@ -1,7 +1,9 @@
 import hashlib
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from core.models import Project, Sample, Study, UserProfile
@@ -173,17 +175,21 @@ class StudyImportApiTests(TestCase):
         )
 
         count_content = "feature_id\tctrl_1\ttrt_1\nGENE1\t10\t12\n"
-        count_response = self.client.post(
-            f"/api/profiling/study-imports/{import_id}/count-resource/",
-            {
-                "filename": "counts.tsv",
-                "content": count_content,
-                "feature_id_kind": "gene_symbol",
-                "annotation_source": "Ensembl",
-                "annotation_version": "110",
-            },
-            format="json",
-        )
+        with TemporaryDirectory() as archive_root:
+            count_path = Path(archive_root) / "studies" / "counts.tsv"
+            count_path.parent.mkdir()
+            count_path.write_text(count_content, encoding="utf-8")
+            with override_settings(STUDY_ARCHIVE_ROOT=archive_root):
+                count_response = self.client.post(
+                    f"/api/profiling/study-imports/{import_id}/count-resource/",
+                    {
+                        "path": str(count_path),
+                        "feature_id_kind": "gene_symbol",
+                        "annotation_source": "Ensembl",
+                        "annotation_version": "110",
+                    },
+                    format="json",
+                )
         self.assertEqual(count_response.status_code, 200)
         self.assertEqual(count_response.json()["resource"]["checksum"], hashlib.sha256(count_content.encode("utf-8")).hexdigest())
 

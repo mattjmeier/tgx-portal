@@ -30,14 +30,18 @@ vi.mock("../api/lookups", async () => {
   };
 });
 
-vi.mock("../api/studyImports", () => ({
-  createStudyImport: (...args: unknown[]) => createStudyImportMock(...args),
-  fetchStudyImport: (...args: unknown[]) => fetchStudyImportMock(...args),
-  previewStudyImportMetadata: (...args: unknown[]) => previewMetadataMock(...args),
-  previewStudyImportContrasts: (...args: unknown[]) => previewContrastsMock(...args),
-  registerStudyImportCountResource: (...args: unknown[]) => registerCountResourceMock(...args),
-  commitStudyImport: (...args: unknown[]) => commitStudyImportMock(...args),
-}));
+vi.mock("../api/studyImports", async () => {
+  const actual = await vi.importActual<typeof import("../api/studyImports")>("../api/studyImports");
+  return {
+    ...actual,
+    createStudyImport: (...args: unknown[]) => createStudyImportMock(...args),
+    fetchStudyImport: (...args: unknown[]) => fetchStudyImportMock(...args),
+    previewStudyImportMetadata: (...args: unknown[]) => previewMetadataMock(...args),
+    previewStudyImportContrasts: (...args: unknown[]) => previewContrastsMock(...args),
+    registerStudyImportCountResource: (...args: unknown[]) => registerCountResourceMock(...args),
+    commitStudyImport: (...args: unknown[]) => commitStudyImportMock(...args),
+  };
+});
 
 function renderPage() {
   const queryClient = new QueryClient({
@@ -200,5 +204,18 @@ describe("AdminStudyImportPage", () => {
 
     await waitFor(() => expect(previewContrastsMock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(commitButton).toBeEnabled());
+
+    fireEvent.change(screen.getByLabelText("Count file path"), {
+      target: { value: "/data/studies/UL-2026-001/counts.tsv.gz" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Register count resource" }));
+    await waitFor(() =>
+      expect(registerCountResourceMock.mock.calls[0]?.[1]).toEqual(
+        expect.objectContaining({
+          path: "/data/studies/UL-2026-001/counts.tsv.gz",
+        }),
+      ),
+    );
+    expect(registerCountResourceMock.mock.calls[0]?.[1]).not.toHaveProperty("content");
   });
 });

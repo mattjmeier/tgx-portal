@@ -53,8 +53,14 @@ services:
       PLANE_PROJECT_ID: ${PLANE_PROJECT_ID:-}
       PLANE_WEB_BASE_URL: ${PLANE_WEB_BASE_URL:-http://localhost}
       TGX_PORTAL_BASE_URL: ${TGX_PORTAL_BASE_URL:-http://localhost:5173}
+      STUDY_ARCHIVE_ROOT: /data
+      DATABASE_BACKUP_ROOT: /backups
+      DATABASE_BACKUP_AGE_RECIPIENT: ${DATABASE_BACKUP_AGE_RECIPIENT:-}
+      DATABASE_BACKUP_AGE_IDENTITY: ${DATABASE_BACKUP_AGE_IDENTITY:-}
     volumes:
       - ./backend:/app
+      - ${STUDY_ARCHIVE_HOST_PATH:-./data}:/data:ro
+      - ${DATABASE_BACKUP_HOST_PATH:-./backups}:/backups:ro
     ports:
       - "8003:8000"
     extra_hosts:
@@ -90,8 +96,14 @@ services:
       PLANE_PROJECT_ID: ${PLANE_PROJECT_ID:-}
       PLANE_WEB_BASE_URL: ${PLANE_WEB_BASE_URL:-http://localhost}
       TGX_PORTAL_BASE_URL: ${TGX_PORTAL_BASE_URL:-http://localhost:5173}
+      STUDY_ARCHIVE_ROOT: /data
+      DATABASE_BACKUP_ROOT: /backups
+      DATABASE_BACKUP_AGE_RECIPIENT: ${DATABASE_BACKUP_AGE_RECIPIENT:-}
+      DATABASE_BACKUP_AGE_IDENTITY: ${DATABASE_BACKUP_AGE_IDENTITY:-}
     volumes:
       - ./backend:/app
+      - ${STUDY_ARCHIVE_HOST_PATH:-./data}:/data:ro
+      - ${DATABASE_BACKUP_HOST_PATH:-./backups}:/backups
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -104,6 +116,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: development
     command: >
       sh -c "npm install &&
       npm run dev -- --host 0.0.0.0 --port 5174"
@@ -115,6 +128,34 @@ services:
     depends_on:
       api:
         condition: service_started
+
+  backup:
+    profiles: ["ops"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: python manage.py database_backup
+    environment:
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-key}
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,api
+      DATABASE_NAME: tgx_portal
+      DATABASE_USER: tgx_portal
+      DATABASE_PASSWORD: tgx_portal
+      DATABASE_HOST: db
+      DATABASE_PORT: "5432"
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      STUDY_ARCHIVE_ROOT: /data
+      DATABASE_BACKUP_ROOT: /backups
+      DATABASE_BACKUP_AGE_RECIPIENT: ${DATABASE_BACKUP_AGE_RECIPIENT:-}
+      DATABASE_BACKUP_AGE_IDENTITY: ${DATABASE_BACKUP_AGE_IDENTITY:-}
+    volumes:
+      - ${STUDY_ARCHIVE_HOST_PATH:-./data}:/data:ro
+      - ${DATABASE_BACKUP_HOST_PATH:-./backups}:/backups
+    depends_on:
+      db:
+        condition: service_healthy
 
   dev-proxy:
     image: nginx:1.27-alpine

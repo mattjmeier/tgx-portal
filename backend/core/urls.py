@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     AssayViewSet,
     AuthViewSet,
+    DatabaseBackupViewSet,
     LookupViewSet,
     MetadataValidationViewSet,
     MetadataTemplateViewSet,
@@ -26,6 +27,7 @@ router.register("lookups", LookupViewSet, basename="lookups")
 router.register("reference-library", ReferenceLibraryViewSet, basename="reference-library")
 router.register("metadata-templates", MetadataTemplateViewSet, basename="metadata-templates")
 router.register("metadata-validation", MetadataValidationViewSet, basename="metadata-validation")
+router.register("admin/database-backups", DatabaseBackupViewSet, basename="database-backup")
 
 urlpatterns = [
     path("health/", healthcheck_view, name="healthcheck"),

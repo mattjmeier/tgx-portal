@@ -53,6 +53,9 @@ Study creation must always select a Collaboration. If the appropriate Collaborat
 * Provide a dedicated admin study import workspace for profiling-study curation instead of extending the client-facing onboarding wizard.
 
 ### Component: Admin Study Import Workspace
+* Begin with a read-only archive card that previews a mounted
+  `portal-study.yaml`, shows its digest, curation status, missing artifacts,
+  stale retained records, and whether changes are detected before apply.
 * Use one continuous page with section cards for:
   * study shell
   * metadata mapping / preview
@@ -65,8 +68,18 @@ Study creation must always select a Collaboration. If the appropriate Collaborat
   * lowercase
   * uppercase
   * replace whitespace with `_`
-* Contrasts and count-data uploads may use stricter expected shapes in MVP, but must still surface validation and readiness in the same workspace.
+* Contrasts may use a stricter expected shape in MVP. Count data must be
+  registered by a mounted `/data` path and must never send the matrix through
+  browser JSON; both still surface validation and readiness in the workspace.
 * Highlight validation issues inline at row/cell level before commit.
+
+### Component: Admin Database Backups
+
+* List backup and verification status, timestamp, size, and filename.
+* Permit asynchronous creation, disposable verification, and authenticated
+  download for completed artifacts.
+* Explain that production restore is a maintenance-window CLI operation.
+* Do not expose a live-restore button or endpoint.
 
 ## Frontend Structure Conventions
 * `frontend/src/components/ui`: Reserved for `shadcn/ui` primitives and light local wrappers around those primitives.

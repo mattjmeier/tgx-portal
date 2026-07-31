@@ -1,0 +1,9 @@
+[Unit]
+Description=Create a TGx Portal PostgreSQL backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/tgx-portal
+ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml run --rm backup

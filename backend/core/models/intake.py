@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -16,7 +17,16 @@ sample_id_validator = RegexValidator(
 )
 
 
+def default_collaboration_key() -> str:
+    return f"collaboration-{uuid.uuid4().hex}"
+
+
 class Project(models.Model):
+    collaboration_key = models.CharField(
+        max_length=255,
+        unique=True,
+        default=default_collaboration_key,
+    )
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -75,10 +85,6 @@ class Study(models.Model):
                 fields=["project", "title"],
                 name="unique_study_title_per_project",
             ),
-            models.UniqueConstraint(
-                fields=["project", "species", "celltype", "treatment_var", "batch_var"],
-                name="unique_study_per_project_metadata",
-            )
         ]
 
     def __str__(self) -> str:
@@ -354,10 +360,10 @@ class Sample(models.Model):
 
 class SequencingRun(models.Model):
     run_id = models.CharField(max_length=255, unique=True)
-    flowcell_id = models.CharField(max_length=255)
-    instrument_name = models.CharField(max_length=255)
-    date_run = models.DateField()
-    raw_data_path = models.CharField(max_length=1024)
+    flowcell_id = models.CharField(max_length=255, blank=True)
+    instrument_name = models.CharField(max_length=255, blank=True)
+    date_run = models.DateField(null=True, blank=True)
+    raw_data_path = models.CharField(max_length=1024, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -365,6 +371,54 @@ class SequencingRun(models.Model):
 
     def __str__(self) -> str:
         return self.run_id
+
+
+class DatabaseBackup(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        RUNNING = "running", "Running"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
+    class VerificationStatus(models.TextChoices):
+        NOT_VERIFIED = "not_verified", "Not verified"
+        RUNNING = "running", "Verification running"
+        PASSED = "passed", "Verification passed"
+        FAILED = "failed", "Verification failed"
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    verification_status = models.CharField(
+        max_length=20,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.NOT_VERIFIED,
+    )
+    path = models.TextField(blank=True)
+    filename = models.CharField(max_length=255, blank=True)
+    size_bytes = models.BigIntegerField(null=True, blank=True)
+    sha256 = models.CharField(max_length=64, blank=True)
+    postgres_version = models.CharField(max_length=100, blank=True)
+    migration_snapshot = models.JSONField(default=list, blank=True)
+    error_message = models.TextField(blank=True)
+    initiated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="database_backups",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["status", "-created_at"], name="db_backup_status_created_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return self.filename or f"Database backup {self.pk or 'pending'}"
 
 
 class Assay(models.Model):

@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from core.models import UserProfile
 
+from .archive_import import ArchiveImportError, apply_study_manifest, diff_study_manifest
 from .models import ImportBatch
 from .services import commit_import, preview_contrasts, preview_metadata, register_count_resource, serialize_import_batch, update_import_draft
 
@@ -48,6 +49,44 @@ class StudyImportViewSet(viewsets.ViewSet):
         import_batch.refresh_from_db()
         return Response(serialize_import_batch(import_batch), status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=["post"], url_path="archive-preview")
+    def archive_preview(self, request):
+        _require_admin(request.user)
+        manifest_path = str(request.data.get("manifest_path") or "").strip()
+        if not manifest_path:
+            return Response(
+                {"detail": "manifest_path is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            report = diff_study_manifest(manifest_path)
+        except ArchiveImportError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(report)
+
+    @action(detail=False, methods=["post"], url_path="archive-apply")
+    def archive_apply(self, request):
+        _require_admin(request.user)
+        manifest_path = str(request.data.get("manifest_path") or "").strip()
+        if not manifest_path:
+            return Response(
+                {"detail": "manifest_path is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            result = apply_study_manifest(
+                manifest_path,
+                initiated_by=request.user,
+            )
+        except ArchiveImportError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        response_status = (
+            status.HTTP_200_OK
+            if result.outcome == "no_changes"
+            else status.HTTP_201_CREATED
+        )
+        return Response(result.as_dict(), status=response_status)
+
     def retrieve(self, request, pk=None):
         _require_admin(request.user)
         import_batch = self.get_queryset().get(pk=pk)
@@ -87,14 +126,16 @@ class StudyImportViewSet(viewsets.ViewSet):
     def count_resource(self, request, pk=None):
         _require_admin(request.user)
         import_batch = self.get_queryset().get(pk=pk)
-        result = register_count_resource(
-            import_batch=import_batch,
-            filename=str(request.data.get("filename") or "counts.tsv"),
-            content=str(request.data.get("content") or ""),
-            feature_id_kind=request.data.get("feature_id_kind"),
-            annotation_source=request.data.get("annotation_source"),
-            annotation_version=request.data.get("annotation_version"),
-        )
+        try:
+            result = register_count_resource(
+                import_batch=import_batch,
+                path=str(request.data.get("path") or ""),
+                feature_id_kind=request.data.get("feature_id_kind"),
+                annotation_source=request.data.get("annotation_source"),
+                annotation_version=request.data.get("annotation_version"),
+            )
+        except ArchiveImportError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(result)
 
     @action(detail=True, methods=["post"], url_path="commit")

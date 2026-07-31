@@ -1,0 +1,4 @@
+file_key	path	sample_ID	library_key	run_id	flowcell_id	instrument_name	date_run	lane	read_role	chunk	checksum_algorithm	checksum	evidence	notes
+fq-s001-r1	raw_data/2026/project_a/FC001/sample_001_L001_R1.fastq.gz	sample_001	lib-s001	run-001	FC001	NovaSeq 6000	2026-01-15	1	R1	1			declared	
+fq-s001-r2	raw_data/2026/project_a/FC001/sample_001_L001_R2.fastq.gz	sample_001	lib-s001	run-001	FC001	NovaSeq 6000	2026-01-15	1	R2	1			declared	
+fq-legacy-unknown	raw_data/2014/legacy/unmapped.fastq.gz										unknown	No surviving sample mapping

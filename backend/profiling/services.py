@@ -423,28 +423,90 @@ def preview_contrasts(*, import_batch: ImportBatch, filename: str, content: str)
 def register_count_resource(
     *,
     import_batch: ImportBatch,
-    filename: str,
-    content: str,
+    path: str,
     feature_id_kind: str | None,
     annotation_source: str | None,
     annotation_version: str | None,
 ) -> dict[str, Any]:
-    lines = content.splitlines()
-    header_columns = []
-    if lines:
-        header_columns = lines[0].split("\t" if "\t" in lines[0] else ",")
-    resource = _save_import_file(import_batch=import_batch, file_role="count", filename=filename, content=content)
-    resource.resource_type = StudyDataResource.ResourceType.FEATURE
-    resource.ext = {
-        **(resource.ext or {}),
-        "feature_id_kind": feature_id_kind,
-        "annotation_source": annotation_source,
-        "annotation_version": annotation_version,
-        "header_column_count": len(header_columns),
-        "feature_identifier_column": header_columns[0] if header_columns else None,
-        "sample_column_count": max(len(header_columns) - 1, 0),
+    from .archive_import import (
+        ArchiveImportError,
+        _data_uri,
+        _hash_file,
+        _read_delimited_header,
+        _resolve_data_path,
+    )
+
+    if not path.strip():
+        raise ArchiveImportError("A count resource path beneath /data is required.")
+    resolved_path = _resolve_data_path(path)
+    if not resolved_path.is_file():
+        raise ArchiveImportError(f"Count resource is not a file: {resolved_path}")
+    header_columns = _read_delimited_header(resolved_path)
+    if len(header_columns) < 2:
+        raise ArchiveImportError(
+            "Count resources require a feature column and at least one sample column."
+        )
+    curated_sample_ids = {
+        str(sample_id)
+        for sample_id in import_batch.staged_rows.filter(
+            file_role=ImportStagedRow.FileRole.METADATA,
+            is_valid=True,
+        ).values_list("normalized_payload__sample_ID", flat=True)
+        if sample_id
     }
-    resource.save(update_fields=["resource_type", "ext", "updated_at"])
+    unknown_columns = sorted(set(header_columns[1:]) - curated_sample_ids)
+    if curated_sample_ids and unknown_columns:
+        raise ArchiveImportError(
+            "Count resource has unknown sample columns: "
+            f"{', '.join(unknown_columns)}"
+        )
+    digest = _hash_file(resolved_path)
+    ext = _draft_ext(import_batch)
+    resource_id = (ext.get("resource_ids") or {}).get("count")
+    resource = (
+        StudyDataResource.objects.filter(id=resource_id).first()
+        if resource_id
+        else None
+    )
+    resource_defaults = {
+        "study_metadata": import_batch.study_metadata,
+        "resource_key": f"import-{import_batch.id}-counts",
+        "resource_type": StudyDataResource.ResourceType.FEATURE,
+        "storage_kind": StudyDataResource.StorageKind.NETWORK_PATH,
+        "display_name": resolved_path.name,
+        "uri": _data_uri(resolved_path),
+        "file_format": "".join(resolved_path.suffixes).lstrip("."),
+        "checksum_algorithm": "sha256",
+        "checksum": digest,
+        "size_bytes": resolved_path.stat().st_size,
+        "availability_status": StudyDataResource.AvailabilityStatus.AVAILABLE,
+        "ext": {
+            **((resource.ext if resource else {}) or {}),
+            "file_role": "count",
+            "feature_id_kind": feature_id_kind,
+            "annotation_source": annotation_source,
+            "annotation_version": annotation_version,
+            "header_column_count": len(header_columns),
+            "feature_identifier_column": header_columns[0] if header_columns else None,
+            "sample_column_count": max(len(header_columns) - 1, 0),
+        },
+    }
+    if resource is None:
+        resource = StudyDataResource.objects.create(**resource_defaults)
+        ImportBatchResource.objects.update_or_create(
+            import_batch=import_batch,
+            data_resource=resource,
+            defaults={"role": ImportBatchResource.ResourceRole.INPUT},
+        )
+    else:
+        for field_name, value in resource_defaults.items():
+            setattr(resource, field_name, value)
+        resource.save()
+    resource_ids = dict(ext.get("resource_ids") or {})
+    resource_ids["count"] = resource.id
+    ext["resource_ids"] = resource_ids
+    import_batch.ext = ext
+    import_batch.save(update_fields=["ext", "updated_at"])
     return {
         "resource": {
             "id": resource.id,

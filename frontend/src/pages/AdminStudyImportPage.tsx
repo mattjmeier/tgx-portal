@@ -12,6 +12,7 @@ import {
   type StudyImportState,
 } from "../api/studyImports";
 import { Button } from "../components/ui/button";
+import { ArchiveManifestImportCard } from "../components/ArchiveManifestImportCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -108,7 +109,7 @@ export function AdminStudyImportPage() {
   const [importState, setImportState] = useState<StudyImportState | null>(null);
   const [metadataContent, setMetadataContent] = useState("");
   const [contrastsContent, setContrastsContent] = useState("");
-  const [countContent, setCountContent] = useState("");
+  const [countPath, setCountPath] = useState("");
   const [metadataMappings, setMetadataMappings] = useState<MetadataMappingState[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -194,8 +195,7 @@ export function AdminStudyImportPage() {
         throw new Error("Create a draft import first.");
       }
       return registerStudyImportCountResource(importState.id, {
-        filename: "counts.tsv",
-        content: countContent,
+        path: countPath,
         feature_id_kind: "gene_symbol",
         annotation_source: "Ensembl",
         annotation_version: "current",
@@ -247,6 +247,7 @@ export function AdminStudyImportPage() {
     <section className="workspace-route">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-5">
+          <ArchiveManifestImportCard />
           <Card>
             <CardHeader>
               <CardTitle>New study import</CardTitle>
@@ -496,25 +497,19 @@ export function AdminStudyImportPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid gap-2">
-                <Label htmlFor="count-file">Count file</Label>
+                <Label htmlFor="count-path">Count file path</Label>
                 <Input
-                  id="count-file"
-                  type="file"
-                  accept=".csv,.tsv,.txt,text/plain,text/csv,text/tab-separated-values"
-                  onChange={async (event) => {
-                    const file = event.target.files?.[0];
-                    if (!file) {
-                      return;
-                    }
-                    setCountContent(await readTextFile(file));
-                  }}
+                  id="count-path"
+                  aria-label="Count file path"
+                  placeholder="/data/studies/example/counts.tsv.gz"
+                  value={countPath}
+                  onChange={(event) => setCountPath(event.target.value)}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="count-content">Count file content</Label>
-                <Textarea id="count-content" aria-label="Count file content" value={countContent} onChange={(event) => setCountContent(event.target.value)} />
-              </div>
-              <Button type="button" disabled={!importState || countMutation.isPending} onClick={() => countMutation.mutate()}>
+              <p className="text-sm text-muted-foreground">
+                The server registers and validates the mounted file by URI; the matrix is never sent through JSON.
+              </p>
+              <Button type="button" disabled={!importState || !countPath.trim() || countMutation.isPending} onClick={() => countMutation.mutate()}>
                 Register count resource
               </Button>
             </CardContent>

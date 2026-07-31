@@ -2,6 +2,7 @@ import { apiFetch, parseErrorMessage } from "./http";
 
 export type Project = {
   id: number;
+  collaboration_key: string;
   owner: string | null;
   owner_id: number | null;
   pi_name: string;

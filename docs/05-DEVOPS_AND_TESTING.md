@@ -108,3 +108,14 @@ If the app suddenly behaves inconsistently after pulling code or switching branc
 4. `docker compose run --rm api python manage.py reset_seed_data`
 
 Use `docker compose down` followed by `docker compose up` when containers are stale or a service command has changed, but treat that as runtime cleanup, not as the primary database fix.
+
+## 7. Archive Mounts And Database Recovery
+
+The development and production Compose definitions mount the study archive at
+`/data` read-only. The API also sees `/backups` read-only; only the worker and
+the opt-in `backup` service receive write access. PostgreSQL client tools and
+optional `age` encryption are included in the backend image.
+
+The complete descriptor, import, scheduling, backup verification, and guarded
+restore runbook is in
+[`07-ARCHIVE_IMPORT_AND_RECOVERY.md`](07-ARCHIVE_IMPORT_AND_RECOVERY.md).

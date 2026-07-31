@@ -3,10 +3,35 @@ import logging
 from django.conf import settings
 from celery import shared_task
 
-from .models import PlaneWorkItemSync, Study
+from .backups import DatabaseBackupError, create_database_backup, verify_database_backup
+from .models import DatabaseBackup, PlaneWorkItemSync, Study
 from .plane import PlaneConfigurationError, PlaneRequestError, build_plane_work_item_payload, create_plane_work_item
 
 logger = logging.getLogger(__name__)
+
+
+@shared_task
+def create_database_backup_task(backup_id: int) -> None:
+    backup = DatabaseBackup.objects.filter(id=backup_id).first()
+    if backup is None:
+        logger.warning("Skipping database backup; job %s was not found.", backup_id)
+        return
+    try:
+        create_database_backup(backup=backup)
+    except DatabaseBackupError:
+        logger.exception("Database backup job %s failed.", backup_id)
+
+
+@shared_task
+def verify_database_backup_task(backup_id: int) -> None:
+    backup = DatabaseBackup.objects.filter(id=backup_id).first()
+    if backup is None:
+        logger.warning("Skipping backup verification; job %s was not found.", backup_id)
+        return
+    try:
+        verify_database_backup(backup.path)
+    except DatabaseBackupError:
+        logger.exception("Database backup verification %s failed.", backup_id)
 
 
 @shared_task

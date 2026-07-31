@@ -4,6 +4,7 @@ export const collaborationCreatePath = "/collaborations/new";
 export const studiesIndexPath = "/studies";
 export const globalStudyCreateRoute = "/studies/new";
 export const adminStudyImportCreatePath = "/admin/study-imports/new";
+export const adminBackupsPath = "/admin/backups";
 
 export function studyWorkspacePath(studyId: number | string): string {
   return `${studiesIndexPath}/${studyId}`;

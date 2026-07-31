@@ -132,3 +132,8 @@ PLANE_WORKSPACE_SLUG = os.environ.get("PLANE_WORKSPACE_SLUG", "")
 PLANE_PROJECT_ID = os.environ.get("PLANE_PROJECT_ID", "")
 PLANE_WEB_BASE_URL = os.environ.get("PLANE_WEB_BASE_URL", "http://localhost").rstrip("/")
 TGX_PORTAL_BASE_URL = os.environ.get("TGX_PORTAL_BASE_URL", "http://localhost:5173").rstrip("/")
+
+STUDY_ARCHIVE_ROOT = os.environ.get("STUDY_ARCHIVE_ROOT", "/data")
+DATABASE_BACKUP_ROOT = os.environ.get("DATABASE_BACKUP_ROOT", "/backups")
+DATABASE_BACKUP_AGE_RECIPIENT = os.environ.get("DATABASE_BACKUP_AGE_RECIPIENT", "")
+DATABASE_BACKUP_AGE_IDENTITY = os.environ.get("DATABASE_BACKUP_AGE_IDENTITY", "")

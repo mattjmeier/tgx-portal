@@ -11,6 +11,9 @@ from .models import (
     Metric,
     Pod,
     ProfilingPlatform,
+    ResourceLineage,
+    SequencingFile,
+    SequencingLibrary,
     Series,
     StudyDataResource,
     StudyWarehouseMetadata,
@@ -28,7 +31,7 @@ class SeriesInline(admin.TabularInline):
 class StudyDataResourceInline(admin.TabularInline):
     model = StudyDataResource
     extra = 0
-    fields = ("display_name", "resource_type", "storage_kind", "availability_status", "file_format", "uri")
+    fields = ("resource_key", "display_name", "resource_type", "availability_status", "file_format", "uri")
     show_change_link = True
 
 
@@ -73,9 +76,17 @@ class ProfilingPlatformAdmin(ModelAdmin):
 
 @admin.register(StudyWarehouseMetadata)
 class StudyWarehouseMetadataAdmin(ModelAdmin):
-    list_display = ("study_name", "study", "source", "study_type", "in_vitro", "platform")
+    list_display = (
+        "study_name",
+        "study",
+        "source",
+        "study_type",
+        "curation_status",
+        "lineage_status",
+        "platform",
+    )
     search_fields = ("study_name", "study__title", "source")
-    list_filter = ("study_type", "in_vitro", "platform")
+    list_filter = ("study_type", "curation_status", "lineage_status", "in_vitro", "platform")
     autocomplete_fields = ("platform",)
     raw_id_fields = ("study",)
     readonly_fields = ("created_at", "updated_at")
@@ -85,6 +96,7 @@ class StudyWarehouseMetadataAdmin(ModelAdmin):
 @admin.register(StudyDataResource)
 class StudyDataResourceAdmin(ModelAdmin):
     list_display = (
+        "resource_key",
         "display_name",
         "study_metadata",
         "resource_type",
@@ -93,7 +105,7 @@ class StudyDataResourceAdmin(ModelAdmin):
         "file_format",
         "version",
     )
-    search_fields = ("display_name", "uri", "description", "study_metadata__study_name")
+    search_fields = ("resource_key", "display_name", "uri", "description", "study_metadata__study_name")
     list_filter = ("resource_type", "storage_kind", "availability_status", "file_format")
     autocomplete_fields = ("study_metadata",)
     readonly_fields = ("created_at", "updated_at")
@@ -106,16 +118,27 @@ class ImportBatchAdmin(ModelAdmin):
         "study_metadata",
         "source_system",
         "status",
+        "source_digest",
         "records_seen",
         "records_created",
         "records_updated",
         "records_rejected",
         "created_at",
     )
-    search_fields = ("source_name", "source_system", "notes", "study_metadata__study_name", "resource_links__data_resource__uri")
+    search_fields = ("source_name", "source_system", "source_digest", "source_directory", "notes", "study_metadata__study_name", "resource_links__data_resource__uri")
     list_filter = ("status", "source_system", "created_at")
     autocomplete_fields = ("study_metadata", "initiated_by")
-    readonly_fields = ("created_at", "updated_at")
+    readonly_fields = (
+        "source_digest",
+        "manifest_schema_version",
+        "tool_version",
+        "applied_manifest",
+        "diff_summary",
+        "started_at",
+        "finished_at",
+        "created_at",
+        "updated_at",
+    )
     inlines = (ImportBatchResourceInline,)
 
 
@@ -141,6 +164,50 @@ class ImportStagedRowAdmin(ModelAdmin):
     search_fields = ("import_batch__source_name",)
     list_filter = ("file_role", "is_valid")
     autocomplete_fields = ("import_batch",)
+
+
+@admin.register(SequencingLibrary)
+class SequencingLibraryAdmin(ModelAdmin):
+    list_display = ("library_key", "sample", "assay", "preparation_method", "updated_at")
+    search_fields = ("library_key", "sample__sample_ID", "sample__study__title")
+    autocomplete_fields = ("sample", "assay")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(SequencingFile)
+class SequencingFileAdmin(ModelAdmin):
+    list_display = (
+        "resource",
+        "sample",
+        "library",
+        "sequencing_run",
+        "lane",
+        "read_role",
+        "mapping_evidence",
+    )
+    search_fields = (
+        "resource__resource_key",
+        "resource__uri",
+        "sample__sample_ID",
+        "library__library_key",
+        "sequencing_run__run_id",
+    )
+    list_filter = ("read_role", "mapping_evidence")
+    autocomplete_fields = ("resource", "sample", "library", "sequencing_run")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(ResourceLineage)
+class ResourceLineageAdmin(ModelAdmin):
+    list_display = ("parent_resource", "child_resource", "evidence", "created_at")
+    search_fields = (
+        "parent_resource__resource_key",
+        "child_resource__resource_key",
+        "parent_resource__study_metadata__study_name",
+    )
+    list_filter = ("evidence",)
+    autocomplete_fields = ("parent_resource", "child_resource")
+    readonly_fields = ("created_at",)
 
 
 @admin.register(Series)

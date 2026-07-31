@@ -48,11 +48,27 @@ class CoreSchemaHardeningTests(TestCase):
         with self.assertRaises(IntegrityError), transaction.atomic():
             Study.objects.create(project=self.project, title="Shared study title")
 
-    def test_study_metadata_uniqueness_treats_missing_values_deterministically(self) -> None:
+    def test_distinct_studies_may_share_empty_or_identical_metadata(self) -> None:
         Study.objects.create(project=self.project, title="Draft study A")
+        Study.objects.create(project=self.project, title="Draft study B")
+        Study.objects.create(
+            project=self.project,
+            title="Study C",
+            species=Study.Species.HUMAN,
+            celltype="Hepatocyte",
+            treatment_var="dose",
+            batch_var="batch",
+        )
+        Study.objects.create(
+            project=self.project,
+            title="Study D",
+            species=Study.Species.HUMAN,
+            celltype="Hepatocyte",
+            treatment_var="dose",
+            batch_var="batch",
+        )
 
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            Study.objects.create(project=self.project, title="Draft study B")
+        self.assertEqual(Study.objects.filter(project=self.project).count(), 4)
 
     def test_sample_plating_prevents_duplicate_plate_positions_and_invalid_columns(self) -> None:
         study = Study.objects.create(project=self.project, title="Plating study")

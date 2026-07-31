@@ -42,6 +42,10 @@ vi.mock("./pages/AdminStudyImportPage", () => ({
   AdminStudyImportPage: () => <div>Admin study import page</div>,
 }));
 
+vi.mock("./pages/AdminBackupsPage", () => ({
+  AdminBackupsPage: () => <div>Admin backups page</div>,
+}));
+
 vi.mock("./pages/LoginPage", () => ({
   LoginPage: () => <div>Login page</div>,
 }));
@@ -159,5 +163,12 @@ describe("App routes", () => {
 
     expect(screen.getByText("Admin study import page")).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/admin/study-imports/new");
+  });
+
+  it("serves the admin database backup route from the React app", () => {
+    renderApp("/admin/backups");
+
+    expect(screen.getByText("Admin backups page")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/admin/backups");
   });
 });

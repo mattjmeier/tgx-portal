@@ -1,4 +1,6 @@
-from django.http import HttpResponse, JsonResponse
+from pathlib import Path
+
+from django.http import FileResponse, HttpResponse, JsonResponse
 import logging
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
@@ -19,6 +21,7 @@ from django.utils import timezone
 from .models import (
     Assay,
     ControlledLookupValue,
+    DatabaseBackup,
     MetadataFieldDefinition,
     PlaneWorkItemSync,
     Project,
@@ -34,6 +37,7 @@ from .models import (
 from .serializers import (
     AssaySerializer,
     AuthUserSerializer,
+    DatabaseBackupSerializer,
     ProjectSerializer,
     ProjectOwnershipUpdateSerializer,
     SampleSerializer,
@@ -55,7 +59,11 @@ from .services import (
     validate_sample_import_rows,
     get_study_template_columns,
 )
-from .tasks import sync_study_to_plane
+from .tasks import (
+    create_database_backup_task,
+    sync_study_to_plane,
+    verify_database_backup_task,
+)
 from .onboarding import (
     DEFAULT_GROUP_BUILDER,
     DEFAULT_MAPPINGS,
@@ -1036,6 +1044,58 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project.owner = User.objects.filter(id=owner_id).first() if owner_id is not None else None
         project.save(update_fields=["owner"])
         return Response(ProjectSerializer(project).data)
+
+
+class DatabaseBackupViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = DatabaseBackup.objects.select_related("initiated_by").all()
+    serializer_class = DatabaseBackupSerializer
+    ordering = ["-created_at", "-id"]
+
+    def list(self, request, *args, **kwargs):
+        _require_admin(request.user)
+        return super().list(request, *args, **kwargs)
+
+    def retrieve(self, request, *args, **kwargs):
+        _require_admin(request.user)
+        return super().retrieve(request, *args, **kwargs)
+
+    def create(self, request):
+        _require_admin(request.user)
+        backup = DatabaseBackup.objects.create(initiated_by=request.user)
+        create_database_backup_task.delay(backup.id)
+        return Response(
+            self.get_serializer(backup).data,
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="verify")
+    def verify(self, request, pk=None):
+        _require_admin(request.user)
+        backup = self.get_object()
+        if backup.status != DatabaseBackup.Status.COMPLETED:
+            return Response(
+                {"detail": "Only completed backups can be verified."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        verify_database_backup_task.delay(backup.id)
+        return Response(self.get_serializer(backup).data, status=status.HTTP_202_ACCEPTED)
+
+    @action(detail=True, methods=["get"], url_path="download")
+    def download(self, request, pk=None):
+        _require_admin(request.user)
+        backup = self.get_object()
+        artifact = Path(backup.path)
+        if backup.status != DatabaseBackup.Status.COMPLETED or not artifact.is_file():
+            return Response(
+                {"detail": "Backup artifact is unavailable."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return FileResponse(
+            artifact.open("rb"),
+            as_attachment=True,
+            filename=backup.filename,
+            content_type="application/octet-stream",
+        )
 
 
 class StudyViewSet(viewsets.ModelViewSet):

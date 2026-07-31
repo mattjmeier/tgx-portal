@@ -1,6 +1,7 @@
 from .intake import (
     Assay,
     ControlledLookupValue,
+    DatabaseBackup,
     MetadataFieldDefinition,
     PlaneWorkItemSync,
     Project,
@@ -14,6 +15,7 @@ from .intake import (
     StudyMetadataMapping,
     StudyOnboardingState,
     UserProfile,
+    default_collaboration_key,
     default_study_config,
     sample_id_validator,
 )
@@ -21,6 +23,7 @@ from .intake import (
 __all__ = [
     "Assay",
     "ControlledLookupValue",
+    "DatabaseBackup",
     "MetadataFieldDefinition",
     "PlaneWorkItemSync",
     "Project",
@@ -34,6 +37,7 @@ __all__ = [
     "StudyMetadataMapping",
     "StudyOnboardingState",
     "UserProfile",
+    "default_collaboration_key",
     "default_study_config",
     "sample_id_validator",
 ]
