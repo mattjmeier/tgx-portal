@@ -7,6 +7,7 @@ import {
   collaborationCreatePath,
   collaborationRegistryPath,
   collaborationPath,
+  dataBrowserPath,
   globalStudyCreateRoute,
   studiesIndexPath,
   studyOnboardingPath,
@@ -55,6 +56,20 @@ function getShellCopy(pathname: string, projectId?: number | null, projectTitle?
       titleHelp: null,
       title: null,
       description: "Browse studies across collaborations.",
+      badge: null,
+    };
+  }
+
+  if (pathname === dataBrowserPath) {
+    return {
+      breadcrumbs: [
+        { label: "Data", to: dataBrowserPath },
+        { label: "Search data" },
+      ],
+      eyebrow: "Data browser",
+      titleHelp: null,
+      title: null,
+      description: null,
       badge: null,
     };
   }

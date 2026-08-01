@@ -193,6 +193,7 @@ function renderLayout(initialEntry: string) {
             <Route path="/" element={<div>Home overview page</div>} />
             <Route path="/collaborations" element={<div>Collaborations page</div>} />
             <Route path="/studies" element={<div>Studies page</div>} />
+            <Route path="/data" element={<div>Data browser page</div>} />
             <Route path="/collaborations/new" element={<div>New collaboration page</div>} />
             <Route path="/library" element={<div>Reference library page</div>} />
             <Route path="/collaborations/:projectId" element={<div>Workspace page</div>} />
@@ -685,6 +686,18 @@ describe("AppLayout", () => {
 
     expect(screen.getByText("Studies page")).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: /breadcrumb/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/active collaboration/i)).not.toBeInTheDocument();
+  });
+
+  it("shows data browser breadcrumbs on the data route", () => {
+    renderLayout("/data");
+
+    expect(screen.getByText("Data browser page")).toBeInTheDocument();
+    const shellHeader = screen.getByRole("banner");
+    expect(within(shellHeader).getByText("Data browser")).toBeInTheDocument();
+    const breadcrumb = within(shellHeader).getByRole("navigation", { name: /breadcrumb/i });
+    expect(within(breadcrumb).getByRole("link", { name: /^data$/i })).toHaveAttribute("href", "/data");
+    expect(within(breadcrumb).getByText("Search data")).toBeInTheDocument();
     expect(screen.queryByText(/active collaboration/i)).not.toBeInTheDocument();
   });
 
